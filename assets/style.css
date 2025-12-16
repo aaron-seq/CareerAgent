@@ -1,0 +1,217 @@
+/* CareerAgent Custom Dark Orange Theme */
+
+/* Main container */
+.main {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: #000000;
+}
+
+/* Headers - All White/Grey */
+h1 {
+    color: #FFFFFF !important;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+h2 {
+    color: #E0E0E0 !important;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+h3 {
+    color: #CCCCCC !important;
+    font-weight: 500;
+}
+
+p, li, span {
+    color: #EEEEEE;
+}
+
+/* Buttons - Dark Orange */
+.stButton>button {
+    background-color: #FF6F00 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.stButton>button:hover {
+    background-color: #E65100 !important; /* Darker orange */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(255, 111, 0, 0.2);
+}
+
+.stButton>button:active {
+    background-color: #BF360C !important;
+}
+
+/* Secondary/Link Buttons (Make them Grey/White) */
+button[kind="secondary"] {
+    background-color: #333333 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #555555 !important;
+}
+
+/* Input fields - Dark Grey */
+.stTextInput>div>div>input,
+.stTextArea>div>div>textarea,
+.stSelectbox>div>div>div {
+    background-color: #121212 !important;
+    color: #FFFFFF !important;
+    border-radius: 6px;
+    border: 1px solid #333333;
+}
+
+.stTextInput>div>div>input:focus,
+.stTextArea>div>div>textarea:focus {
+    border-color: #FF6F00 !important;
+    box-shadow: 0 0 0 1px #FF6F00;
+}
+
+/* File uploader */
+.stFileUploader {
+    background-color: #121212;
+    border: 2px dashed #444444;
+    border-radius: 8px;
+    padding: 2rem;
+    color: #FFFFFF;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background-color: #000000;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background-color: #121212;
+    color: #AAAAAA;
+    border-radius: 6px;
+    padding: 8px 16px;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #FF6F00 !important;
+    color: #FFFFFF !important;
+}
+
+/* Metrics - Dark Grey Cards */
+.stMetric {
+    background-color: #121212 !important;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 1rem;
+}
+.stMetric label {
+    color: #AAAAAA !important;
+}
+.stMetric div[data-testid="stMetricValue"] {
+    color: #FFFFFF !important;
+}
+
+/* Dataframe & Tables */
+.stDataFrame {
+    border: 1px solid #333333;
+    border-radius: 8px;
+}
+div[data-testid="stDataFrame"] div {
+    background-color: #121212 !important;
+    color: #FFFFFF !important;
+}
+
+/* Alerts - MONOCHROME OVERRIDE */
+/* Success -> Grey with Orange left border */
+.stSuccess {
+    background-color: #121212 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #333333 !important;
+    border-left: 4px solid #FF6F00 !important;
+}
+
+/* Error -> Grey with White text (No Red) */
+.stError {
+    background-color: #121212 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #333333 !important;
+    border-left: 4px solid #FFFFFF !important;
+}
+
+/* Warning -> Grey with Grey border */
+.stWarning {
+    background-color: #121212 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #333333 !important;
+    border-left: 4px solid #888888 !important;
+}
+
+/* Info -> Grey */
+.stInfo {
+    background-color: #121212 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #333333 !important;
+    border-left: 4px solid #444444 !important;
+}
+
+/* Custom Checklists (Draft Studio) */
+.quality-check {
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    border-radius: 4px;
+    background-color: #121212;
+    border: 1px solid #333333;
+    color: #FFFFFF;
+}
+
+/* Remove green/red backgrounds from checks */
+.quality-pass {
+    border-left: 4px solid #FF6F00; /* Orange for pass */
+}
+
+.quality-fail {
+    border-left: 4px solid #444444; /* Grey for fail */
+}
+
+/* Expanders */
+.streamlit-expanderHeader {
+    background-color: #121212 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #333333;
+    border-radius: 4px;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 2rem;
+    color: #666666;
+    font-size: 0.875rem;
+    border-top: 1px solid #333333;
+}
+.footer a {
+    color: #FF6F00;
+    text-decoration: none;
+}
+.footer a:hover {
+    color: #FFFFFF;
+}
+
+/* Radio buttons & Checkboxes */
+.stRadio > div[role="radiogroup"] > label {
+    color: #FFFFFF !important;
+}
+.stCheckbox > label {
+    color: #FFFFFF !important;
+}
+
+/* Sidebar styling */
+section[data-testid="stSidebar"] {
+    background-color: #000000 !important; /* Pure black sidebar */
+    border-right: 1px solid #333333;
+}

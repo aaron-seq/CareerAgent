@@ -1,0 +1,59 @@
+{
+  "name": "Aaron Sequeira",
+  "email": "aaron@example.com",
+  "phone": null,
+  "linkedin": "linkedin.com/in/aaron-seq",
+  "github": "github.com/aaron-seq",
+  "portfolio": null,
+  "summary": "AI/ML Engineer with 3+ years experience in document intelligence, RAG systems, and full-stack development. Built production ML pipelines serving 10k+ users.",
+  "experiences": [
+    {
+      "title": "AI Research Engineer",
+      "company": "Wood Engineering",
+      "duration": "2023-Present",
+      "achievements": [
+        "Reduced search time by 60%",
+        "Implemented ML models with 92% accuracy for classification tasks"
+      ],
+      "metrics": [
+        "Built production ML pipelines serving 10k+ users",
+        "Deployed on Azure Cloud with Docker containers"
+      ],
+      "technologies": [
+        "RAG architecture",
+        "TensorFlow",
+        "PyTorch",
+        "Docker",
+        "Azure"
+      ]
+    },
+    {
+      "title": "Full Stack Developer",
+      "company": "Smarter.Codes.AI",
+      "duration": "2022-2023",
+      "achievements": [
+        "Built AI automation tools using Python and LLMs",
+        "Created web applications serving 5000+ active users"
+      ],
+      "metrics": [],
+      "technologies": [
+        "Python",
+        "LLMs",
+        "OpenAI API"
+      ]
+    }
+  ],
+  "projects": [],
+  "skills": [
+    "Python",
+    "TensorFlow",
+    "PyTorch",
+    "Docker",
+    "Azure",
+    "React",
+    "FastAPI",
+    "LangChain"
+  ],
+  "education": [],
+  "raw_text": "Aaron Sequeira\nAI/ML Engineer\nemail: aaron@example.com\nlinkedin: linkedin.com/in/aaron-seq\ngithub: github.com/aaron-seq\n\nSUMMARY\nAI/ML Engineer with 3+ years experience in document intelligence, RAG systems, and full-stack development. Built production ML pipelines serving 10k+ users.\n\nEXPERIENCE\nAI Research Engineer - Wood Engineering (2023-Present)\n- Developed document search engine using RAG architecture, reducing search time by 60%\n- Implemented ML models with 92% accuracy for classification tasks\n- Deployed on Azure Cloud with Docker containers\n\nFull Stack Developer - Smarter.Codes.AI (2022-2023)\n- Built AI automation tools using Python and LLMs\n- Created web applications serving 5000+ active users\n- Integrated OpenAI API for intelligent document processing\n\nSKILLS\nPython, TensorFlow, PyTorch, Docker, Azure, React, FastAPI, LangChain"
+}
