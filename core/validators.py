@@ -11,6 +11,10 @@ from .models import EmailDraft, QualityCheck
 class DraftValidator:
     """Validate email draft quality"""
 
+    # Class-level configuration constants
+    max_words: int = 180
+    min_quality_score: int = 70
+
     def __init__(self):
         # Emoji pattern (comprehensive)
         self.emoji_pattern = re.compile(
@@ -32,9 +36,10 @@ class DraftValidator:
             r"\n\s*[-•*→]\s+",  # Newline followed by dash/bullet
         ]
 
-        # URL pattern
+        # URL pattern - matches both with and without protocol
         self.url_pattern = re.compile(
-            r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+            r"(?:http[s]?://)?(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+"
+            r"[a-zA-Z]{2,}(?:/[^\s]*)?"
         )
 
         # Metric patterns (numbers with %, K, M, or units)

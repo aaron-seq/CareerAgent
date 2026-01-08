@@ -3,10 +3,9 @@ Pydantic data models for CareerAgent
 All type-safe data structures for CV, jobs, contacts, emails, WhatsApp
 """
 
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, HttpUrl, validator
+from typing import List, Optional
+from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
-import re
 
 
 class Experience(BaseModel):
@@ -103,11 +102,12 @@ class EmailDraft(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     gmail_draft_id: Optional[str] = None
 
-    @validator("word_count", always=True)
-    def calculate_word_count(cls, v, values):
-        if "body" in values:
-            return len(values["body"].split())
-        return v
+    @model_validator(mode="after")
+    def calculate_word_count(self):
+        """Calculate word count from body text after model initialization."""
+        if self.body:
+            self.word_count = len(self.body.split())
+        return self
 
 
 class WhatsAppDraft(BaseModel):
@@ -121,11 +121,12 @@ class WhatsAppDraft(BaseModel):
     character_count: int = 0
     created_at: datetime = Field(default_factory=datetime.now)
 
-    @validator("character_count", always=True)
-    def calculate_character_count(cls, v, values):
-        if "message" in values:
-            return len(values["message"])
-        return v
+    @model_validator(mode="after")
+    def calculate_character_count(self):
+        """Calculate character count from message after model initialization."""
+        if self.message:
+            self.character_count = len(self.message)
+        return self
 
 
 class QualityCheck(BaseModel):
@@ -142,22 +143,21 @@ class QualityCheck(BaseModel):
     issues: List[str] = []
     passed: bool = False
 
-    @validator("score", always=True)
-    def calculate_score(cls, v, values):
+    @model_validator(mode="after")
+    def calculate_score_and_passed(self):
+        """Calculate quality score and passed status after model initialization."""
         checks = [
-            values.get("has_metric", False),
-            values.get("has_project_link", False),
-            values.get("has_company_hook", False),
-            values.get("has_clear_cta", False),
-            values.get("under_word_limit", False),
-            values.get("no_emojis", False),
-            values.get("no_bullet_dashes", False),
+            self.has_metric,
+            self.has_project_link,
+            self.has_company_hook,
+            self.has_clear_cta,
+            self.under_word_limit,
+            self.no_emojis,
+            self.no_bullet_dashes,
         ]
-        return sum(checks) / len(checks) * 100
-
-    @validator("passed", always=True)
-    def check_passed(cls, v, values):
-        return values.get("score", 0) >= 70.0
+        self.score = sum(checks) / len(checks) * 100
+        self.passed = self.score >= 70.0
+        return self
 
 
 class SearchQuery(BaseModel):
