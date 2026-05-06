@@ -5,7 +5,7 @@ Enforces no emojis, no bullets, must have links and metrics
 
 import re
 from typing import List
-from .models import EmailDraft, QualityCheck
+from data.models import EmailDraft, QualityCheck
 
 
 class DraftValidator:

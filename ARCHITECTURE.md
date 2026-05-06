@@ -81,27 +81,27 @@ graph TB
 
 | Component | File | Description |
 |-----------|------|-------------|
-| CV Parser | `core/cv_parser.py` | Extracts structured data from PDF/text using LLM |
-| Job Finder | `core/job_finder.py` | Searches for jobs using DuckDuckGo web search |
-| Contact Finder | `core/contact_finder.py` | Finds hiring contacts and generates email permutations |
-| Personalization Engine | `core/personalization.py` | Creates personalized email and WhatsApp drafts |
-| Draft Validator | `core/validators.py` | Validates draft quality against professional standards |
+| CV Parser | `bloc/cv_parser.py` | Extracts structured data from PDF/text using LLM |
+| Job Finder | `bloc/job_finder.py` | Searches for jobs using DuckDuckGo web search |
+| Contact Finder | `bloc/contact_finder.py` | Finds hiring contacts and generates email permutations |
+| Personalization Engine | `bloc/personalization.py` | Creates personalized email and WhatsApp drafts |
+| Draft Validator | `helpers/validators.py` | Validates draft quality against professional standards |
 
 ### Integration Layer
 
 | Component | File | Description |
 |-----------|------|-------------|
-| LLM Client | `core/llm.py` | Ollama API client with JSON parsing and retry logic |
-| Gmail Drafts | `core/gmail_drafts.py` | Gmail API integration for draft creation |
-| WhatsApp | `core/whatsapp.py` | WhatsApp click-to-chat URL generation |
-| Prompts | `core/prompts.py` | LLM prompt templates for structured responses |
+| LLM Client | `sdk/llm.py` | Ollama API client with JSON parsing and retry logic |
+| Gmail Drafts | `sdk/gmail_drafts.py` | Gmail API integration for draft creation |
+| WhatsApp | `sdk/whatsapp.py` | WhatsApp click-to-chat URL generation |
+| Prompts | `helpers/prompts.py` | LLM prompt templates for structured responses |
 
 ### Data Layer
 
 | Component | File | Description |
 |-----------|------|-------------|
-| Models | `core/models.py` | Pydantic data models for type-safe structures |
-| Storage | `core/storage.py` | Local JSON-based persistence and ZIP export |
+| Models | `data/models.py` | Pydantic data models for type-safe structures |
+| Storage | `data/storage.py` | Local JSON-based persistence and ZIP export |
 
 ## Data Flow
 
@@ -164,19 +164,29 @@ Email drafts must pass validation checks:
 ```
 CareerAgent/
 ├── app.py                 # Main Streamlit application
-├── core/                  # Business logic modules
+├── bloc/                  # Business logic modules
 │   ├── __init__.py
-│   ├── llm.py            # Ollama LLM client
-│   ├── models.py         # Pydantic data models
-│   ├── validators.py     # Draft quality validation
 │   ├── cv_parser.py      # CV extraction
 │   ├── job_finder.py     # Job search
 │   ├── contact_finder.py # Contact discovery
-│   ├── personalization.py# Email/WhatsApp generation
+│   └── personalization.py# Email/WhatsApp generation
+├── sdk/                   # External service integrations
+│   ├── __init__.py
+│   ├── llm.py            # Ollama LLM client
 │   ├── gmail_drafts.py   # Gmail API integration
-│   ├── whatsapp.py       # WhatsApp URL generation
-│   ├── prompts.py        # LLM prompt templates
+│   └── whatsapp.py       # WhatsApp URL generation
+├── data/                  # Data models and persistence
+│   ├── __init__.py
+│   ├── models.py         # Pydantic data models
 │   └── storage.py        # Local JSON persistence
+├── helpers/               # Utilities and validators
+│   ├── __init__.py
+│   ├── prompts.py        # LLM prompt templates
+│   └── validators.py     # Draft quality validation
+├── utils/                 # General project utilities
+│   ├── __init__.py
+│   ├── logger.py         # Centralized error logging
+│   └── telemetry.py      # Latency & performance tracking
 ├── tests/                 # Test suite
 ├── assets/               # Static assets
 ├── .github/workflows/    # CI/CD configuration

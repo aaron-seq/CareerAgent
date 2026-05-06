@@ -8,16 +8,16 @@ import os
 from pathlib import Path
 
 # Core imports
-from core.llm import LocalLLMClient
-from core.cv_parser import CVParser
-from core.job_finder import JobFinder
-from core.contact_finder import ContactFinder
-from core.personalization import PersonalizationEngine
-from core.gmail_drafts import GmailDraftClient
-from core.whatsapp import WhatsAppClient
-from core.validators import DraftValidator
-from core.storage import LocalStorage
-from core.models import SearchQuery, CVProfile, JobPosting, ContactCandidate
+from sdk.llm import LocalLLMClient
+from bloc.cv_parser import CVParser
+from bloc.job_finder import JobFinder
+from bloc.contact_finder import ContactFinder
+from bloc.personalization import PersonalizationEngine
+from sdk.gmail_drafts import GmailDraftClient
+from sdk.whatsapp import WhatsAppClient
+from helpers.validators import DraftValidator
+from data.storage import LocalStorage
+from data.models import SearchQuery, CVProfile, JobPosting, ContactCandidate
 
 
 # Page config
@@ -260,7 +260,7 @@ def page_onboarding():
         col4.metric("Skills", len(profile.skills))
 
         with st.expander("View Full Profile"):
-            st.json(profile.dict())
+            st.json(profile.model_dump())
 
         if st.button("Next: Job Discovery", type="primary", use_container_width=True):
             st.session_state.page = "discovery"

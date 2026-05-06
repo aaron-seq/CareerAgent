@@ -5,8 +5,8 @@ import os
 import json
 import tempfile
 import shutil
-from core.storage import LocalStorage
-from core.models import EmailDraft, CVProfile, JobPosting
+from data.storage import LocalStorage
+from data.models import EmailDraft, CVProfile, JobPosting
 
 
 class TestLocalStorage:

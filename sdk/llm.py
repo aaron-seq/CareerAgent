@@ -10,6 +10,11 @@ import time
 from pydantic import BaseModel
 
 
+from utils.logger import get_logger
+from utils.telemetry import telemetry
+
+logger = get_logger(__name__)
+
 class LocalLLMClient:
     """Client for interacting with Ollama local LLM"""
 
@@ -49,6 +54,7 @@ class LocalLLMClient:
             return True
         return False
 
+    @telemetry.track_latency("generate_text")
     def generate_text(
         self, prompt: str, temperature: float = 0.7, max_tokens: int = 2000
     ) -> str:
@@ -86,6 +92,7 @@ class LocalLLMClient:
         except Exception as e:
             raise Exception(f"LLM generation failed: {str(e)}")
 
+    @telemetry.track_latency("generate_json")
     def generate_json(
         self, prompt: str, temperature: float = 0.3, max_retries: int = 2
     ) -> Dict[str, Any]:
@@ -109,8 +116,8 @@ class LocalLLMClient:
                 return parsed
 
             except json.JSONDecodeError as e:
-                print(f"DEBUG: JSON Parse Error (Attempt {attempt + 1}): {e}")
-                print(
+                logger.error(f"DEBUG: JSON Parse Error (Attempt {attempt + 1}): {e}", exc_info=True)
+                logger.error(
                     f"DEBUG: Failed JSON content: {cleaned[:200]}..."
                 )  # Print start of failed content
                 if attempt < max_retries - 1:
@@ -170,6 +177,7 @@ class LocalLLMClient:
 
         return response[start:end]
 
+    @telemetry.track_latency("generate_with_schema")
     def generate_with_schema(
         self, prompt: str, schema_model: BaseModel, temperature: float = 0.3
     ) -> BaseModel:

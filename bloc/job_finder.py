@@ -5,13 +5,17 @@ Finds job postings from web search results
 
 from duckduckgo_search import DDGS
 from typing import List, Optional
-from .models import JobPosting, SearchQuery
-from .llm import LocalLLMClient
-from .prompts import JOB_PARSE_PROMPT
+from data.models import JobPosting, SearchQuery
+from sdk.llm import LocalLLMClient
+from helpers.prompts import JOB_PARSE_PROMPT
 import requests
 from bs4 import BeautifulSoup
 import time
 
+
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class JobFinder:
     """Search for job postings using DuckDuckGo"""
@@ -43,7 +47,7 @@ class JobFinder:
                     time.sleep(0.5)
 
                 except Exception as e:
-                    print(f"Failed to parse result: {e}")
+                    logger.error(f"Failed to parse result: {e}", exc_info=True)
                     continue
 
             return job_postings
@@ -163,5 +167,5 @@ class JobFinder:
             return JobPosting(**job_data)
 
         except Exception as e:
-            print(f"Failed to fetch job details from {job_url}: {e}")
+            logger.error(f"Failed to fetch job details from {job_url}: {e}", exc_info=True)
             return None

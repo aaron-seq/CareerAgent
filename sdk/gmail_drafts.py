@@ -17,6 +17,10 @@ from googleapiclient.errors import HttpError
 SCOPES = ["https://www.googleapis.com/auth/gmail.compose"]
 
 
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 class GmailDraftClient:
     """Gmail API client for draft creation only"""
 
@@ -36,7 +40,7 @@ class GmailDraftClient:
             try:
                 creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
             except Exception as e:
-                print(f"Failed to load token: {e}")
+                logger.error(f"Failed to load token: {e}", exc_info=True)
 
         # Refresh or get new credentials
         if not creds or not creds.valid:
@@ -44,7 +48,7 @@ class GmailDraftClient:
                 try:
                     creds.refresh(Request())
                 except Exception as e:
-                    print(f"Token refresh failed: {e}")
+                    logger.error(f"Token refresh failed: {e}", exc_info=True)
                     creds = None
 
             if not creds:
@@ -96,7 +100,7 @@ class GmailDraftClient:
             )
 
             draft_id = result["id"]
-            print(f"Draft created successfully with ID: {draft_id}")
+            logger.info(f"Draft created successfully with ID: {draft_id}")
 
             return draft_id
 
