@@ -5,12 +5,16 @@ Generates email permutations when exact email not found
 
 from duckduckgo_search import DDGS
 from typing import List, Optional
-from .models import ContactCandidate
-from .llm import LocalLLMClient
-from .prompts import CONTACT_SEARCH_QUERIES_PROMPT
+from data.models import ContactCandidate
+from sdk.llm import LocalLLMClient
+from helpers.prompts import CONTACT_SEARCH_QUERIES_PROMPT
 import re
 import time
 
+
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class ContactFinder:
     """Find hiring managers and generate email permutations"""
@@ -68,7 +72,7 @@ class ContactFinder:
                 time.sleep(0.5)  # Rate limiting
 
             except Exception as e:
-                print(f"Search query failed: {e}")
+                logger.error(f"Search query failed: {e}", exc_info=True)
                 continue
 
             if len(contacts) >= max_results:

@@ -1,7 +1,7 @@
 """Tests for draft validation logic"""
 import pytest
-from core.validators import DraftValidator
-from core.models import EmailDraft
+from helpers.validators import DraftValidator
+from data.models import EmailDraft
 
 
 class TestDraftValidator:

@@ -1,7 +1,7 @@
 """Tests for Pydantic data models"""
 import pytest
 from datetime import datetime
-from core.models import (
+from data.models import (
     CVProfile,
     Experience,
     Project,

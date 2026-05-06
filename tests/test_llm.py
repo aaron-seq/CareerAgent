@@ -1,7 +1,7 @@
 """Tests for LLM client module"""
 import pytest
 from unittest.mock import Mock, patch
-from core.llm import LocalLLMClient
+from sdk.llm import LocalLLMClient
 
 
 class TestLocalLLMClient:
@@ -22,7 +22,7 @@ class TestLocalLLMClient:
         assert client.base_url == "http://custom:8000"
         assert client.model == "mistral:7b"
 
-    @patch("core.llm.requests.get")
+    @patch("sdk.llm.requests.get")
     def test_check_connection_success(self, mock_get):
         """Test successful connection check"""
         mock_response = Mock()
@@ -32,7 +32,7 @@ class TestLocalLLMClient:
         client = LocalLLMClient()
         assert client.check_connection() is True
 
-    @patch("core.llm.requests.get")
+    @patch("sdk.llm.requests.get")
     def test_check_connection_failure(self, mock_get):
         """Test failed connection check"""
         mock_get.side_effect = Exception("Connection refused")
@@ -68,7 +68,7 @@ class TestLocalLLMClient:
         with pytest.raises(ValueError, match="No JSON object found"):
             client._clean_json_response(response)
 
-    @patch("core.llm.requests.get")
+    @patch("sdk.llm.requests.get")
     def test_list_models(self, mock_get):
         """Test listing available models"""
         mock_response = Mock()

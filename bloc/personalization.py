@@ -4,7 +4,7 @@ Uses LLM with personalization plan for targeted outreach
 """
 
 from typing import Optional
-from .models import (
+from data.models import (
     CVProfile,
     JobPosting,
     EmailDraft,
@@ -12,8 +12,8 @@ from .models import (
     PersonalizationPlan,
     Project,
 )
-from .llm import LocalLLMClient
-from .prompts import (
+from sdk.llm import LocalLLMClient
+from helpers.prompts import (
     PERSONALIZATION_PLAN_PROMPT,
     EMAIL_DRAFT_PROMPT,
     WHATSAPP_DRAFT_PROMPT,

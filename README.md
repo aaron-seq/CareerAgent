@@ -69,7 +69,11 @@ Note: For cloud deployment, ensure the Ollama instance is accessible or bundled 
 ## Project Structure
 
 - `app.py`: Main entry point and UI logic.
-- `core/`: Business logic modules (LLM, Parsers, Search).
+- `bloc/`: Business logic components (CV parsing, job finding).
+- `sdk/`: External service integrations (LLM, Gmail, WhatsApp).
+- `data/`: Data models and persistence layers.
+- `helpers/`: Project-specific utilities (prompts, validators).
+- `utils/`: Core utilities (logging, telemetry).
 - `assets/`: Static assets and styles.
 - `requirements.txt`: Python dependencies.
 

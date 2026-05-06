@@ -206,31 +206,31 @@ Add screenshots for UI changes
 
 ## Core Modules Overview
 
-### `core/llm.py`
+### `sdk/llm.py`
 Handles Ollama API communication, JSON parsing, retry logic
 
-### `core/cv_parser.py`
+### `bloc/cv_parser.py`
 Extracts structured data from CV PDFs using LLM
 
-### `core/job_finder.py`
+### `bloc/job_finder.py`
 Searches for jobs using DuckDuckGo and extracts details
 
-### `core/contact_finder.py`
+### `bloc/contact_finder.py`
 Finds hiring managers and generates email permutations
 
-### `core/personalization.py`
+### `bloc/personalization.py`
 Generates personalized email drafts using LLM
 
-### `core/validators.py`
+### `helpers/validators.py`
 Validates draft quality against professional standards
 
-### `core/storage.py`
+### `data/storage.py`
 Handles local JSON-based persistence
 
-### `core/gmail_drafts.py`
+### `sdk/gmail_drafts.py`
 Creates Gmail drafts via Google API
 
-### `core/models.py`
+### `data/models.py`
 Pydantic data models for type safety
 
 ## Questions or Issues?
