@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "CareerAgent Autofill",
+  "version": "1.0.0",
+  "description": "Human-in-the-loop autofill for job application forms. Fills fields from your saved profile; you review and submit. Never auto-submits.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "CareerAgent Autofill"
+  },
+  "background": {
+    "service_worker": "src/service_worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*"
+      ],
+      "js": ["src/field_mapping.js", "src/content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

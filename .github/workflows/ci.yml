@@ -82,6 +82,21 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  extension:
+    name: Extension Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run field-mapping tests
+        working-directory: extension
+        run: node --test
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
