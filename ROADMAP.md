@@ -22,10 +22,11 @@ work. Progress is tracked in `PROGRESS.md`; conventions live in `CLAUDE.md`.
 
 Legend: ☐ not started · ◐ in progress · ☑ done
 
-- ☐ **Phase 0 — Foundation & hygiene.** CLAUDE.md, ROADMAP.md, PROGRESS.md, ADR
+- ☑ **Phase 0 — Foundation & hygiene.** CLAUDE.md, ROADMAP.md, PROGRESS.md, ADR
   folder, issue templates; ruff+mypy+pytest+CI; fix Pydantic v2 deprecations
   (`.dict()` → `.model_dump()`); `.env` schema.
-  *AC:* CI green, lint clean, docs present.
+  *AC:* CI green, lint clean, docs present. **Done** — `ruff check`/`ruff format`
+  clean, 51 tests passing, ruff is a blocking CI gate (mypy advisory).
 
 - ☐ **Phase 1 — Data layer.** Postgres (Supabase/Neon) + SQLModel + Alembic;
   migrate `CVProfile`, `JobPosting`, `Contact`, `EmailDraft`, `Application` from

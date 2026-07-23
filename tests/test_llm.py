@@ -1,6 +1,9 @@
 """Tests for LLM client module"""
-import pytest
+
 from unittest.mock import Mock, patch
+
+import pytest
+
 from core.llm import LocalLLMClient
 
 
@@ -16,9 +19,7 @@ class TestLocalLLMClient:
 
     def test_custom_initialization(self):
         """Test LLM client initialization with custom parameters"""
-        client = LocalLLMClient(
-            base_url="http://custom:8000", model="mistral:7b"
-        )
+        client = LocalLLMClient(base_url="http://custom:8000", model="mistral:7b")
         assert client.base_url == "http://custom:8000"
         assert client.model == "mistral:7b"
 
@@ -57,7 +58,7 @@ class TestLocalLLMClient:
     def test_clean_json_response_with_preamble(self):
         """Test JSON response cleaning with preamble text"""
         client = LocalLLMClient()
-        response = "Here's the JSON: {\"key\": \"value\"}"
+        response = 'Here\'s the JSON: {"key": "value"}'
         cleaned = client._clean_json_response(response)
         assert cleaned == '{"key": "value"}'
 

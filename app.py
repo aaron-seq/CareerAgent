@@ -3,22 +3,22 @@ CareerAgent - Main Streamlit Application
 Complete UI with 5 screens: Onboarding, Discovery, Contacts, Draft Studio, Export
 """
 
-import streamlit as st
 import os
 from pathlib import Path
 
+import streamlit as st
+
+from core.contact_finder import ContactFinder
+from core.cv_parser import CVParser
+from core.gmail_drafts import GmailDraftClient
+from core.job_finder import JobFinder
+
 # Core imports
 from core.llm import LocalLLMClient
-from core.cv_parser import CVParser
-from core.job_finder import JobFinder
-from core.contact_finder import ContactFinder
+from core.models import ContactCandidate, JobPosting, SearchQuery
 from core.personalization import PersonalizationEngine
-from core.gmail_drafts import GmailDraftClient
-from core.whatsapp import WhatsAppClient
-from core.validators import DraftValidator
 from core.storage import LocalStorage
-from core.models import SearchQuery, CVProfile, JobPosting, ContactCandidate
-
+from core.validators import DraftValidator
 
 # Page config
 st.set_page_config(
@@ -246,6 +246,17 @@ def page_onboarding():
             value="Senior",
         )
 
+        # Persist collected preferences so they survive Streamlit reruns and can
+        # be consumed by downstream discovery/personalization steps.
+        st.session_state.preferences = {
+            "target_roles": [r.strip() for r in target_roles.splitlines() if r.strip()],
+            "target_locations": [
+                loc.strip() for loc in target_locations.splitlines() if loc.strip()
+            ],
+            "industries": industries,
+            "seniority": seniority,
+        }
+
     # Show parsed CV
     if st.session_state.cv_profile:
         st.divider()
@@ -260,7 +271,7 @@ def page_onboarding():
         col4.metric("Skills", len(profile.skills))
 
         with st.expander("View Full Profile"):
-            st.json(profile.dict())
+            st.json(profile.model_dump())
 
         if st.button("Next: Job Discovery", type="primary", use_container_width=True):
             st.session_state.page = "discovery"
@@ -329,7 +340,7 @@ def page_discovery():
                     st.write(f"**URL:** {job.url}")
                     st.write(f"**Description:** {job.description[:300]}...")
 
-                    if st.button(f"Select This Job", key=f"select_{i}"):
+                    if st.button("Select This Job", key=f"select_{i}"):
                         if job not in st.session_state.selected_jobs:
                             st.session_state.selected_jobs.append(job)
                             st.session_state.storage.save_job_posting(job)
@@ -426,7 +437,7 @@ def page_contacts():
             col1, col2 = st.columns(2)
 
             with col1:
-                if st.button(f"Search Contacts", key=f"search_contacts_{idx}"):
+                if st.button("Search Contacts", key=f"search_contacts_{idx}"):
                     with st.spinner("Searching for contacts..."):
                         try:
                             finder = ContactFinder(st.session_state.llm_client)
@@ -522,7 +533,7 @@ def page_contacts():
                     "Domain", value=domain, key=f"domain_{idx}"
                 )
 
-            if st.button(f"Generate Permutations", key=f"gen_perm_{idx}"):
+            if st.button("Generate Permutations", key=f"gen_perm_{idx}"):
                 if first_name and last_name and domain_input:
                     finder = ContactFinder(st.session_state.llm_client)
                     permutations = finder.generate_email_permutations(

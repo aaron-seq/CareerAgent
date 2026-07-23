@@ -3,14 +3,16 @@ Job discovery using DuckDuckGo search (free, no API key)
 Finds job postings from web search results
 """
 
-from duckduckgo_search import DDGS
+import time
 from typing import List, Optional
-from .models import JobPosting, SearchQuery
-from .llm import LocalLLMClient
-from .prompts import JOB_PARSE_PROMPT
+
 import requests
 from bs4 import BeautifulSoup
-import time
+from duckduckgo_search import DDGS
+
+from .llm import LocalLLMClient
+from .models import JobPosting, SearchQuery
+from .prompts import JOB_PARSE_PROMPT
 
 
 class JobFinder:
@@ -126,7 +128,7 @@ class JobFinder:
             # Take first part before .com
             company = domain.split(".")
             return company[0].capitalize()
-        except:
+        except Exception:
             pass
 
         return "Unknown Company"

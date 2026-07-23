@@ -1,6 +1,5 @@
 """Tests for WhatsApp client module"""
 
-import pytest
 from core.whatsapp import WhatsAppClient
 
 

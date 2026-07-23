@@ -3,8 +3,8 @@ WhatsApp integration for click-to-chat links
 Generates URL-encoded WhatsApp Web links with pre-filled messages
 """
 
-from urllib.parse import quote
 from typing import Optional
+from urllib.parse import quote
 
 
 class WhatsAppClient:

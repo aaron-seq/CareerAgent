@@ -5,9 +5,10 @@ Local storage for drafts and export to JSON/ZIP
 import json
 import os
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List
 from zipfile import ZipFile
-from .models import EmailDraft, WhatsAppDraft, CVProfile, JobPosting
+
+from .models import CVProfile, EmailDraft, JobPosting, WhatsAppDraft
 
 
 class LocalStorage:
@@ -38,7 +39,7 @@ class LocalStorage:
         filepath = os.path.join(self.storage_dir, "email_drafts", filename)
 
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(draft.dict(), f, indent=2, default=str)
+            json.dump(draft.model_dump(), f, indent=2, default=str)
 
         return filepath
 
@@ -49,7 +50,7 @@ class LocalStorage:
         filepath = os.path.join(self.storage_dir, "whatsapp_drafts", filename)
 
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(draft.dict(), f, indent=2, default=str)
+            json.dump(draft.model_dump(), f, indent=2, default=str)
 
         return filepath
 
@@ -60,7 +61,7 @@ class LocalStorage:
         filepath = os.path.join(self.storage_dir, "cv_profiles", filename)
 
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(profile.dict(), f, indent=2, default=str)
+            json.dump(profile.model_dump(), f, indent=2, default=str)
 
         return filepath
 
@@ -71,7 +72,7 @@ class LocalStorage:
         filepath = os.path.join(self.storage_dir, "job_postings", filename)
 
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(job.dict(), f, indent=2, default=str)
+            json.dump(job.model_dump(), f, indent=2, default=str)
 
         return filepath
 

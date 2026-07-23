@@ -3,9 +3,10 @@ Pydantic data models for CareerAgent
 All type-safe data structures for CV, jobs, contacts, emails, WhatsApp
 """
 
-from typing import List, Optional
-from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class Experience(BaseModel):

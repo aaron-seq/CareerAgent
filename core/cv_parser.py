@@ -3,11 +3,11 @@ CV parser with PDF extraction and LLM-based structuring
 Supports both PDF and plain text input
 """
 
-import PyPDF2
 import pdfplumber
-from typing import Optional
-from .models import CVProfile
+import PyPDF2
+
 from .llm import LocalLLMClient
+from .models import CVProfile
 from .prompts import CV_PARSE_PROMPT
 
 
