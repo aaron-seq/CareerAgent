@@ -4,13 +4,50 @@ Living status log. Update the top block at the end of every working session.
 Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARCH.md`.
 
 ## Current status
-- **Current phase:** Phase 0 — Foundation & hygiene (**complete**)
+- **Current phase:** Phases 0–10 **complete**.
 - **Last updated:** 2026-07-23
-- **Next action:** Begin Phase 1 — Data layer (Postgres + SQLModel + Alembic;
-  migrate models off JSON; PII encryption for resume fields).
-- **Blockers:** None.
+- **Next action:** Manual QA of the not-live-verified paths (live API pulls,
+  real LLM output, extension in a browser, real email send, deployment), then
+  wire the new `core/` services into `app.py` screens incrementally.
+- **Blockers:** None. Build env can't reach external services (job APIs / model
+  hub / Ollama) or install pgvector; see per-phase notes below and ADRs 0003/0004.
+
+## Verification level per phase
+- **Genuinely run + tested here:** P1 data layer, P4 dedup/scoring, P5 resume
+  tooling, P6 tracking, P7 outreach gate logic, P9 enrichment/digest, P10
+  analytics, and the full internal E2E (`tests/test_e2e_pipeline.py`).
+- **Built + unit-tested, external boundary mocked:** P2 ingestion adapters
+  (respx), P3 JSON-LD/polite fetcher (respx), P7 email verification (stub
+  resolver), P9 Telegram/Discord emitters (respx).
+- **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
+  real email delivery, and deployment (dry-run only).
+
+Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
+
+### 2026-07-23 — Phases 1–10 (full platform build)
+Built the platform in phase order, one commit per phase, CI green throughout:
+- **P1 `core/db`** — SQLModel tables, Alembic, Fernet PII encryption, repos,
+  legacy JSON import (ADR 0003).
+- **P2 `core/ingestion`** — Greenhouse/Lever/Ashby + Adzuna/Muse/Remotive
+  adapters → canonical `JobPosting`; idempotent upsert; error isolation.
+- **P3 `core/fetching`** — ATS detection (regex), JSON-LD extraction (bs4),
+  robots-respecting rate-limited fetcher.
+- **P4 `core/matching`** — pluggable embeddings (hashing fallback), fuzzy dedup,
+  explainable resume↔JD scoring.
+- **P5 `core/resume`** — JSON Resume interchange, ATS linter, fpdf2 PDF,
+  truthful tailoring with `assert_no_fabrication`.
+- **P6 `core/tracking`** — kanban state machine, reminders, dup-prevention,
+  blacklist.
+- **P7 `core/outreach`** — verification, CAN-SPAM/GDPR footer + LIA + send caps,
+  single pre-send gate.
+- **P8 `extension/`** — MV3 human-in-the-loop autofill; tested field-mapping
+  core (Node); never auto-submits.
+- **P9 `core/enrichment` + `core/alerting`** — salary/company/visa/ghost
+  enrichment, filters, digest (MD/RSS) + Telegram/Discord.
+- **P10 `core/analytics` + E2E + deploy** — funnel, A/B, interview prep; full
+  E2E pipeline test; `scripts/send_digest.py` + Actions cron; ADR 0004.
 
 ### 2026-07-23 — Phase 0 complete (code-touching hygiene)
 - Added `pyproject.toml` with ruff (lint + format) and mypy config.

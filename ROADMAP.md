@@ -28,57 +28,80 @@ Legend: ☐ not started · ◐ in progress · ☑ done
   *AC:* CI green, lint clean, docs present. **Done** — `ruff check`/`ruff format`
   clean, 51 tests passing, ruff is a blocking CI gate (mypy advisory).
 
-- ☐ **Phase 1 — Data layer.** Postgres (Supabase/Neon) + SQLModel + Alembic;
+- ☑ **Phase 1 — Data layer.** Postgres (Supabase/Neon) + SQLModel + Alembic;
   migrate `CVProfile`, `JobPosting`, `Contact`, `EmailDraft`, `Application` from
   JSON to DB; PII encryption for resume fields.
   *AC:* CRUD + migration tests pass; JSON import path works.
 
-- ☐ **Phase 2 — Real job ingestion (APIs).** Ingestion service:
+- ☑ **Phase 2 — Real job ingestion (APIs).** Ingestion service:
   Greenhouse/Lever/Ashby public APIs + Adzuna + The Muse + Remotive; normalize
   into canonical `JobPosting`; store with source + fetched-at.
   *AC:* pulls ≥N real jobs from ≥3 sources into DB with mocked-HTTP tests.
 
-- ☐ **Phase 3 — ATS detection + JSON-LD + polite fetcher.** Careers URL → ATS
+- ☑ **Phase 3 — ATS detection + JSON-LD + polite fetcher.** Careers URL → ATS
   detection (regex signatures); `extruct` JSON-LD parser; robots.txt +
   rate-limit + cache; Jina Reader/Crawl4AI fallback.
   *AC:* careers URL returns structured jobs; robots.txt honored; fixture tests.
 
-- ☐ **Phase 4 — Dedup + embeddings + scoring.** Fuzzy dedup
+- ☑ **Phase 4 — Dedup + embeddings + scoring.** Fuzzy dedup
   (title+company+location, canonical URL); sentence-transformers `all-MiniLM-L6-v2`
   → pgvector; resume↔JD cosine + keyword-gap (KeyBERT/RapidFuzz), explainable.
   *AC:* duplicates collapse; each job gets an explainable match score.
 
-- ☐ **Phase 5 — Resume tooling.** LLM parse into JSON Resume schema;
+- ☑ **Phase 5 — Resume tooling.** LLM parse into JSON Resume schema;
   ATS-friendliness linter; RenderCV (YAML→PDF); truthful tailored variants.
   *AC:* upload → JSON Resume → ATS-clean PDF; tailoring cites only real data.
 
-- ☐ **Phase 6 — Application tracking pipeline.** Kanban states
+- ☑ **Phase 6 — Application tracking pipeline.** Kanban states
   (saved→applied→screening→interview→offer/rejected); follow-up reminders;
   duplicate-application prevention; company blacklist.
   *AC:* full lifecycle tracked; reminders fire; no double-apply.
 
-- ☐ **Phase 7 — Outreach engine hardening (compliance).** Reuse personalization
+- ☑ **Phase 7 — Outreach engine hardening (compliance).** Reuse personalization
   + validators + Gmail drafts; add email verification (dnspython/email-validator),
   suppression list, per-campaign LIA, postal address + opt-out in every template,
   send caps + jitter, reply detection.
   *AC:* no send without verification + suppression check; enforced by tests.
 
-- ☐ **Phase 8 — Human-in-the-loop autofill extension.** Manifest V3 extension:
+- ☑ **Phase 8 — Human-in-the-loop autofill extension.** Manifest V3 extension:
   profile in `chrome.storage`, layered field detection
   (autocomplete→ARIA→label→fuzzy→LLM fallback), per-site activation; fills but
   never auto-submits; optimized for Greenhouse/Lever/Ashby.
   *AC:* fills a real Greenhouse form correctly; never auto-submits.
 
-- ☐ **Phase 9 — Enrichment, filters, alerting.** Salary (Adzuna), company
+- ☑ **Phase 9 — Enrichment, filters, alerting.** Salary (Adzuna), company
   enrichment (layoffs.fyi, Glassdoor), visa sponsorship filter (USCIS H-1B /
   DOL LCA / UK sponsor register), ghost-job detection, new-grad/intern filter;
   alerting via Telegram/Discord/email digest/RSS (GitHub Actions cron).
   *AC:* jobs annotated with salary/visa/company signals; daily digest delivered.
 
-- ☐ **Phase 10 — Analytics + polish + deploy.** Application→response funnel; A/B
+- ☑ **Phase 10 — Analytics + polish + deploy.** Application→response funnel; A/B
   resume-variant tracking; interview-prep generation from JD; deploy (HF Spaces /
   self-host + scheduled Actions); docs + onboarding.
   *AC:* dashboard renders funnel; deployment reproducible; README updated.
+
+## Implementation status (2026-07-23)
+
+**All phases 0–10 implemented and tested** (143 Python tests + 11 JS tests
+green, `ruff` clean). A full internal end-to-end test
+(`tests/test_e2e_pipeline.py`) exercises ingest → dedup → enrich → score →
+track → digest → tailor → outreach gate.
+
+Deviations from the original plan, made for the build environment (no outbound
+access to job APIs / model hub / Ollama, no pgvector) and recorded in ADRs:
+
+- **DB:** SQLite for dev/CI, Postgres as the deployment target; vectors stored
+  as JSON with in-process NumPy cosine (pgvector is the documented swap) —
+  ADR 0003.
+- **Embeddings:** `HashingEmbedder` (no-download, deterministic) is the default;
+  `sentence-transformers` is an optional upgrade — `core/matching/embeddings.py`.
+- **JSON-LD:** parsed with BeautifulSoup + stdlib `json` instead of `extruct`
+  (broken transitive dep in this env).
+- **Resume PDF:** rendered with `fpdf2` (pure-Python, no system libs) rather
+  than RenderCV; JSON Resume remains the interchange format.
+- **Built + unit-tested but not live-verified here:** live API pulls, real LLM
+  output, the browser extension in a real browser, real email sends, and actual
+  deployment (ADR 0004). Each is noted in `PROGRESS.md`.
 
 ## Definition of done (every phase)
 Code + tests green + docs updated + `PROGRESS.md` updated + an ADR in
