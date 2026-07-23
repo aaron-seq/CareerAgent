@@ -4,6 +4,10 @@ pytest-cov==4.1.0
 pytest-mock==3.12.0
 pytest-asyncio==0.21.1
 
+# HTTP mocking for API-adapter tests (no live network in CI)
+respx==0.23.1
+responses==0.25.9
+
 # Code quality (ruff handles lint + format, replacing black/flake8/isort)
 ruff==0.15.8
 mypy==1.7.1
