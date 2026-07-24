@@ -151,6 +151,189 @@ def test_unsupported_ats_raises(temp_db):
 
 
 # --------------------------------------------------------------------------- #
+# Aggregator ingestion
+# --------------------------------------------------------------------------- #
+
+
+@respx.mock
+def test_ingest_aggregator_remotive(temp_db):
+    respx.get(url__regex=r"https://remotive\.com/api/remote-jobs.*").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 7,
+                        "title": "Remote Python Dev",
+                        "company_name": "RemoteCorp",
+                        "candidate_required_location": "Worldwide",
+                        "description": "<p>Python.</p>",
+                        "url": "https://remotive.example/7",
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        result = facade.ingest_aggregator("remotive", client=client)
+    assert result.upserted == 1
+    assert facade.top_jobs()[0]["remote"] is True
+
+
+def test_ingest_aggregator_adzuna_requires_keys(temp_db, monkeypatch):
+    monkeypatch.delenv("ADZUNA_APP_ID", raising=False)
+    monkeypatch.delenv("ADZUNA_APP_KEY", raising=False)
+    with pytest.raises(ValueError, match="ADZUNA_APP_ID"):
+        facade.ingest_aggregator("adzuna")
+
+
+def test_ingest_aggregator_unsupported(temp_db):
+    with pytest.raises(ValueError, match="Unsupported aggregator"):
+        facade.ingest_aggregator("linkedin")
+
+
+# --------------------------------------------------------------------------- #
+# Enrichment + filters via the facade
+# --------------------------------------------------------------------------- #
+
+
+@respx.mock
+def test_refresh_matches_enriches_company_and_visa(temp_db):
+    # Stripe is in the bundled visa-sponsor sample; Nobody Co is not.
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "ML Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "u1",
+                        "content": "Python",
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        facade.ingest_ats("greenhouse", "stripe", "Stripe", client=client)
+
+    facade.refresh_matches(_cv())
+    job = facade.top_jobs()[0]
+    # Company linked and annotated from the bundled datasets.
+    assert job["sponsors_visa"] is True
+    assert job["glassdoor_rating"] == 4.2
+    assert job["ghost_score"] is not None
+
+
+@respx.mock
+def test_top_jobs_filters(temp_db):
+    respx.get("https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "Senior Python Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "u1",
+                        "content": "Python " * 60,
+                    },
+                    {
+                        "id": 2,
+                        "title": "New Grad Software Engineer",
+                        "location": {"name": "NYC"},
+                        "absolute_url": "u2",
+                        "content": "Entry level " * 60,
+                    },
+                    {
+                        "id": 3,
+                        "title": "Engineering Intern",
+                        "location": {"name": "NYC"},
+                        "absolute_url": "u3",
+                        "content": "Internship " * 60,
+                    },
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        facade.ingest_ats("greenhouse", "acme", "Acme", client=client)
+    facade.refresh_matches(_cv())
+
+    assert len(facade.top_jobs()) == 3
+    remote = facade.top_jobs(remote_only=True)
+    assert len(remote) == 1 and remote[0]["remote"] is True
+
+    grads = facade.top_jobs(new_grad_only=True)
+    assert [j["title"] for j in grads] == ["New Grad Software Engineer"]
+
+    interns = facade.top_jobs(internships_only=True)
+    assert [j["title"] for j in interns] == ["Engineering Intern"]
+
+    # Acme is not in the visa sample -> filtered out entirely.
+    assert facade.top_jobs(sponsors_visa_only=True) == []
+
+    # A min-score above every score removes everything.
+    assert facade.top_jobs(min_score=101) == []
+
+
+# --------------------------------------------------------------------------- #
+# Digest + interview prep
+# --------------------------------------------------------------------------- #
+
+
+@respx.mock
+def test_digest_markdown_and_rss(temp_db):
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "ML Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "https://x.example/1",
+                        "content": "Python",
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        facade.ingest_ats("greenhouse", "stripe", "Stripe", client=client)
+    facade.refresh_matches(_cv())
+
+    md = facade.digest_markdown()
+    assert "ML Engineer" in md and "CareerAgent digest" in md
+
+    rss = facade.digest_rss()
+    assert rss.startswith("<?xml") and "ML Engineer" in rss
+
+
+def test_interview_questions_from_job():
+    from core.models import JobPosting
+
+    job = JobPosting(
+        title="ML Engineer",
+        company="Acme",
+        tech_stack=["PyTorch"],
+        requirements=["Ship models to production"],
+    )
+    qs = facade.interview_questions(job, limit=6)
+    assert any("PyTorch" in q for q in qs)
+    assert any("production" in q for q in qs)
+    assert len(qs) <= 6
+
+
+# --------------------------------------------------------------------------- #
 # Careers-URL discovery (API-first, JSON-LD fallback)
 # --------------------------------------------------------------------------- #
 

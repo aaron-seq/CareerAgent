@@ -12,23 +12,37 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from .alerting import build_digest
-from .analytics import compute_funnel
+from .analytics import compute_funnel, generate_interview_questions
 from .db import get_session, init_db
 from .db.repository import (
     ApplicationRepository,
+    CompanyRepository,
     CVRepository,
     JobRepository,
     row_to_job,
 )
-from .db.tables import ApplicationStatus
-from .enrichment import SalaryEnricher
+from .db.tables import ApplicationStatus, Company
+from .enrichment import (
+    CompanyEnricher,
+    GhostAnnotator,
+    SalaryEnricher,
+    VisaSponsorFilter,
+    exclude_ghosts,
+    filter_by_min_score,
+    filter_remote,
+    is_internship,
+    is_new_grad,
+)
 from .fetching import PoliteFetcher, RobotsDisallowed, detect, extract_jsonld_jobs
 from .ingestion import (
+    AdzunaSource,
     AshbySource,
     GreenhouseSource,
     IngestionResult,
     IngestionService,
     LeverSource,
+    RemotiveSource,
+    TheMuseSource,
 )
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, JobPosting
@@ -91,25 +105,127 @@ def ingest_ats(
         return IngestionService(session).ingest(source, client=client)
 
 
+def link_companies(session) -> int:
+    """Ensure every job points at a Company row.
+
+    Ingestion stores the company *name* on the job; enrichment (visa,
+    Glassdoor, layoffs) lives on ``Company``. This backfills the link so the
+    two can be joined per job.
+    """
+    repo = JobRepository(session)
+    companies = CompanyRepository(session)
+    linked = 0
+    for row in repo.list(include_duplicates=True):
+        if row.company_id is not None or not row.company_name:
+            continue
+        row.company_id = companies.get_or_create(row.company_name).id
+        session.add(row)
+        linked += 1
+    session.flush()
+    return linked
+
+
+def ingest_aggregator(
+    provider: str,
+    client=None,
+    **params: Any,
+) -> IngestionResult:
+    """Pull jobs from a keyword-searchable aggregator.
+
+    ``remotive`` needs no credentials. ``adzuna`` requires ADZUNA_APP_ID /
+    ADZUNA_APP_KEY and ``themuse`` optionally uses THEMUSE_API_KEY (a key
+    raises the rate limit); both are read from the environment.
+    """
+    import os
+
+    init_persistence()
+    provider = provider.lower()
+    if provider == "remotive":
+        source = RemotiveSource()
+    elif provider == "themuse":
+        source = TheMuseSource(api_key=os.environ.get("THEMUSE_API_KEY"))
+    elif provider == "adzuna":
+        app_id = os.environ.get("ADZUNA_APP_ID")
+        app_key = os.environ.get("ADZUNA_APP_KEY")
+        if not app_id or not app_key:
+            raise ValueError(
+                "Adzuna needs ADZUNA_APP_ID and ADZUNA_APP_KEY in the environment."
+            )
+        source = AdzunaSource(app_id, app_key, country=params.pop("country", "gb"))
+    else:
+        raise ValueError(f"Unsupported aggregator: {provider}")
+
+    with get_session() as session:
+        return IngestionService(session).ingest(source, client=client, **params)
+
+
 def refresh_matches(cv: CVProfile) -> int:
-    """Dedup, backfill salary, and score all jobs against the CV."""
+    """Full refresh: dedup, link companies, enrich, then score against the CV.
+
+    Runs the whole annotation chain so the UI can filter on salary, visa
+    sponsorship, company signals, and ghost-job risk.
+    """
     init_persistence()
     embedder = get_embedder()
     with get_session() as session:
         DedupService(session).run()
+        link_companies(session)
         SalaryEnricher().enrich(session)
+        GhostAnnotator().annotate(session)
+        # Dataset-backed enrichment; skip quietly if a dataset is unavailable.
+        try:
+            VisaSponsorFilter.from_csv().annotate(session)
+            CompanyEnricher.from_csv().annotate(session)
+        except (OSError, ValueError):
+            pass
         return ScoringService(session, embedder=embedder).score_all(cv)
 
 
-def top_jobs(limit: int = 25) -> list[dict[str, Any]]:
-    """Non-duplicate jobs, best match first, as plain dicts for the UI."""
+def top_jobs(
+    limit: int = 25,
+    min_score: float = 0.0,
+    remote_only: bool = False,
+    max_ghost_score: float | None = None,
+    new_grad_only: bool = False,
+    internships_only: bool = False,
+    sponsors_visa_only: bool = False,
+) -> list[dict[str, Any]]:
+    """Non-duplicate jobs, best match first, with optional filters applied."""
     with get_session() as session:
         rows = JobRepository(session).list(include_duplicates=False)
+
+        if min_score:
+            rows = filter_by_min_score(rows, min_score)
+        if remote_only:
+            rows = filter_remote(rows)
+        if max_ghost_score is not None:
+            rows = exclude_ghosts(rows, max_ghost_score=max_ghost_score)
+        if new_grad_only:
+            rows = [r for r in rows if is_new_grad(r.title, r.description or "")]
+        if internships_only:
+            rows = [r for r in rows if is_internship(r.title, r.description or "")]
+
+        # Company-derived signals need the linked Company row.
+        companies = {}
+        for row in rows:
+            if row.company_id and row.company_id not in companies:
+                companies[row.company_id] = session.get(Company, row.company_id)
+        if sponsors_visa_only:
+            rows = [
+                r
+                for r in rows
+                if r.company_id
+                and getattr(companies.get(r.company_id), "sponsors_visa", False)
+            ]
+
         rows.sort(key=lambda r: r.match_score or 0, reverse=True)
-        return [_job_to_dict(r) for r in rows[:limit]]
+        return [
+            _job_to_dict(r, companies.get(r.company_id) if r.company_id else None)
+            for r in rows[:limit]
+        ]
 
 
-def _job_to_dict(row) -> dict[str, Any]:
+def _job_to_dict(row, company=None) -> dict[str, Any]:
     explanation = row.match_explanation or {}
     return {
         "id": row.id,
@@ -125,6 +241,9 @@ def _job_to_dict(row) -> dict[str, Any]:
         "salary_max": row.salary_max,
         "ghost_score": row.ghost_score,
         "dedup_key": row.dedup_key,
+        "sponsors_visa": getattr(company, "sponsors_visa", None),
+        "glassdoor_rating": getattr(company, "glassdoor_rating", None),
+        "had_layoffs": getattr(company, "had_layoffs", None),
     }
 
 
@@ -205,6 +324,18 @@ def digest_markdown(limit: int = 10) -> str:
     with get_session() as session:
         rows = JobRepository(session).list(include_duplicates=False)
         return build_digest(rows, limit=limit).to_markdown()
+
+
+def digest_rss(limit: int = 10) -> str:
+    """The same digest as an RSS feed (for feed readers / static hosting)."""
+    with get_session() as session:
+        rows = JobRepository(session).list(include_duplicates=False)
+        return build_digest(rows, limit=limit).to_rss()
+
+
+def interview_questions(job: JobPosting, limit: int = 10) -> list[str]:
+    """Likely interview questions derived from the job description."""
+    return generate_interview_questions(job, limit=limit)
 
 
 # --------------------------------------------------------------------------- #
