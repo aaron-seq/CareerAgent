@@ -291,6 +291,55 @@ def page_onboarding():
         with st.expander("View Full Profile"):
             st.json(profile.model_dump())
 
+        # --- ATS-friendliness report + ATS-clean exports (Phase 5) --- #
+        st.divider()
+        st.subheader("ATS check")
+        report = facade.lint_resume(profile, raw_text=profile.raw_text or None)
+
+        if report["ok"]:
+            st.success("No blocking ATS issues found.")
+        else:
+            for msg in report["errors"]:
+                st.error(msg)
+        for msg in report["warnings"]:
+            st.warning(msg)
+        if report["info"]:
+            with st.expander(f"Suggestions ({len(report['info'])})"):
+                for msg in report["info"]:
+                    st.info(msg)
+
+        st.caption(
+            "Exports are single-column, standard-font, selectable text - the "
+            "format applicant-tracking systems parse most reliably."
+        )
+        exp1, exp2, exp3 = st.columns(3)
+        with exp1:
+            st.download_button(
+                "Download ATS-clean PDF",
+                data=facade.resume_pdf(profile),
+                file_name="resume_ats.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        with exp2:
+            st.download_button(
+                "Download Markdown",
+                data=facade.resume_markdown(profile),
+                file_name="resume.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with exp3:
+            import json as _json
+
+            st.download_button(
+                "Download JSON Resume",
+                data=_json.dumps(facade.resume_json(profile), indent=2),
+                file_name="resume.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+
         if st.button("Next: Job Discovery", type="primary", use_container_width=True):
             st.session_state.page = "discovery"
             st.rerun()
@@ -626,6 +675,41 @@ def page_draft_studio():
 
                 if profile.skills:
                     st.write(f"**Skills:** {', '.join(profile.skills[:8])}")
+
+        # --- Tailored resume variant for this job (Phase 5) --- #
+        if st.session_state.cv_profile:
+            st.subheader("Tailored resume")
+            st.caption(
+                "Reorders and emphasizes what you already have. Never invents "
+                "skills or experience - unmatched requirements are listed as gaps."
+            )
+            if st.button("Tailor resume to this job", use_container_width=True):
+                with st.spinner("Tailoring (truthfully)..."):
+                    try:
+                        st.session_state.tailored = facade.tailor_for_job(
+                            st.session_state.cv_profile, current_job
+                        )
+                    except Exception as e:
+                        st.error(f"Tailoring failed: {e}")
+
+            tailored = st.session_state.get("tailored")
+            if tailored:
+                if tailored["emphasized"]:
+                    st.success("Emphasized: " + ", ".join(tailored["emphasized"][:10]))
+                if tailored["gaps"]:
+                    st.warning(
+                        "Gaps (address honestly, do not fake): "
+                        + ", ".join(tailored["gaps"][:10])
+                    )
+                if tailored["reordered_experience"]:
+                    st.caption("Experience order adjusted for relevance.")
+                st.download_button(
+                    "Download tailored ATS PDF",
+                    data=facade.resume_pdf(tailored["profile"]),
+                    file_name=f"resume_{current_job.company}.pdf".replace(" ", "_"),
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
 
         # Contact selection
         st.subheader("Recipient")

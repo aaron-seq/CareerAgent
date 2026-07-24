@@ -32,6 +32,8 @@ from .ingestion import (
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, JobPosting
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
+from .resume import lint as ats_lint
+from .resume import render_markdown, render_pdf, tailor_resume, to_json_resume
 from .tracking import (
     BlacklistedCompanyError,
     DuplicateApplicationError,
@@ -239,3 +241,49 @@ def job_from_dict(d: dict[str, Any]) -> JobPosting:
             if row
             else JobPosting(title=d["title"], company=d["company"])
         )
+
+
+# --------------------------------------------------------------------------- #
+# Resume tooling (no DB required -- pure functions over a CVProfile)
+# --------------------------------------------------------------------------- #
+
+
+def lint_resume(cv: CVProfile, raw_text: str | None = None) -> dict[str, Any]:
+    """ATS-friendliness report: issues grouped by severity + a pass/fail flag."""
+    issues = ats_lint(cv, raw_text)
+    return {
+        "ok": not any(i.severity == "error" for i in issues),
+        "errors": [i.message for i in issues if i.severity == "error"],
+        "warnings": [i.message for i in issues if i.severity == "warning"],
+        "info": [i.message for i in issues if i.severity == "info"],
+    }
+
+
+def resume_pdf(cv: CVProfile) -> bytes:
+    """Render an ATS-clean, single-column, selectable-text PDF."""
+    return render_pdf(to_json_resume(cv))
+
+
+def resume_markdown(cv: CVProfile) -> str:
+    return render_markdown(to_json_resume(cv))
+
+
+def resume_json(cv: CVProfile) -> dict[str, Any]:
+    """The JSON Resume document (portable interchange format)."""
+    return to_json_resume(cv)
+
+
+def tailor_for_job(cv: CVProfile, job: JobPosting) -> dict[str, Any]:
+    """Truthfully tailor a CV to a job.
+
+    Returns the tailored profile plus the report. Never fabricates -- the
+    underlying service raises if the tailored copy would add skills or
+    experience the candidate doesn't have.
+    """
+    tailored, report = tailor_resume(cv, job, embedder=get_embedder())
+    return {
+        "profile": tailored,
+        "emphasized": report.emphasized_skills,
+        "gaps": report.gaps,
+        "reordered_experience": report.reordered_experience,
+    }
