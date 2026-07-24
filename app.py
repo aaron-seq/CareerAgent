@@ -349,26 +349,85 @@ def page_onboarding():
 def page_discovery():
     """Job discovery screen"""
     st.title("Job Discovery")
-    st.markdown("Find relevant job postings using DuckDuckGo")
-
-    if not st.session_state.llm_client:
-        st.error("Please initialize LLM first")
-        return
+    st.markdown(
+        "API-first discovery: pull structured postings straight from a "
+        "company's ATS, or extract them from a careers page. Web search is a "
+        "last-resort fallback."
+    )
 
     if not st.session_state.cv_profile:
         st.warning("Please complete onboarding first")
         return
 
-    # Search mode
+    # Search mode. Ordered best-data-first; the DuckDuckGo path is retained as
+    # an explicitly-labeled fallback for companies without a supported ATS.
     mode = st.radio(
-        "Search Mode",
-        ["Web Search (DuckDuckGo)", "Paste Job URL", "Paste Job Description"],
+        "Discovery mode",
+        [
+            "Company careers URL (recommended)",
+            "Paste Job URL",
+            "Paste Job Description",
+            "Web Search (fallback)",
+        ],
         horizontal=True,
+        help=(
+            "Careers URL auto-detects Greenhouse/Lever/Ashby and uses their "
+            "public API; otherwise it reads schema.org JSON-LD, honoring "
+            "robots.txt."
+        ),
     )
 
     st.divider()
 
-    if mode == "Web Search (DuckDuckGo)":
+    if mode == "Company careers URL (recommended)":
+        careers_url = st.text_input(
+            "Careers page or job board URL",
+            placeholder="https://boards.greenhouse.io/stripe",
+            help="e.g. a Greenhouse/Lever/Ashby board, or any careers page.",
+        )
+        if st.button("Discover jobs", type="primary"):
+            if not careers_url:
+                st.warning("Enter a URL first")
+            else:
+                with st.spinner("Detecting ATS / reading structured data..."):
+                    try:
+                        result = facade.discover_from_url(careers_url)
+                    except Exception as e:
+                        result = {"stored": 0, "errors": [str(e)], "method": "error"}
+
+                if result["stored"]:
+                    method = (
+                        f"{result.get('ats_type', '')} API"
+                        if result["method"] == "ats"
+                        else "JSON-LD extraction"
+                    )
+                    st.success(
+                        f"Stored {result['stored']} job(s) via {method}. "
+                        "See them scored on the Pipeline screen."
+                    )
+                    if st.session_state.cv_profile:
+                        with st.spinner("Scoring against your CV..."):
+                            facade.refresh_matches(st.session_state.cv_profile)
+                else:
+                    for err in result.get("errors", ["Nothing found."]):
+                        st.warning(err)
+
+        st.info(
+            "Discovered jobs are deduplicated, enriched, and scored on the "
+            "**Pipeline** screen.",
+            icon=None,
+        )
+
+    elif mode == "Web Search (fallback)":
+        st.caption(
+            "Fallback only. Search results are unstructured snippets, not real "
+            "postings - no salary, dates, or reliable company data. Prefer a "
+            "careers URL when you have one. Requires the local LLM."
+        )
+        if not st.session_state.llm_client:
+            st.error("Please initialize the LLM from the sidebar to use search.")
+            return
+
         col1, col2 = st.columns([3, 1])
 
         with col1:
@@ -419,7 +478,16 @@ def page_discovery():
             "Job Post URL", placeholder="https://company.com/careers/job-id"
         )
 
+        if not st.session_state.llm_client:
+            st.info(
+                "This mode uses the local LLM to parse the page. Initialize it "
+                "from the sidebar, or use the careers-URL mode instead."
+            )
+
         if st.button("Fetch Job Details", type="primary"):
+            if not st.session_state.llm_client:
+                st.error("Please initialize the LLM from the sidebar first.")
+                return
             with st.spinner("Fetching job details..."):
                 try:
                     finder = JobFinder(st.session_state.llm_client)

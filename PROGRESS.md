@@ -26,6 +26,21 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-23 — Discovery reworked to API-first (branch: claude/discovery-api-first)
+- Facade gains `discover_from_url`: detects the ATS from a careers URL and pulls
+  its public feed; otherwise fetches politely (robots.txt honored, rate-limited)
+  and extracts `schema.org/JobPosting` JSON-LD. Recognized-but-unsupported ATS
+  (e.g. Workday) is reported explicitly rather than silently scraped.
+- **Discovery screen** reordered API-first: "Company careers URL (recommended)"
+  is the default mode; DuckDuckGo is retained but relabeled "Web Search
+  (fallback)" with a caveat about unstructured results.
+- Fixed a branch-chain bug introduced while restructuring the modes (the new
+  mode fell through to the paste-description branch), and moved the LLM guard
+  from the whole screen to only the modes that need it — the careers-URL and
+  paste-description modes now work without Ollama.
+- 5 new facade tests (ATS detect, JSON-LD fallback, unsupported ATS, robots
+  block, no-JSON-LD). Totals: **158 Python + 11 JS tests green; ruff clean.**
+
 ### 2026-07-23 — Resume tooling surfaced in the UI
 - Facade gains `lint_resume`, `resume_pdf`, `resume_markdown`, `resume_json`,
   `tailor_for_job`.

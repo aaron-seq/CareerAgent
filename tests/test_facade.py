@@ -151,6 +151,100 @@ def test_unsupported_ats_raises(temp_db):
 
 
 # --------------------------------------------------------------------------- #
+# Careers-URL discovery (API-first, JSON-LD fallback)
+# --------------------------------------------------------------------------- #
+
+
+@respx.mock
+def test_discover_from_url_detects_ats(temp_db):
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "ML Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "u1",
+                        "content": "ML",
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        result = facade.discover_from_url(
+            "https://boards.greenhouse.io/stripe", client=client
+        )
+    assert result["method"] == "ats"
+    assert result["ats_type"] == "greenhouse"
+    assert result["stored"] == 1
+    assert facade.top_jobs()[0]["title"] == "ML Engineer"
+
+
+@respx.mock
+def test_discover_from_url_falls_back_to_jsonld(temp_db):
+    html = """
+    <script type="application/ld+json">
+    {"@type": "JobPosting", "title": "Platform Engineer",
+     "hiringOrganization": {"name": "Indie Co"},
+     "datePosted": "2026-06-01",
+     "jobLocationType": "TELECOMMUTE",
+     "description": "<p>Run the platform.</p>"}
+    </script>
+    """
+    respx.get("https://indie.example/robots.txt").mock(return_value=httpx.Response(404))
+    respx.get("https://indie.example/careers").mock(
+        return_value=httpx.Response(200, text=html)
+    )
+    with httpx.Client() as client:
+        result = facade.discover_from_url(
+            "https://indie.example/careers", client=client
+        )
+    assert result["method"] == "jsonld"
+    assert result["stored"] == 1
+    job = facade.top_jobs()[0]
+    assert job["title"] == "Platform Engineer"
+    assert job["remote"] is True
+
+
+@respx.mock
+def test_discover_from_url_reports_unsupported_ats(temp_db):
+    result = facade.discover_from_url("https://acme.wd5.myworkdayjobs.com/External")
+    assert result["method"] == "unsupported_ats"
+    assert result["stored"] == 0
+    assert result["errors"]
+
+
+@respx.mock
+def test_discover_from_url_honors_robots(temp_db):
+    respx.get("https://blocked.example/robots.txt").mock(
+        return_value=httpx.Response(200, text="User-agent: *\nDisallow: /careers")
+    )
+    with httpx.Client() as client:
+        result = facade.discover_from_url(
+            "https://blocked.example/careers", client=client
+        )
+    assert result["stored"] == 0
+    assert "robots.txt" in result["errors"][0]
+
+
+@respx.mock
+def test_discover_from_url_no_jsonld_found(temp_db):
+    respx.get("https://plain.example/robots.txt").mock(return_value=httpx.Response(404))
+    respx.get("https://plain.example/jobs").mock(
+        return_value=httpx.Response(200, text="<html><body>No data</body></html>")
+    )
+    with httpx.Client() as client:
+        result = facade.discover_from_url("https://plain.example/jobs", client=client)
+    assert result["stored"] == 0
+    assert "JSON-LD" in result["errors"][0]
+
+
+# --------------------------------------------------------------------------- #
 # Resume tooling (no DB needed)
 # --------------------------------------------------------------------------- #
 

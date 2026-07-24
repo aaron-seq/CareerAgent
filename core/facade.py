@@ -22,6 +22,7 @@ from .db.repository import (
 )
 from .db.tables import ApplicationStatus
 from .enrichment import SalaryEnricher
+from .fetching import PoliteFetcher, RobotsDisallowed, detect, extract_jsonld_jobs
 from .ingestion import (
     AshbySource,
     GreenhouseSource,
@@ -241,6 +242,93 @@ def job_from_dict(d: dict[str, Any]) -> JobPosting:
             if row
             else JobPosting(title=d["title"], company=d["company"])
         )
+
+
+# --------------------------------------------------------------------------- #
+# Careers-URL discovery (ATS detection -> JSON-LD fallback)
+# --------------------------------------------------------------------------- #
+
+
+def discover_from_url(url: str, client=None, fetcher=None) -> dict[str, Any]:
+    """Discover jobs from a company careers URL, API-first.
+
+    1. Detect the ATS from the URL. If recognized, pull the structured feed via
+       its public API (best data, zero scraping).
+    2. Otherwise fetch the page politely (robots.txt honored, rate-limited) and
+       extract any ``schema.org/JobPosting`` JSON-LD.
+
+    Returns a summary dict; ingested jobs are persisted.
+    """
+    init_persistence()
+    match = detect(url=url)
+    if match is not None and match.ats_type in _ATS_SOURCES:
+        result = ingest_ats(match.ats_type, match.slug, client=client)
+        return {
+            "method": "ats",
+            "ats_type": match.ats_type,
+            "slug": match.slug,
+            "fetched": result.fetched,
+            "stored": result.upserted,
+            "errors": result.errors,
+        }
+
+    if match is not None:
+        # Recognized but unsupported (e.g. Workday) -- say so rather than
+        # silently scraping.
+        return {
+            "method": "unsupported_ats",
+            "ats_type": match.ats_type,
+            "slug": match.slug,
+            "fetched": 0,
+            "stored": 0,
+            "errors": [
+                f"{match.ats_type} has no public feed adapter; "
+                "paste the job description instead."
+            ],
+        }
+
+    # JSON-LD fallback.
+    fetcher = fetcher or PoliteFetcher(client=client)
+    try:
+        response = fetcher.get(url)
+    except RobotsDisallowed:
+        return {
+            "method": "jsonld",
+            "fetched": 0,
+            "stored": 0,
+            "errors": ["robots.txt disallows fetching this URL"],
+        }
+    except Exception as exc:
+        return {"method": "jsonld", "fetched": 0, "stored": 0, "errors": [str(exc)]}
+
+    found = extract_jsonld_jobs(response.text, page_url=url)
+    if not found:
+        return {
+            "method": "jsonld",
+            "fetched": 0,
+            "stored": 0,
+            "errors": ["no JSON-LD JobPosting found on the page"],
+        }
+
+    stored = 0
+    with get_session() as session:
+        repo = JobRepository(session)
+        for fj in found:
+            row = repo.upsert(fj.job, source=fj.source, source_id=fj.source_id)
+            row.remote = fj.remote
+            row.salary_min = fj.salary_min
+            row.salary_max = fj.salary_max
+            row.salary_currency = fj.salary_currency
+            row.employment_type = fj.employment_type
+            row.date_posted = fj.date_posted
+            session.add(row)
+            stored += 1
+    return {
+        "method": "jsonld",
+        "fetched": len(found),
+        "stored": stored,
+        "errors": [],
+    }
 
 
 # --------------------------------------------------------------------------- #
