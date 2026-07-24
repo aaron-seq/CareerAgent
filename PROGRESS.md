@@ -26,6 +26,40 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-23 — Remaining core services surfaced (branch: claude/discovery-api-first)
+Every `core/` service is now reachable from the UI; nothing built in Phases
+1–10 is left unwired.
+- **Aggregator ingestion** (`ingest_aggregator`): Remotive (keyless), The Muse
+  (optional key), Adzuna (requires env keys, fails with a clear message).
+  Surfaced as a "Job boards (API)" Discovery mode, with the Remotive
+  attribution requirement shown in the UI.
+- **Full enrichment chain** in `refresh_matches`: dedup → link companies →
+  salary → ghost score → visa sponsor → company signals → score. Fixed a real
+  gap: jobs were never linked to their `Company` row (`link_companies`), so
+  visa/Glassdoor/layoff data could not be joined per job.
+- **Filters** on the Pipeline screen: min score, remote-only, hide ghost jobs,
+  visa sponsors only, new-grad/internship level.
+- **Digest** on the Export screen: rendered inline + Markdown and RSS
+  downloads (`digest_rss` added).
+- **Interview prep** in Draft Studio: questions derived from the JD, with a
+  downloadable prep list.
+- 7 new facade tests. Totals: **165 Python + 11 JS tests green; ruff clean.**
+
+### 2026-07-23 — Discovery reworked to API-first (branch: claude/discovery-api-first)
+- Facade gains `discover_from_url`: detects the ATS from a careers URL and pulls
+  its public feed; otherwise fetches politely (robots.txt honored, rate-limited)
+  and extracts `schema.org/JobPosting` JSON-LD. Recognized-but-unsupported ATS
+  (e.g. Workday) is reported explicitly rather than silently scraped.
+- **Discovery screen** reordered API-first: "Company careers URL (recommended)"
+  is the default mode; DuckDuckGo is retained but relabeled "Web Search
+  (fallback)" with a caveat about unstructured results.
+- Fixed a branch-chain bug introduced while restructuring the modes (the new
+  mode fell through to the paste-description branch), and moved the LLM guard
+  from the whole screen to only the modes that need it — the careers-URL and
+  paste-description modes now work without Ollama.
+- 5 new facade tests (ATS detect, JSON-LD fallback, unsupported ATS, robots
+  block, no-JSON-LD). Totals: **158 Python + 11 JS tests green; ruff clean.**
+
 ### 2026-07-23 — Resume tooling surfaced in the UI
 - Facade gains `lint_resume`, `resume_pdf`, `resume_markdown`, `resume_json`,
   `tailor_for_job`.
