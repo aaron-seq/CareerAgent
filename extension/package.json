@@ -1,0 +1,9 @@
+{
+  "name": "careeragent-autofill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Human-in-the-loop autofill extension for CareerAgent.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

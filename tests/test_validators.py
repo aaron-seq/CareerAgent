@@ -1,7 +1,7 @@
 """Tests for draft validation logic"""
-import pytest
-from core.validators import DraftValidator
+
 from core.models import EmailDraft
+from core.validators import DraftValidator
 
 
 class TestDraftValidator:
@@ -161,10 +161,10 @@ class TestDraftValidator:
         draft = EmailDraft(
             subject="Application: Senior ML Engineer",
             body="""I reduced model inference latency by 45% at my current role.
-            
-            My recent project (github.com/user/ml-optimizer) demonstrates my expertise 
+
+            My recent project (github.com/user/ml-optimizer) demonstrates my expertise
             in TechCo's tech stack. I noticed your focus on scalable ML systems.
-            
+
             Would you have 15 minutes next week to discuss how I can contribute?""",
             job_title="ML Engineer",
             company="TechCo",

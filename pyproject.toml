@@ -1,0 +1,35 @@
+[tool.ruff]
+# Match the project's current supported floor (CI still tests 3.9-3.11).
+target-version = "py39"
+line-length = 88
+extend-exclude = ["careeragent_data"]
+
+[tool.ruff.lint]
+# Phase 0 baseline gate: pyflakes (F), pycodestyle (E/W), isort (I).
+# Follow-up (tracked in PROGRESS.md): enable pyupgrade (UP) and
+# flake8-bugbear (B) once their fixes (typing.List -> list, raise ... from)
+# are applied module by module.
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # line length is enforced by the formatter, not the linter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may import fixtures/util symbols that read as unused.
+"tests/*" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+# Advisory today (run non-blocking in CI); tightened as modules gain types.
+python_version = "3.9"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+files = ["core", "app.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"

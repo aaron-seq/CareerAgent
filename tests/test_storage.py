@@ -1,12 +1,14 @@
 """Tests for local storage module"""
 
-import pytest
-import os
 import json
-import tempfile
+import os
 import shutil
+import tempfile
+
+import pytest
+
+from core.models import CVProfile, EmailDraft, JobPosting
 from core.storage import LocalStorage
-from core.models import EmailDraft, CVProfile, JobPosting
 
 
 class TestLocalStorage:

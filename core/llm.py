@@ -4,9 +4,10 @@ Handles JSON parsing, retries, and streaming
 """
 
 import json
-import requests
-from typing import Optional, Dict, Any
 import time
+from typing import Any, Dict
+
+import requests
 from pydantic import BaseModel
 
 
@@ -25,7 +26,7 @@ class LocalLLMClient:
         try:
             response = requests.get(f"{self.base_url}/api/version", timeout=5)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
     def list_models(self) -> list:
@@ -36,7 +37,7 @@ class LocalLLMClient:
                 data = response.json()
                 return [model["name"] for model in data.get("models", [])]
             return []
-        except:
+        except Exception:
             return []
 
     def check_model_availability(self, model_name: str) -> bool:

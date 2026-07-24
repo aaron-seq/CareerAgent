@@ -3,13 +3,15 @@ Contact discovery using web search
 Generates email permutations when exact email not found
 """
 
-from duckduckgo_search import DDGS
-from typing import List, Optional
-from .models import ContactCandidate
-from .llm import LocalLLMClient
-from .prompts import CONTACT_SEARCH_QUERIES_PROMPT
 import re
 import time
+from typing import List, Optional
+
+from duckduckgo_search import DDGS
+
+from .llm import LocalLLMClient
+from .models import ContactCandidate
+from .prompts import CONTACT_SEARCH_QUERIES_PROMPT
 
 
 class ContactFinder:
@@ -36,7 +38,7 @@ class ContactFinder:
             # Handle list of strings or dict values
             if isinstance(queries, dict):
                 queries = list(queries.values())
-        except:
+        except Exception:
             # Fallback to default queries
             queries = [
                 f"{company_name} hiring manager {role_keyword}",

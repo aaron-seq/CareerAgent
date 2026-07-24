@@ -3,22 +3,24 @@ CareerAgent - Main Streamlit Application
 Complete UI with 5 screens: Onboarding, Discovery, Contacts, Draft Studio, Export
 """
 
-import streamlit as st
 import os
 from pathlib import Path
 
+import streamlit as st
+
+from core import facade
+from core.contact_finder import ContactFinder
+from core.cv_parser import CVParser
+from core.gmail_drafts import GmailDraftClient
+from core.job_finder import JobFinder
+
 # Core imports
 from core.llm import LocalLLMClient
-from core.cv_parser import CVParser
-from core.job_finder import JobFinder
-from core.contact_finder import ContactFinder
+from core.models import ContactCandidate, EmailDraft, JobPosting, SearchQuery
+from core.outreach import ComplianceConfig, LIARecord
 from core.personalization import PersonalizationEngine
-from core.gmail_drafts import GmailDraftClient
-from core.whatsapp import WhatsAppClient
-from core.validators import DraftValidator
 from core.storage import LocalStorage
-from core.models import SearchQuery, CVProfile, JobPosting, ContactCandidate
-
+from core.validators import DraftValidator
 
 # Page config
 st.set_page_config(
@@ -76,8 +78,18 @@ def init_session_state():
     if "storage" not in st.session_state:
         st.session_state.storage = LocalStorage()
 
+    if "cv_id" not in st.session_state:
+        st.session_state.cv_id = None
+
 
 init_session_state()
+
+# Ensure the database schema exists (Phase 1+). Non-fatal if it can't init so
+# the legacy JSON-only flow still works.
+try:
+    facade.init_persistence()
+except Exception:  # pragma: no cover - defensive UI guard
+    pass
 
 
 # Sidebar configuration
@@ -94,6 +106,7 @@ def render_sidebar():
         pages = {
             "onboarding": "Onboarding",
             "discovery": "Job Discovery",
+            "pipeline": "Pipeline",
             "contacts": "Contact Finder",
             "draft": "Draft Studio",
             "export": "Export & Logs",
@@ -206,6 +219,11 @@ def page_onboarding():
 
                         st.session_state.cv_profile = profile
                         st.session_state.storage.save_cv_profile(profile)
+                        # Persist to the encrypted DB (Phase 1) for matching/tracking.
+                        try:
+                            st.session_state.cv_id = facade.persist_cv(profile)
+                        except Exception:
+                            st.session_state.cv_id = None
                         st.success(
                             f"✅ CV parsed successfully! Found {len(profile.experiences)} experiences."
                         )
@@ -246,6 +264,17 @@ def page_onboarding():
             value="Senior",
         )
 
+        # Persist collected preferences so they survive Streamlit reruns and can
+        # be consumed by downstream discovery/personalization steps.
+        st.session_state.preferences = {
+            "target_roles": [r.strip() for r in target_roles.splitlines() if r.strip()],
+            "target_locations": [
+                loc.strip() for loc in target_locations.splitlines() if loc.strip()
+            ],
+            "industries": industries,
+            "seniority": seniority,
+        }
+
     # Show parsed CV
     if st.session_state.cv_profile:
         st.divider()
@@ -260,7 +289,7 @@ def page_onboarding():
         col4.metric("Skills", len(profile.skills))
 
         with st.expander("View Full Profile"):
-            st.json(profile.dict())
+            st.json(profile.model_dump())
 
         if st.button("Next: Job Discovery", type="primary", use_container_width=True):
             st.session_state.page = "discovery"
@@ -329,7 +358,7 @@ def page_discovery():
                     st.write(f"**URL:** {job.url}")
                     st.write(f"**Description:** {job.description[:300]}...")
 
-                    if st.button(f"Select This Job", key=f"select_{i}"):
+                    if st.button("Select This Job", key=f"select_{i}"):
                         if job not in st.session_state.selected_jobs:
                             st.session_state.selected_jobs.append(job)
                             st.session_state.storage.save_job_posting(job)
@@ -426,7 +455,7 @@ def page_contacts():
             col1, col2 = st.columns(2)
 
             with col1:
-                if st.button(f"Search Contacts", key=f"search_contacts_{idx}"):
+                if st.button("Search Contacts", key=f"search_contacts_{idx}"):
                     with st.spinner("Searching for contacts..."):
                         try:
                             finder = ContactFinder(st.session_state.llm_client)
@@ -522,7 +551,7 @@ def page_contacts():
                     "Domain", value=domain, key=f"domain_{idx}"
                 )
 
-            if st.button(f"Generate Permutations", key=f"gen_perm_{idx}"):
+            if st.button("Generate Permutations", key=f"gen_perm_{idx}"):
                 if first_name and last_name and domain_input:
                     finder = ContactFinder(st.session_state.llm_client)
                     permutations = finder.generate_email_permutations(
@@ -721,6 +750,63 @@ def page_draft_studio():
 
             st.divider()
 
+            # Outreach compliance gate (CAN-SPAM / GDPR) - Phase 7.
+            st.subheader("Compliance check")
+            with st.expander("Sender identity + opt-out (required to send)"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    sender_name = st.text_input(
+                        "Sender name", value=st.session_state.cv_profile.name or ""
+                    )
+                    sender_email = st.text_input(
+                        "Sender email",
+                        value=st.session_state.cv_profile.email or "",
+                    )
+                with c2:
+                    postal_address = st.text_input("Physical postal address")
+                    unsubscribe = st.text_input(
+                        "Opt-out (URL or mailto:)",
+                        value=f"mailto:{st.session_state.cv_profile.email or ''}"
+                        "?subject=unsubscribe",
+                    )
+                lia_purpose = st.text_input(
+                    "LIA purpose (GDPR)",
+                    value="Relevant B2B job application to a hiring contact.",
+                )
+
+            st.session_state.compliance_ok = False
+            if st.button("Run compliance check"):
+                try:
+                    cfg = ComplianceConfig(
+                        sender_name=sender_name,
+                        sender_email=sender_email,
+                        postal_address=postal_address,
+                        unsubscribe=unsubscribe,
+                    )
+                    lia = LIARecord(
+                        campaign="outreach",
+                        purpose=lia_purpose,
+                        necessity="Direct role-specific contact.",
+                        balancing="Business address + opt-out honored.",
+                    )
+                    gate_draft = EmailDraft(
+                        subject=subject,
+                        body=body,
+                        recipient_email=recipient_email,
+                        company=current_job.company,
+                    )
+                    decision = facade.compliance_gate(gate_draft, cfg, lia)
+                    if decision.allowed:
+                        st.session_state.compliance_ok = True
+                        st.success("Compliant. A footer was added:")
+                        st.code(decision.body)
+                    else:
+                        st.error(f"Blocked: {decision.reason}")
+                except ValueError as e:
+                    st.error(f"Fill required fields: {e}")
+
+            st.divider()
+
             # Actions
             col1, col2, col3 = st.columns(3)
 
@@ -728,6 +814,8 @@ def page_draft_studio():
                 if st.button("Create Gmail Draft", use_container_width=True):
                     if not recipient_email:
                         st.error("Please enter recipient email")
+                    elif not st.session_state.get("compliance_ok"):
+                        st.error("Run the compliance check first (required to send).")
                     else:
                         with st.spinner("Creating Gmail draft..."):
                             try:
@@ -800,6 +888,131 @@ def page_export():
                 st.error(f"Export failed: {e}")
 
 
+def page_pipeline():
+    """Pipeline screen - API-first ingestion, scored matches, and tracking."""
+    st.title("Pipeline")
+    st.markdown(
+        "Pull jobs directly from company ATS APIs, see explainable match "
+        "scores against your CV, and track applications through the funnel."
+    )
+
+    # --- Ingest from an ATS public API --- #
+    st.subheader("Ingest jobs from a company ATS")
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        slug = st.text_input(
+            "Board slug", value="stripe", help="e.g. 'stripe' for Greenhouse"
+        )
+    with col2:
+        ats_type = st.selectbox("ATS", ["greenhouse", "lever", "ashby"])
+    with col3:
+        company = st.text_input("Company name", value="Stripe")
+
+    if st.button("Ingest", type="primary"):
+        with st.spinner(f"Pulling {slug} jobs from {ats_type}..."):
+            try:
+                result = facade.ingest_ats(ats_type, slug, company)
+                if result.errors:
+                    st.error(f"Ingestion error: {result.errors[0]}")
+                else:
+                    st.success(
+                        f"Fetched {result.fetched}, stored {result.upserted} jobs."
+                    )
+                    if st.session_state.cv_profile:
+                        facade.refresh_matches(st.session_state.cv_profile)
+            except Exception as e:
+                st.error(f"Ingestion failed: {e}")
+
+    if st.session_state.cv_profile and st.button("Re-score matches"):
+        with st.spinner("Dedup + score against your CV..."):
+            facade.refresh_matches(st.session_state.cv_profile)
+            st.success("Matches refreshed.")
+
+    st.divider()
+
+    # --- Scored matches --- #
+    st.subheader("Top matches")
+    try:
+        jobs = facade.top_jobs(limit=25)
+    except Exception as e:
+        jobs = []
+        st.error(f"Could not load jobs: {e}")
+
+    if not jobs:
+        st.info("No jobs yet. Ingest from an ATS above.")
+    for job in jobs:
+        score = f"{job['score']:.0f}%" if job["score"] is not None else "unscored"
+        with st.expander(f"[{score}] {job['title']} - {job['company']}"):
+            st.write(f"**Location:** {job['location'] or 'N/A'}")
+            if job["salary_min"]:
+                st.write(f"**Salary:** {int(job['salary_min']):,}+")
+            if job["matched"]:
+                st.success("Matched: " + ", ".join(job["matched"][:12]))
+            if job["missing"]:
+                st.warning("Missing: " + ", ".join(job["missing"][:12]))
+            if job["url"]:
+                st.write(f"[View posting]({job['url']})")
+            if st.button("Add to pipeline", key=f"track_{job['id']}"):
+                res = facade.add_to_pipeline(job["id"], st.session_state.cv_id)
+                if res["ok"]:
+                    st.success("Added to pipeline (Saved).")
+                    st.rerun()
+                else:
+                    st.warning(res["error"])
+
+    st.divider()
+
+    # --- Kanban board + funnel --- #
+    st.subheader("Application board")
+    try:
+        board = facade.pipeline_board()
+        f = facade.funnel()
+    except Exception as e:
+        board, f = {}, None
+        st.error(f"Could not load board: {e}")
+
+    statuses = [
+        "saved",
+        "applied",
+        "screening",
+        "interview",
+        "offer",
+        "rejected",
+    ]
+    next_status = {
+        "saved": "applied",
+        "applied": "screening",
+        "screening": "interview",
+        "interview": "offer",
+    }
+    cols = st.columns(len(statuses))
+    for col, status in zip(cols, statuses):
+        with col:
+            cards = board.get(status, [])
+            st.markdown(f"**{status.title()}** ({len(cards)})")
+            for card in cards:
+                st.caption(f"{card['title']} — {card['company']}")
+                if status in next_status:
+                    if st.button(
+                        f"→ {next_status[status]}",
+                        key=f"adv_{card['application_id']}",
+                    ):
+                        facade.advance_application(
+                            card["application_id"], next_status[status]
+                        )
+                        st.rerun()
+
+    if f:
+        st.divider()
+        st.subheader("Funnel")
+        m = st.columns(5)
+        m[0].metric("Total", f["total"])
+        m[1].metric("Applied", f["reached"].get("applied", 0))
+        m[2].metric("Screening", f["reached"].get("screening", 0))
+        m[3].metric("Interview", f["reached"].get("interview", 0))
+        m[4].metric("Offer", f["reached"].get("offer", 0))
+
+
 # Router
 render_sidebar()
 
@@ -807,6 +1020,8 @@ if st.session_state.get("page") == "onboarding":
     page_onboarding()
 elif st.session_state.get("page") == "discovery":
     page_discovery()
+elif st.session_state.get("page") == "pipeline":
+    page_pipeline()
 elif st.session_state.get("page") == "contacts":
     page_contacts()
 elif st.session_state.get("page") == "draft":

@@ -23,3 +23,22 @@ google-api-python-client>=2.108.0,<3.0.0
 # Data processing
 pandas>=2.1.3,<3.0.0
 pillow>=10.1.0,<12.0.0
+
+# Persistence (Phase 1): SQLModel on SQLite for dev, Postgres in prod
+sqlmodel>=0.0.14,<1.0.0
+SQLAlchemy>=2.0.0,<3.0.0
+alembic>=1.13.0,<2.0.0
+cryptography>=42.0.0
+
+# Job ingestion + matching (Phases 2-5)
+httpx>=0.27.0,<1.0.0
+rapidfuzz>=3.6.0,<4.0.0
+numpy>=1.26.0,<3.0.0
+python-dateutil>=2.8.2,<3.0.0
+fpdf2>=2.7.0,<3.0.0
+
+# Optional, heavy: semantic embeddings. The app falls back to a no-download
+# hashing embedder when this is absent (see core/matching/embeddings.py).
+# Install explicitly for best matching quality:
+#   pip install sentence-transformers
+# sentence-transformers>=2.5.0

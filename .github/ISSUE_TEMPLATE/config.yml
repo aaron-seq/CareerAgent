@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Roadmap
+    url: https://github.com/aaron-seq/CareerAgent/blob/main/ROADMAP.md
+    about: The phased delivery plan and acceptance criteria.
+  - name: Contributing guide
+    url: https://github.com/aaron-seq/CareerAgent/blob/main/CONTRIBUTING.md
+    about: How to set up, develop, and submit changes.

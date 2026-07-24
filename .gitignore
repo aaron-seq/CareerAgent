@@ -40,3 +40,12 @@ verify_core.py
 legacy_oil_spill/
 temp_cv_*.pdf
 *.log
+
+# Databases (local dev)
+*.db
+*.sqlite
+*.sqlite3
+careeragent.db
+
+# Local encryption key material
+.careeragent_key

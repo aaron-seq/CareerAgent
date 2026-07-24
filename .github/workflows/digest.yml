@@ -1,0 +1,37 @@
+name: Daily Job Digest
+
+# Free scheduled delivery via GitHub Actions cron. Sends a digest if the
+# delivery secrets are configured; otherwise runs a harmless dry-run.
+on:
+  schedule:
+    - cron: "0 8 * * *" # 08:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build and send digest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CAREERAGENT_ENCRYPTION_KEY: ${{ secrets.CAREERAGENT_ENCRYPTION_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] && [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            python -m scripts.send_digest --dry-run
+          else
+            python -m scripts.send_digest
+          fi

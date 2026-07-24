@@ -4,18 +4,19 @@ Uses LLM with personalization plan for targeted outreach
 """
 
 from typing import Optional
+
+from .llm import LocalLLMClient
 from .models import (
     CVProfile,
-    JobPosting,
     EmailDraft,
-    WhatsAppDraft,
+    JobPosting,
     PersonalizationPlan,
     Project,
+    WhatsAppDraft,
 )
-from .llm import LocalLLMClient
 from .prompts import (
-    PERSONALIZATION_PLAN_PROMPT,
     EMAIL_DRAFT_PROMPT,
+    PERSONALIZATION_PLAN_PROMPT,
     WHATSAPP_DRAFT_PROMPT,
 )
 
@@ -51,7 +52,7 @@ class PersonalizationEngine:
             plan_data = self.llm.generate_json(prompt, temperature=0.4)
             plan = PersonalizationPlan(**plan_data)
             return plan
-        except Exception as e:
+        except Exception:
             # Fallback to basic plan
             return self._create_fallback_plan(cv_profile, job_posting)
 

@@ -1,13 +1,14 @@
 """Tests for Pydantic data models"""
-import pytest
+
 from datetime import datetime
+
 from core.models import (
-    CVProfile,
-    Experience,
-    Project,
-    JobPosting,
     ContactCandidate,
+    CVProfile,
     EmailDraft,
+    Experience,
+    JobPosting,
+    Project,
     QualityCheck,
     SearchQuery,
 )
@@ -61,9 +62,7 @@ class TestCVProfile:
 
     def test_cv_profile_complete(self):
         """Test creating complete CV profile"""
-        exp = Experience(
-            title="Engineer", company="Corp", duration="2020-2022"
-        )
+        exp = Experience(title="Engineer", company="Corp", duration="2020-2022")
         proj = Project(name="App", description="Mobile app")
 
         cv = CVProfile(

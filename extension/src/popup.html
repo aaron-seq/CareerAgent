@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: system-ui, sans-serif; width: 300px; padding: 12px; }
+      h1 { font-size: 15px; margin: 0 0 8px; }
+      label { display: block; font-size: 12px; margin-top: 6px; }
+      input { width: 100%; box-sizing: border-box; padding: 4px; }
+      button { margin-top: 10px; width: 100%; padding: 8px; cursor: pointer; }
+      .fill { background: #4caf50; color: #fff; border: none; }
+      .note { font-size: 11px; color: #666; margin-top: 8px; }
+      #status { font-size: 12px; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>CareerAgent Autofill</h1>
+    <label>Full name <input id="fullName" /></label>
+    <label>Email <input id="email" /></label>
+    <label>Phone <input id="phone" /></label>
+    <label>LinkedIn <input id="linkedin" /></label>
+    <label>GitHub <input id="github" /></label>
+    <label>Portfolio <input id="portfolio" /></label>
+    <label>Location <input id="location" /></label>
+    <button id="save">Save profile</button>
+    <button id="fill" class="fill">Autofill this page</button>
+    <div class="note">
+      Fills fields only. You review and click submit yourself &mdash; this
+      extension never submits a form for you.
+    </div>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
