@@ -148,3 +148,56 @@ def test_compliance_gate_and_opt_out(temp_db):
 def test_unsupported_ats_raises(temp_db):
     with pytest.raises(ValueError):
         facade.ingest_ats("workday", "acme")
+
+
+# --------------------------------------------------------------------------- #
+# Resume tooling (no DB needed)
+# --------------------------------------------------------------------------- #
+
+
+def test_lint_resume_reports_severities():
+    report = facade.lint_resume(_cv())
+    assert report["ok"] is True  # name + email present
+    assert isinstance(report["warnings"], list)
+
+    bad = _cv()
+    bad.email = None
+    assert facade.lint_resume(bad)["ok"] is False
+    assert any("email" in e.lower() for e in facade.lint_resume(bad)["errors"])
+
+
+def test_lint_resume_flags_emoji_in_raw_text():
+    report = facade.lint_resume(_cv(), raw_text="EXPERIENCE\nShipped it 🚀\n")
+    assert report["ok"] is False
+    assert any("emoji" in e.lower() for e in report["errors"])
+
+
+def test_resume_pdf_and_markdown_and_json():
+    cv = _cv()
+    pdf = facade.resume_pdf(cv)
+    assert pdf.startswith(b"%PDF") and len(pdf) > 500
+
+    md = facade.resume_markdown(cv)
+    assert "# Ada Lovelace" in md
+
+    doc = facade.resume_json(cv)
+    assert doc["basics"]["name"] == "Ada Lovelace"
+    assert doc["work"][0]["name"] == "AI Co"
+
+
+def test_tailor_for_job_is_truthful():
+    from core.models import JobPosting
+
+    cv = _cv()  # Python, PyTorch
+    job = JobPosting(
+        title="Rust Engineer",
+        company="Acme",
+        description="Rust systems work",
+        tech_stack=["Rust", "PyTorch"],
+    )
+    result = facade.tailor_for_job(cv, job)
+    tailored = result["profile"]
+    # PyTorch is emphasized; Rust is reported as a gap, never invented.
+    assert set(tailored.skills) == set(cv.skills)
+    assert "rust" in result["gaps"]
+    assert "PyTorch" in result["emphasized"]

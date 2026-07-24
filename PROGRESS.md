@@ -26,6 +26,17 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-23 — Resume tooling surfaced in the UI
+- Facade gains `lint_resume`, `resume_pdf`, `resume_markdown`, `resume_json`,
+  `tailor_for_job`.
+- **Onboarding:** ATS-friendliness report (errors/warnings/suggestions) plus
+  one-click downloads — ATS-clean PDF, Markdown, and JSON Resume.
+- **Draft Studio:** "Tailor resume to this job" — shows emphasized skills and
+  honest gaps, and offers a per-company tailored ATS PDF. Fabrication is
+  impossible by construction (`assert_no_fabrication` in `core/resume`).
+- 4 new facade tests (lint severities, emoji flagging, PDF/MD/JSON render,
+  truthful tailoring). Totals: **153 Python + 11 JS tests green; ruff clean.**
+
 ### 2026-07-23 — UI wiring (core services → Streamlit)
 - Added `core/facade.py` — the single, **tested** entry point `app.py` calls
   (session-managed; returns plain dicts, never ORM objects), keeping business
