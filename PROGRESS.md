@@ -26,6 +26,19 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-23 — UI wiring (core services → Streamlit)
+- Added `core/facade.py` — the single, **tested** entry point `app.py` calls
+  (session-managed; returns plain dicts, never ORM objects), keeping business
+  logic out of the UI per CLAUDE.md.
+- `app.py`: DB-persist CV on parse; new **Pipeline** screen (ATS API ingest →
+  explainable scored matches → add-to-pipeline → kanban board + funnel);
+  Draft Studio now runs the **outreach compliance gate** before a Gmail draft
+  (blocks send until identity + postal address + opt-out + LIA pass).
+- 6 facade tests (temp-file DB, respx-mocked ingest). `app.py` verified via
+  `py_compile`, `ruff`, and a stubbed-streamlit module-load smoke test — a live
+  browser render was **not** performed here.
+- Totals now: **149 Python tests + 11 JS tests green; ruff clean.**
+
 ### 2026-07-23 — Phases 1–10 (full platform build)
 Built the platform in phase order, one commit per phase, CI green throughout:
 - **P1 `core/db`** — SQLModel tables, Alembic, Fernet PII encryption, repos,
