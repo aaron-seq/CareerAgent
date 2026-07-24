@@ -365,6 +365,7 @@ def page_discovery():
         "Discovery mode",
         [
             "Company careers URL (recommended)",
+            "Job boards (API)",
             "Paste Job URL",
             "Paste Job Description",
             "Web Search (fallback)",
@@ -373,7 +374,7 @@ def page_discovery():
         help=(
             "Careers URL auto-detects Greenhouse/Lever/Ashby and uses their "
             "public API; otherwise it reads schema.org JSON-LD, honoring "
-            "robots.txt."
+            "robots.txt. Job boards query aggregator APIs by keyword."
         ),
     )
 
@@ -417,6 +418,58 @@ def page_discovery():
             "**Pipeline** screen.",
             icon=None,
         )
+
+    elif mode == "Job boards (API)":
+        st.caption(
+            "Structured results from aggregator APIs. Remotive needs no key; "
+            "The Muse works keyless at a lower rate limit; Adzuna requires "
+            "ADZUNA_APP_ID / ADZUNA_APP_KEY in your environment."
+        )
+        bcol1, bcol2 = st.columns([1, 2])
+        with bcol1:
+            provider = st.selectbox("Provider", ["remotive", "themuse", "adzuna"])
+        with bcol2:
+            keywords = st.text_input(
+                "Keywords (optional)", placeholder="machine learning"
+            )
+
+        if st.button("Search job boards", type="primary"):
+            with st.spinner(f"Querying {provider}..."):
+                try:
+                    params = {}
+                    if keywords:
+                        # Each provider names its query parameter differently.
+                        if provider == "adzuna":
+                            params["what"] = keywords
+                        else:
+                            params["category"] = keywords
+                    result = facade.ingest_aggregator(provider, **params)
+                except ValueError as e:
+                    result = None
+                    st.error(str(e))
+                except Exception as e:
+                    result = None
+                    st.error(f"Search failed: {e}")
+
+            if result is not None:
+                if result.errors:
+                    st.error(f"{provider} error: {result.errors[0]}")
+                elif result.upserted:
+                    st.success(
+                        f"Stored {result.upserted} job(s) from {provider}. "
+                        "See them scored on the Pipeline screen."
+                    )
+                    if st.session_state.cv_profile:
+                        with st.spinner("Scoring against your CV..."):
+                            facade.refresh_matches(st.session_state.cv_profile)
+                else:
+                    st.warning("No jobs returned. Try different keywords.")
+
+        if provider == "remotive":
+            st.caption(
+                "Remotive requires attribution: link back to the original "
+                "posting when sharing results."
+            )
 
     elif mode == "Web Search (fallback)":
         st.caption(
@@ -779,6 +832,23 @@ def page_draft_studio():
                     use_container_width=True,
                 )
 
+        # --- Interview prep from the job description (Phase 10) --- #
+        with st.expander("Interview prep"):
+            questions = facade.interview_questions(current_job, limit=10)
+            st.caption(
+                "Likely questions derived from this job description, plus "
+                "standard behavioral prompts."
+            )
+            for q in questions:
+                st.write(f"- {q}")
+            st.download_button(
+                "Download prep list",
+                data="\n".join(f"- {q}" for q in questions),
+                file_name=f"prep_{current_job.company}.md".replace(" ", "_"),
+                mime="text/markdown",
+                use_container_width=True,
+            )
+
         # Contact selection
         st.subheader("Recipient")
 
@@ -1039,6 +1109,42 @@ def page_export():
             except Exception as e:
                 st.error(f"Export failed: {e}")
 
+    st.divider()
+
+    # --- Job digest (Phase 9) --- #
+    st.subheader("Job digest")
+    st.caption(
+        "Your top scored matches as a shareable digest. The same digest can be "
+        "delivered on a schedule via the daily GitHub Actions workflow."
+    )
+    digest_limit = st.slider("Jobs in digest", 5, 25, 10)
+    try:
+        digest_md = facade.digest_markdown(limit=digest_limit)
+        digest_feed = facade.digest_rss(limit=digest_limit)
+    except Exception as e:
+        digest_md = digest_feed = None
+        st.error(f"Could not build digest: {e}")
+
+    if digest_md:
+        st.markdown(digest_md)
+        dcol1, dcol2 = st.columns(2)
+        with dcol1:
+            st.download_button(
+                "Download digest (Markdown)",
+                data=digest_md,
+                file_name="careeragent_digest.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with dcol2:
+            st.download_button(
+                "Download feed (RSS)",
+                data=digest_feed,
+                file_name="careeragent_jobs.xml",
+                mime="application/rss+xml",
+                use_container_width=True,
+            )
+
 
 def page_pipeline():
     """Pipeline screen - API-first ingestion, scored matches, and tracking."""
@@ -1082,22 +1188,67 @@ def page_pipeline():
 
     st.divider()
 
-    # --- Scored matches --- #
+    # --- Scored matches, with filters --- #
     st.subheader("Top matches")
+
+    with st.expander("Filters"):
+        f1, f2, f3 = st.columns(3)
+        with f1:
+            min_score = st.slider("Minimum match score", 0, 100, 0)
+            remote_only = st.checkbox("Remote only")
+        with f2:
+            hide_ghosts = st.checkbox(
+                "Hide likely ghost jobs",
+                help="Excludes stale/vague postings scoring above 0.6 ghost risk.",
+            )
+            sponsors_visa_only = st.checkbox(
+                "Visa sponsors only",
+                help="Employer appears in the sponsor dataset (US H-1B / UK register).",
+            )
+        with f3:
+            level = st.radio(
+                "Level", ["Any", "New grad", "Internship"], horizontal=False
+            )
+
     try:
-        jobs = facade.top_jobs(limit=25)
+        jobs = facade.top_jobs(
+            limit=25,
+            min_score=float(min_score),
+            remote_only=remote_only,
+            max_ghost_score=0.6 if hide_ghosts else None,
+            new_grad_only=(level == "New grad"),
+            internships_only=(level == "Internship"),
+            sponsors_visa_only=sponsors_visa_only,
+        )
     except Exception as e:
         jobs = []
         st.error(f"Could not load jobs: {e}")
 
     if not jobs:
-        st.info("No jobs yet. Ingest from an ATS above.")
+        st.info("No jobs match. Ingest more above, or relax the filters.")
     for job in jobs:
         score = f"{job['score']:.0f}%" if job["score"] is not None else "unscored"
         with st.expander(f"[{score}] {job['title']} - {job['company']}"):
             st.write(f"**Location:** {job['location'] or 'N/A'}")
             if job["salary_min"]:
                 st.write(f"**Salary:** {int(job['salary_min']):,}+")
+
+            # Company + risk signals from enrichment.
+            signals = []
+            if job.get("sponsors_visa"):
+                signals.append("Visa sponsor")
+            if job.get("glassdoor_rating"):
+                signals.append(f"Glassdoor {job['glassdoor_rating']}")
+            if job.get("had_layoffs"):
+                signals.append("Recent layoffs")
+            if signals:
+                st.caption(" · ".join(signals))
+            if job.get("ghost_score") and job["ghost_score"] > 0.6:
+                st.warning(
+                    f"Possible ghost job (risk {job['ghost_score']:.0%}) - "
+                    "stale or vague posting."
+                )
+
             if job["matched"]:
                 st.success("Matched: " + ", ".join(job["matched"][:12]))
             if job["missing"]:
