@@ -339,6 +339,33 @@ def interview_questions(job: JobPosting, limit: int = 10) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
+# Capability / data-availability reporting
+# --------------------------------------------------------------------------- #
+
+
+def data_status() -> dict[str, Any]:
+    """Report which real datasets and models are actually available.
+
+    The UI uses this to disable filters it cannot answer honestly and to say
+    whether matching is semantic or a lexical fallback -- rather than quietly
+    presenting degraded results as if they were the real thing.
+    """
+    visa = VisaSponsorFilter.from_csv()
+    company = CompanyEnricher.from_csv()
+    embedder = get_embedder()
+    semantic = type(embedder).__name__ == "SentenceTransformerEmbedder"
+    return {
+        "visa_dataset_loaded": visa.loaded,
+        "visa_employer_count": len(visa),
+        "visa_dataset_path": visa.source,
+        "company_dataset_loaded": company.loaded,
+        "company_dataset_path": company.source,
+        "embedder": type(embedder).__name__,
+        "semantic_embeddings": semantic,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Outreach compliance gate (no DB write; suppression check reads DB)
 # --------------------------------------------------------------------------- #
 

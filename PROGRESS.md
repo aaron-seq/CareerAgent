@@ -26,6 +26,35 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-25 — Removed fabricated enrichment data (honesty fix)
+The bundled "sample" enrichment CSVs contained **invented facts about real,
+named companies** (Glassdoor ratings, layoff history, sponsor status), and the
+lookup logic turned *absence of data* into a **false negative** — any company
+missing from an 8-row file was recorded as `sponsors_visa = False`. For a
+job-search tool that is actively harmful: a user could rule out an employer
+because of data we made up.
+- **Deleted** both fabricated CSVs. Nothing is shipped in their place.
+- **Tri-state everywhere:** `is_sponsor()` / `CompanySignal` return
+  `True` / `False` / `None`; `None` means *unknown* and is never rendered as a
+  negative. `annotate()` is a no-op without a dataset, leaving columns NULL.
+- **Schema:** `Company.had_layoffs` `bool = False` → `Optional[bool] = None`
+  (a default of `False` asserted "no layoffs" for every unknown company).
+  Migration `cbb284f817e8`, up/down verified.
+- **Real loaders:** `VisaSponsorFilter.from_csv` auto-detects the employer
+  column across the official UK Home Office and USCIS export formats.
+- **`scripts/fetch_datasets.py`** downloads the real UK register (discovers the
+  current CSV on gov.uk), verifies it parses, writes atomically via a `.part`
+  file, and fails loudly rather than leaving a truncated file.
+- **UI honesty:** the "visa sponsors only" filter is *disabled* with an
+  explanation when no register is loaded; a caption reports when matching is
+  using the lexical fallback rather than semantic embeddings
+  (`facade.data_status()`). Removed hardcoded `stripe` demo defaults.
+- 20 new/rewritten tests. Totals: **180 Python + 11 JS green; ruff clean.**
+
+**Still not real in this environment** (network is blocked except PyPI): live
+API pulls, the actual dataset download, semantic embeddings (model hub
+unreachable), and any live browser render.
+
 ### 2026-07-23 — Remaining core services surfaced (branch: claude/discovery-api-first)
 Every `core/` service is now reachable from the UI; nothing built in Phases
 1–10 is left unwired.

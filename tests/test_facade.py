@@ -198,8 +198,8 @@ def test_ingest_aggregator_unsupported(temp_db):
 
 
 @respx.mock
-def test_refresh_matches_enriches_company_and_visa(temp_db):
-    # Stripe is in the bundled visa-sponsor sample; Nobody Co is not.
+def test_refresh_matches_links_company_and_leaves_unknown_unset(temp_db):
+    """With no real datasets present, enrichment must report unknown, not False."""
     respx.get(
         "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
     ).mock(
@@ -223,10 +223,53 @@ def test_refresh_matches_enriches_company_and_visa(temp_db):
 
     facade.refresh_matches(_cv())
     job = facade.top_jobs()[0]
-    # Company linked and annotated from the bundled datasets.
-    assert job["sponsors_visa"] is True
-    assert job["glassdoor_rating"] == 4.2
+    # Ghost score is computed locally, so it is always available.
     assert job["ghost_score"] is not None
+    # No sponsor/company dataset shipped -> these must be unknown, never False.
+    assert job["sponsors_visa"] is None
+    assert job["glassdoor_rating"] is None
+    assert job["had_layoffs"] is None
+
+
+@respx.mock
+def test_visa_filter_requires_a_dataset(temp_db):
+    """Filtering by sponsorship with no dataset must return nothing, not lie."""
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "ML Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "u1",
+                        "content": "Python",
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        facade.ingest_ats("greenhouse", "stripe", "Stripe", client=client)
+    facade.refresh_matches(_cv())
+
+    status = facade.data_status()
+    assert status["visa_dataset_loaded"] is False
+    # The job exists unfiltered, but cannot be claimed as a sponsor.
+    assert len(facade.top_jobs()) == 1
+    assert facade.top_jobs(sponsors_visa_only=True) == []
+
+
+def test_data_status_reports_capabilities(temp_db):
+    status = facade.data_status()
+    assert status["visa_dataset_loaded"] is False
+    assert status["company_dataset_loaded"] is False
+    assert "embedder" in status
+    # Semantic embeddings are optional; the flag must reflect reality.
+    assert isinstance(status["semantic_embeddings"], bool)
 
 
 @respx.mock

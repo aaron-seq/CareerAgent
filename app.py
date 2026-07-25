@@ -1159,14 +1159,15 @@ def page_pipeline():
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
         slug = st.text_input(
-            "Board slug", value="stripe", help="e.g. 'stripe' for Greenhouse"
+            "Board slug",
+            placeholder="e.g. the company's Greenhouse/Lever/Ashby board name",
         )
     with col2:
         ats_type = st.selectbox("ATS", ["greenhouse", "lever", "ashby"])
     with col3:
-        company = st.text_input("Company name", value="Stripe")
+        company = st.text_input("Company name", placeholder="Display name")
 
-    if st.button("Ingest", type="primary"):
+    if st.button("Ingest", type="primary", disabled=not slug):
         with st.spinner(f"Pulling {slug} jobs from {ats_type}..."):
             try:
                 result = facade.ingest_ats(ats_type, slug, company)
@@ -1191,6 +1192,11 @@ def page_pipeline():
     # --- Scored matches, with filters --- #
     st.subheader("Top matches")
 
+    try:
+        status = facade.data_status()
+    except Exception:
+        status = {"visa_dataset_loaded": False, "semantic_embeddings": False}
+
     with st.expander("Filters"):
         f1, f2, f3 = st.columns(3)
         with f1:
@@ -1201,13 +1207,35 @@ def page_pipeline():
                 "Hide likely ghost jobs",
                 help="Excludes stale/vague postings scoring above 0.6 ghost risk.",
             )
+            # Only offer the visa filter when a real sponsor register is
+            # loaded. Without one we have no basis to say an employer does or
+            # does not sponsor, and guessing would be worse than not offering.
+            visa_loaded = status.get("visa_dataset_loaded", False)
             sponsors_visa_only = st.checkbox(
                 "Visa sponsors only",
-                help="Employer appears in the sponsor dataset (US H-1B / UK register).",
+                disabled=not visa_loaded,
+                help=(
+                    f"{status.get('visa_employer_count', 0):,} employers loaded."
+                    if visa_loaded
+                    else "No sponsor register loaded. Run "
+                    "`python -m scripts.fetch_datasets --uk` to enable."
+                ),
             )
         with f3:
             level = st.radio(
                 "Level", ["Any", "New grad", "Internship"], horizontal=False
+            )
+
+        if not visa_loaded:
+            st.caption(
+                "Sponsorship and employer-signal data are not bundled — they "
+                "are facts about real companies, so nothing is shipped as "
+                "placeholder. See `core/enrichment/data/README.md`."
+            )
+        if not status.get("semantic_embeddings", False):
+            st.caption(
+                "Matching is using the offline lexical embedder. For semantic "
+                "matching install `sentence-transformers`."
             )
 
     try:

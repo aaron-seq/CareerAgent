@@ -47,7 +47,9 @@ class Company(SQLModel, table=True):
     ats_type: Optional[str] = None
     careers_url: Optional[str] = None
     glassdoor_rating: Optional[float] = None
-    had_layoffs: bool = False
+    # Tri-state: True / False / None. NULL means "we have no data", which is
+    # distinct from "no layoffs recorded" -- never default this to False.
+    had_layoffs: Optional[bool] = None
     sponsors_visa: Optional[bool] = None
     blacklisted: bool = False
     created_at: datetime = Field(default_factory=_utcnow)
