@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import httpx
+import pytest
 import respx
 
 from core.alerting import TelegramEmitter, build_digest
@@ -54,26 +55,78 @@ def test_salary_enricher_backfills(session):
 # --------------------------------------------------------------------------- #
 
 
-def test_visa_sponsor_filter_from_sample():
-    vf = VisaSponsorFilter.from_csv()
-    assert vf.is_sponsor("Stripe") is True
-    assert vf.is_sponsor("Stripe Inc.") is True  # normalized
-    assert vf.is_sponsor("Nonexistent LLC") is False
+def _uk_register(tmp_path):
+    """A CSV in the real Home Office register format (header names matter)."""
+    path = tmp_path / "visa_sponsors.csv"
+    path.write_text(
+        "Organisation Name,Town/City,County,Type & Rating,Route\n"
+        "Acme Robotics Ltd,London,,Worker (A rating),Skilled Worker\n"
+        "Globex Corporation,Manchester,,Worker (A rating),Skilled Worker\n",
+        encoding="utf-8",
+    )
+    return path
 
 
-def test_visa_annotate_companies(session):
-    CompanyRepository(session).get_or_create("Stripe")
+def test_visa_filter_reads_official_uk_format(tmp_path):
+    vf = VisaSponsorFilter.from_csv(_uk_register(tmp_path))
+    assert vf.loaded is True
+    assert len(vf) == 2
+    assert vf.is_sponsor("Acme Robotics") is True  # suffix normalized away
+    assert vf.is_sponsor("Globex Corporation") is True
+    assert vf.is_sponsor("Not On The Register Ltd") is False
+
+
+def test_visa_filter_uscis_column_name(tmp_path):
+    path = tmp_path / "h1b.csv"
+    path.write_text(
+        "Fiscal Year,Employer (Petitioner) Name,State\n2025,Initech,CA\n",
+        encoding="utf-8",
+    )
+    assert VisaSponsorFilter.from_csv(path).is_sponsor("Initech") is True
+
+
+def test_visa_filter_without_dataset_is_unknown_never_false(tmp_path):
+    """The critical invariant: absence of data must not assert 'not a sponsor'."""
+    vf = VisaSponsorFilter.from_csv(tmp_path / "does_not_exist.csv")
+    assert vf.loaded is False
+    assert vf.is_sponsor("Any Company") is None  # unknown, NOT False
+
+
+def test_visa_filter_rejects_unrecognized_columns(tmp_path):
+    path = tmp_path / "bad.csv"
+    path.write_text("foo,bar\n1,2\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="employer-name column"):
+        VisaSponsorFilter.from_csv(path)
+
+
+def test_visa_annotate_companies(session, tmp_path):
+    CompanyRepository(session).get_or_create("Acme Robotics")
     CompanyRepository(session).get_or_create("Nobody Co")
     session.commit()
-    VisaSponsorFilter.from_csv().annotate(session)
+    VisaSponsorFilter.from_csv(_uk_register(tmp_path)).annotate(session)
     session.commit()
     from sqlmodel import select
 
     from core.db.tables import Company
 
     companies = {c.name: c for c in session.exec(select(Company)).all()}
-    assert companies["Stripe"].sponsors_visa is True
+    assert companies["Acme Robotics"].sponsors_visa is True
+    # The UK register is authoritative, so absence here IS a real negative.
     assert companies["Nobody Co"].sponsors_visa is False
+
+
+def test_visa_annotate_is_noop_without_dataset(session, tmp_path):
+    CompanyRepository(session).get_or_create("Acme Robotics")
+    session.commit()
+    updated = VisaSponsorFilter.from_csv(tmp_path / "missing.csv").annotate(session)
+    session.commit()
+    assert updated == 0
+    from sqlmodel import select
+
+    from core.db.tables import Company
+
+    company = session.exec(select(Company)).first()
+    assert company.sponsors_visa is None  # left unknown, not written as False
 
 
 # --------------------------------------------------------------------------- #
@@ -81,20 +134,55 @@ def test_visa_annotate_companies(session):
 # --------------------------------------------------------------------------- #
 
 
-def test_company_enricher_lookup_and_annotate(session):
-    CompanyRepository(session).get_or_create("Twitter")
+def _signals_csv(tmp_path):
+    path = tmp_path / "company_signals.csv"
+    path.write_text(
+        "company_name,glassdoor_rating,had_layoffs\n"
+        "Acme Robotics,4.1,true\n"
+        "Globex Corporation,,\n",  # present but with no values -> unknown
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_company_enricher_lookup_and_annotate(session, tmp_path):
+    CompanyRepository(session).get_or_create("Acme Robotics")
     session.commit()
-    enricher = CompanyEnricher.from_csv()
-    assert enricher.lookup("Twitter").had_layoffs is True
+    enricher = CompanyEnricher.from_csv(_signals_csv(tmp_path))
+    assert enricher.lookup("Acme Robotics").had_layoffs is True
     enricher.annotate(session)
     session.commit()
     from sqlmodel import select
 
     from core.db.tables import Company
 
-    twitter = session.exec(select(Company).where(Company.name == "Twitter")).first()
-    assert twitter.had_layoffs is True
-    assert twitter.glassdoor_rating == 2.8
+    row = session.exec(select(Company)).first()
+    assert row.had_layoffs is True
+    assert row.glassdoor_rating == 4.1
+
+
+def test_company_blank_fields_are_unknown_not_false(tmp_path):
+    enricher = CompanyEnricher.from_csv(_signals_csv(tmp_path))
+    signal = enricher.lookup("Globex Corporation")
+    assert signal is not None
+    assert signal.had_layoffs is None  # blank -> unknown, NOT False
+    assert signal.glassdoor_rating is None
+
+
+def test_company_enricher_without_dataset_is_noop(session, tmp_path):
+    CompanyRepository(session).get_or_create("Acme Robotics")
+    session.commit()
+    enricher = CompanyEnricher.from_csv(tmp_path / "missing.csv")
+    assert enricher.loaded is False
+    assert enricher.lookup("Acme Robotics") is None
+    assert enricher.annotate(session) == 0
+    session.commit()
+    from sqlmodel import select
+
+    from core.db.tables import Company
+
+    row = session.exec(select(Company)).first()
+    assert row.had_layoffs is None  # never fabricated as False
 
 
 # --------------------------------------------------------------------------- #

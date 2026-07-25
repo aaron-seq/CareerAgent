@@ -49,3 +49,5 @@ careeragent.db
 
 # Local encryption key material
 .careeragent_key
+# Downloaded enrichment datasets (large; licences restrict redistribution)
+core/enrichment/data/*.csv
