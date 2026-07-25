@@ -421,13 +421,13 @@ def page_discovery():
 
     elif mode == "Job boards (API)":
         st.caption(
-            "Structured results from aggregator APIs. Remotive needs no key; "
-            "The Muse works keyless at a lower rate limit; Adzuna requires "
-            "ADZUNA_APP_ID / ADZUNA_APP_KEY in your environment."
+            "Structured results from real job-board APIs. The first four need "
+            "**no key and no account**. The Muse works keyless at a lower rate "
+            "limit; Adzuna needs ADZUNA_APP_ID / ADZUNA_APP_KEY."
         )
         bcol1, bcol2 = st.columns([1, 2])
         with bcol1:
-            provider = st.selectbox("Provider", ["remotive", "themuse", "adzuna"])
+            provider = st.selectbox("Provider", facade.AGGREGATOR_PROVIDERS)
         with bcol2:
             keywords = st.text_input(
                 "Keywords (optional)", placeholder="machine learning"
@@ -436,14 +436,7 @@ def page_discovery():
         if st.button("Search job boards", type="primary"):
             with st.spinner(f"Querying {provider}..."):
                 try:
-                    params = {}
-                    if keywords:
-                        # Each provider names its query parameter differently.
-                        if provider == "adzuna":
-                            params["what"] = keywords
-                        else:
-                            params["category"] = keywords
-                    result = facade.ingest_aggregator(provider, **params)
+                    result = facade.ingest_aggregator(provider, keywords=keywords)
                 except ValueError as e:
                     result = None
                     st.error(str(e))
@@ -465,10 +458,15 @@ def page_discovery():
                 else:
                     st.warning("No jobs returned. Try different keywords.")
 
-        if provider == "remotive":
+        if provider in ("remotive", "remoteok"):
             st.caption(
-                "Remotive requires attribution: link back to the original "
-                "posting when sharing results."
+                f"{provider} requires attribution: link back to the original "
+                "posting (no redirects) when sharing these results."
+            )
+        if provider in ("arbeitnow", "himalayas", "remoteok"):
+            st.caption(
+                "This provider has no keyword filter — it returns its current "
+                "board, which is then deduped, scored, and filtered for you."
             )
 
     elif mode == "Web Search (fallback)":

@@ -3,6 +3,12 @@
 from .aggregators import AdzunaSource, RemotiveSource, TheMuseSource
 from .ats import AshbySource, GreenhouseSource, LeverSource
 from .base import FetchedJob, IngestionResult, IngestionService, JobSource
+from .freeboards import (
+    ArbeitnowSource,
+    HimalayasSource,
+    JobicySource,
+    RemoteOKSource,
+)
 
 __all__ = [
     "FetchedJob",
@@ -15,4 +21,8 @@ __all__ = [
     "AdzunaSource",
     "TheMuseSource",
     "RemotiveSource",
+    "ArbeitnowSource",
+    "HimalayasSource",
+    "JobicySource",
+    "RemoteOKSource",
 ]

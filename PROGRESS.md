@@ -26,6 +26,33 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-25 — Keyless live job sources + a live verifier
+Added four job boards that need **no API key and no account**, so the app
+returns real listings out of the box:
+
+| Source | Endpoint | Notes |
+|---|---|---|
+| Arbeitnow | `www.arbeitnow.com/api/job-board-api` | EU + remote; `visa_sponsorship` flag |
+| Himalayas | `himalayas.app/jobs/api` | Remote-only; provider caps limit at 20 |
+| Jobicy | `jobicy.com/api/v2/remote-jobs` | Remote-only; annual salary fields |
+| RemoteOK | `remoteok.com/api` | **Attribution legally required** |
+
+- Keyword filtering is mapped per provider in the facade (`what` / `category` /
+  `industry`), and silently dropped for boards that have no keyword filter
+  rather than sent as a junk parameter.
+- RemoteOK's first array element is a legal notice, not a job — skipped.
+- `scripts/verify_sources.py` probes every source live, runs the real payload
+  through our parser, and reports which work (plus salary/date coverage).
+  Exits non-zero so it can gate CI on a connected runner.
+
+**Response shapes come from each provider's documentation, not a live call** —
+this environment's egress is blocked (only PyPI and api.github.com resolve;
+every job API returns 403). `verify_sources.py` is how that gets confirmed on a
+connected machine. Parsing is defensive: unexpected/missing fields degrade to
+`None` instead of raising.
+
+11 new tests. Totals: **191 Python + 11 JS green; ruff clean.**
+
 ### 2026-07-25 — Removed fabricated enrichment data (honesty fix)
 The bundled "sample" enrichment CSVs contained **invented facts about real,
 named companies** (Glassdoor ratings, layoff history, sponsor status), and the

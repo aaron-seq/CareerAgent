@@ -36,11 +36,15 @@ from .enrichment import (
 from .fetching import PoliteFetcher, RobotsDisallowed, detect, extract_jsonld_jobs
 from .ingestion import (
     AdzunaSource,
+    ArbeitnowSource,
     AshbySource,
     GreenhouseSource,
+    HimalayasSource,
     IngestionResult,
     IngestionService,
+    JobicySource,
     LeverSource,
+    RemoteOKSource,
     RemotiveSource,
     TheMuseSource,
 )
@@ -60,6 +64,17 @@ _ATS_SOURCES = {
     "lever": LeverSource,
     "ashby": AshbySource,
 }
+
+#: Aggregators that need no API key and no account.
+_KEYLESS_SOURCES = {
+    "arbeitnow": ArbeitnowSource,
+    "himalayas": HimalayasSource,
+    "jobicy": JobicySource,
+    "remoteok": RemoteOKSource,
+}
+
+#: Everything ``ingest_aggregator`` accepts, keyless first.
+AGGREGATOR_PROVIDERS = list(_KEYLESS_SOURCES) + ["remotive", "themuse", "adzuna"]
 
 
 def init_persistence() -> None:
@@ -125,9 +140,20 @@ def link_companies(session) -> int:
     return linked
 
 
+#: Each provider names its free-text filter differently; some have none at all
+#: (they return the whole current board and are filtered downstream).
+_KEYWORD_PARAM = {
+    "adzuna": "what",
+    "themuse": "category",
+    "remotive": "category",
+    "jobicy": "industry",
+}
+
+
 def ingest_aggregator(
     provider: str,
     client=None,
+    keywords: str | None = None,
     **params: Any,
 ) -> IngestionResult:
     """Pull jobs from a keyword-searchable aggregator.
@@ -140,7 +166,10 @@ def ingest_aggregator(
 
     init_persistence()
     provider = provider.lower()
-    if provider == "remotive":
+    # Keyless providers first -- these work with no setup at all.
+    if provider in _KEYLESS_SOURCES:
+        source = _KEYLESS_SOURCES[provider]()
+    elif provider == "remotive":
         source = RemotiveSource()
     elif provider == "themuse":
         source = TheMuseSource(api_key=os.environ.get("THEMUSE_API_KEY"))
@@ -154,6 +183,14 @@ def ingest_aggregator(
         source = AdzunaSource(app_id, app_key, country=params.pop("country", "gb"))
     else:
         raise ValueError(f"Unsupported aggregator: {provider}")
+
+    # Map free-text keywords onto whatever this provider calls that parameter.
+    if keywords:
+        param = _KEYWORD_PARAM.get(provider)
+        if param:
+            params[param] = keywords
+        # Providers with no keyword filter (arbeitnow/himalayas/remoteok)
+        # return the whole board; scoring and filters narrow it afterwards.
 
     with get_session() as session:
         return IngestionService(session).ingest(source, client=client, **params)

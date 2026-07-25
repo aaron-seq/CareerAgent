@@ -192,6 +192,65 @@ def test_ingest_aggregator_unsupported(temp_db):
         facade.ingest_aggregator("linkedin")
 
 
+@respx.mock
+def test_ingest_keyless_provider_needs_no_credentials(temp_db, monkeypatch):
+    """The keyless boards must work with a completely empty environment."""
+    for var in ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "THEMUSE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    respx.get(url__regex=r"https://jobicy\.com/api/v2/remote-jobs.*").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "jobTitle": "Remote Python Engineer",
+                        "companyName": "Keyless Co",
+                        "url": "https://jobicy.com/jobs/1",
+                        "jobGeo": "Anywhere",
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        result = facade.ingest_aggregator("jobicy", client=client)
+    assert result.upserted == 1
+    assert facade.top_jobs()[0]["company"] == "Keyless Co"
+
+
+@respx.mock
+def test_keywords_map_to_each_providers_parameter(temp_db):
+    route = respx.get(url__regex=r"https://jobicy\.com/api/v2/remote-jobs.*").mock(
+        return_value=httpx.Response(200, json={"jobs": []})
+    )
+    with httpx.Client() as client:
+        facade.ingest_aggregator("jobicy", client=client, keywords="data science")
+    # Jobicy calls it "industry", not "category" or "what".
+    assert "industry=data" in str(route.calls[0].request.url)
+
+
+@respx.mock
+def test_keywords_ignored_for_providers_without_a_filter(temp_db):
+    """arbeitnow has no keyword param; passing one must not break the call."""
+    route = respx.get(
+        url__regex=r"https://www\.arbeitnow\.com/api/job-board-api.*"
+    ).mock(return_value=httpx.Response(200, json={"data": []}))
+    with httpx.Client() as client:
+        facade.ingest_aggregator("arbeitnow", client=client, keywords="python")
+    url = str(route.calls[0].request.url)
+    assert "python" not in url  # silently dropped rather than sent as garbage
+
+
+def test_aggregator_providers_lists_keyless_first():
+    assert facade.AGGREGATOR_PROVIDERS[:4] == [
+        "arbeitnow",
+        "himalayas",
+        "jobicy",
+        "remoteok",
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Enrichment + filters via the facade
 # --------------------------------------------------------------------------- #
