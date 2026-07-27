@@ -4,13 +4,18 @@ Living status log. Update the top block at the end of every working session.
 Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARCH.md`.
 
 ## Current status
-- **Current phase:** Phases 0–10 **complete**.
-- **Last updated:** 2026-07-23
-- **Next action:** Manual QA of the not-live-verified paths (live API pulls,
-  real LLM output, extension in a browser, real email send, deployment), then
-  wire the new `core/` services into `app.py` screens incrementally.
-- **Blockers:** None. Build env can't reach external services (job APIs / model
-  hub / Ollama) or install pgvector; see per-phase notes below and ADRs 0003/0004.
+- **Current phase:** Phases 0–10 **complete**. Post-Phase-10 hardening ongoing.
+- **Last updated:** 2026-07-27
+- **Next action:** Fix job-matching keyword extraction for aggregator-ingested
+  jobs (falls back to raw description tokenization when `tech_stack`/
+  `requirements` aren't populated, deflating scores and polluting "missing
+  skills" with stopwords — see 2026-07-27 log entry). Manual QA of remaining
+  not-live-verified paths (extension in a browser, real email send,
+  deployment).
+- **Blockers:** None. This session ran with live network access (real Remotive
+  API pulls, real Groq LLM calls) for the first time — see log below. Earlier
+  entries' "build env can't reach external services" note no longer applies
+  to LLM calls or job-board APIs; still true for pgvector.
 
 ## Verification level per phase
 - **Genuinely run + tested here:** P1 data layer, P4 dedup/scoring, P5 resume
@@ -22,9 +27,64 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
+Totals: **204 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
+
+### 2026-07-27 — CV parsing fabrication fix, cover letters, Groq provider, dark-native redesign
+First session with live network access: real Groq LLM calls and a real
+Remotive job-API pull, tested against the maintainer's actual CV end-to-end.
+- **Found and fixed a real fabrication bug.** A CV's contact links render as
+  anchor text (visible word "Github") with the URL only in the PDF's link-
+  annotation layer, which `extract_text()` discards. With no URL in its input,
+  the model invented a plausible-looking one from the candidate's name --
+  `github.com/AaronSequeira` instead of the real `github.com/aaron-seq`. Fixed
+  by extracting annotation-layer hyperlinks (`_extract_hyperlinks_from_pdf`)
+  and appending them to the prompt after truncation, plus rewriting the
+  prompt's placeholder shape (which itself taught the model to invent a
+  username) into an explicit copy-or-null instruction with an anti-fabrication
+  rule. Verified against the real CV: GitHub/LinkedIn now match exactly, two
+  previously-null project repo links recovered. 6 new tests
+  (`tests/test_cv_parser.py`).
+- **Added cover letter generation** (`core/resume/cover_letter.py`), gated the
+  same way `tailor.py` gates resume tailoring: raises rather than ship a
+  letter naming an employer not in the CV or citing an unsupported metric.
+  First live draft cited zero metrics -- the guard had made the model avoid
+  numbers entirely; rewrote the prompt to positively push real figures, and
+  the next draft cited 5, all CV-verified, plus one honestly-flagged gap. 8
+  new tests (`tests/test_cover_letter.py`).
+- **Added Groq as a free cloud LLM provider** alongside Ollama
+  (`CloudLLMClient` in `core/llm.py`, subclasses `LocalLLMClient`, overrides
+  only the 3 HTTP methods). Lets the app run without installing Ollama +
+  pulling multi-GB models first. This is a deliberate, documented deviation
+  from ADR 0002's "cloud only for non-PII work" guardrail -- see ADR 0005.
+  Verified live: connected, listed 15 models, `generate_json` round-tripped.
+- **Dark-native UI redesign.** `assets/style.css` had been authored for a
+  light theme while `.streamlit/config.toml` set a dark one, rendering every
+  heading near-invisible (near-black text on near-black background). Rewrote
+  dark-native; added a stage rail across the top reflecting the app's real
+  screen gating (Discovery can't run before Onboarding); reworded the six
+  gating messages from state descriptions ("please initialize LLM first") to
+  next actions ("pick a provider, then choose Initialize LLM").
+- **Privacy cleanup:** 11 parsed CV profiles (real PII: name, email, phone,
+  employers) and 1 job posting were tracked in git as stale test artifacts.
+  Untracked them and extended `.gitignore` to prevent recurrence
+  (`careeragent_data/{cv_profiles,contacts,job_postings}/`, `*_CV.pdf`). Note:
+  content is still in git history; a full purge needs a history rewrite, left
+  for the repo owner.
+- **Found, not yet fixed:** job-matching keyword extraction
+  (`core/matching/scoring.py::_job_keywords`) prefers curated
+  `tech_stack`/`requirements`, but aggregator-ingested jobs never populate
+  those fields (only the LLM job-parse path does) -- so it falls back to
+  tokenizing the raw description against a 20-word stopword list. Observed
+  live: a real job's "missing skills" list was full of stopwords (`at`, `is`,
+  `who`, `why`) and punctuation-glued tokens (`api.`, `built.`), and match
+  scores are systematically deflated (4 matched / ~200 prose tokens). Fix:
+  run aggregator-ingested jobs through the existing `JOB_PARSE_PROMPT` to
+  populate `tech_stack` -- the parser already exists, ingestion just skips it.
+  Cost is one LLM call per job, a tradeoff intentionally left for the
+  maintainer to decide rather than assumed.
+- 14 new tests. Totals: **204 Python + 11 JS tests green; ruff clean.**
 
 ### 2026-07-25 — Removed fabricated enrichment data (honesty fix)
 The bundled "sample" enrichment CSVs contained **invented facts about real,

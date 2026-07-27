@@ -47,6 +47,7 @@ from .ingestion import (
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, JobPosting
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
+from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
 from .resume import render_markdown, render_pdf, tailor_resume, to_json_resume
 from .tracking import (
@@ -532,4 +533,21 @@ def tailor_for_job(cv: CVProfile, job: JobPosting) -> dict[str, Any]:
         "emphasized": report.emphasized_skills,
         "gaps": report.gaps,
         "reordered_experience": report.reordered_experience,
+    }
+
+
+def cover_letter_for_job(
+    llm, cv: CVProfile, job: JobPosting, tone: str = "professional"
+) -> dict[str, Any]:
+    """Draft a cover letter grounded in the CV.
+
+    Same contract as :func:`tailor_for_job`: the underlying service raises
+    rather than ship a letter that invents an employer or a metric.
+    """
+    letter, report = _generate_cover_letter(llm, cv, job, tone=tone)
+    return {
+        "letter": letter,
+        "gaps": report.gaps,
+        "cited_metrics": report.cited_metrics,
+        "word_count": report.word_count,
     }

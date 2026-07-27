@@ -51,3 +51,15 @@ careeragent.db
 .careeragent_key
 # Downloaded enrichment datasets (large; licences restrict redistribution)
 core/enrichment/data/*.csv
+
+# Personal documents and parsed PII - never commit (see CLAUDE.md "Secrets & PII").
+# NOTE: careeragent_data/cv_profiles/ is ALREADY TRACKED from earlier commits;
+# ignoring it here only stops new files. Purging the existing ones needs
+# `git rm -r --cached careeragent_data/cv_profiles` plus a history rewrite.
+*_C_V.pdf
+*_CV.pdf
+cv_*.pdf
+resume_*.pdf
+careeragent_data/cv_profiles/
+careeragent_data/contacts/
+careeragent_data/job_postings/

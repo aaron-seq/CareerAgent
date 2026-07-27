@@ -3,6 +3,8 @@ CV parser with PDF extraction and LLM-based structuring
 Supports both PDF and plain text input
 """
 
+from typing import List, Optional
+
 import pdfplumber
 import PyPDF2
 
@@ -20,16 +22,28 @@ class CVParser:
     def parse_pdf(self, pdf_path: str) -> CVProfile:
         """Parse CV from PDF file"""
         text = self._extract_text_from_pdf(pdf_path)
-        return self.parse_text(text)
+        return self.parse_text(text, links=self._extract_hyperlinks_from_pdf(pdf_path))
 
-    def parse_text(self, cv_text: str) -> CVProfile:
-        """Parse CV from plain text using LLM"""
+    def parse_text(self, cv_text: str, links: Optional[List[str]] = None) -> CVProfile:
+        """Parse CV from plain text using LLM.
+
+        ``links`` carries URLs recovered from the PDF's annotation layer. They
+        are appended *after* truncation so a long CV can never push the
+        contact links out of the prompt.
+        """
         if not cv_text or len(cv_text.strip()) < 50:
             raise ValueError("CV text is too short or empty")
 
         # Truncate text to avoid token limits and reduce latency (approx 3000 tokens)
         if len(cv_text) > 12000:
             cv_text = cv_text[:12000]
+
+        if links:
+            listed = "\n".join(f"- {url}" for url in links)
+            cv_text += (
+                "\n\nDOCUMENT LINKS (real URLs behind the hyperlink labels above; "
+                "the visible text shows only labels such as 'Github'):\n" + listed
+            )
 
         # Use LLM to extract structured data
         prompt = CV_PARSE_PROMPT.format(cv_text=cv_text)
@@ -86,6 +100,29 @@ class CVParser:
         raise ValueError(
             "Could not extract text from PDF. File may be scanned image or corrupted."
         )
+
+    def _extract_hyperlinks_from_pdf(self, pdf_path: str) -> List[str]:
+        """Recover URLs from the PDF's link-annotation layer.
+
+        A CV usually renders contact links as anchor text -- the visible word
+        is "Github" while the URL lives only in the annotation. extract_text()
+        drops that layer, so without this the model is asked for a github
+        field with no github URL anywhere in its input, and fills the gap by
+        inventing one from the candidate's name. Fabricated credentials are a
+        hard no (CLAUDE.md guardrail 4), so the real URLs must reach the model.
+        """
+        urls: List[str] = []
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    for link in page.hyperlinks or []:
+                        uri = link.get("uri")
+                        if uri and uri not in urls:
+                            urls.append(uri)
+        except Exception as e:  # non-fatal: parsing still works without links
+            print(f"hyperlink extraction failed: {e}")
+
+        return urls
 
     def extract_links(self, cv_profile: CVProfile) -> list:
         """Extract all URLs from CV profile"""

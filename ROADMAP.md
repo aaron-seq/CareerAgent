@@ -12,7 +12,11 @@ work. Progress is tracked in `PROGRESS.md`; conventions live in `CLAUDE.md`.
 - **Human-in-the-loop before any submit.** Autofill assists; the human reviews
   and clicks submit. No unattended mass-apply.
 - **PII stays local and encrypted.** Resume/contact data uses local LLMs by
-  default; cloud calls are opt-in and non-PII.
+  default; cloud calls are opt-in. *(Narrowed in ADR 0005: a cloud provider
+  is now available as an explicit, visible, per-session choice even for
+  PII-heavy work like CV parsing, because requiring Ollama made the app
+  unusable without a multi-GB local install. The guardrail that survives:
+  cloud must stay opt-in per session, never a silent default.)*
 - **Compliance is built in, not bolted on.** Suppression list, opt-out, postal
   address, and per-campaign LIA live in the data model.
 - **Free-tier first.** Choose tools with durable free tiers; re-verify quotas at
@@ -82,8 +86,9 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 
 ## Implementation status (2026-07-23)
 
-**All phases 0–10 implemented and tested** (143 Python tests + 11 JS tests
-green, `ruff` clean). A full internal end-to-end test
+**All phases 0–10 implemented and tested** (204+ Python tests + 11 JS tests
+green as of 2026-07-27, `ruff` clean — see `PROGRESS.md` for the current
+count). A full internal end-to-end test
 (`tests/test_e2e_pipeline.py`) exercises ingest → dedup → enrich → score →
 track → digest → tailor → outreach gate.
 

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m ruff check .)",
+      "Bash(python -m pytest -q)",
+      "Bash(python -m mypy .)",
+      "Bash(python --version)",
+      "Bash(node --version)",
+      "Bash(git status)",
+      "Bash(git status --short)",
+      "Bash(git branch --show-current)"
+    ]
+  }
+}

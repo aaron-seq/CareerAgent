@@ -1,12 +1,14 @@
 """
 CareerAgent - Main Streamlit Application
-Complete UI with 5 screens: Onboarding, Discovery, Contacts, Draft Studio, Export
+6 screens: Onboarding, Job Discovery, Pipeline, Contact Finder, Draft Studio,
+Export & Logs. Calls only core/facade.py -- no business logic here.
 """
 
 import os
 from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
 
 from core import facade
 from core.contact_finder import ContactFinder
@@ -15,12 +17,14 @@ from core.gmail_drafts import GmailDraftClient
 from core.job_finder import JobFinder
 
 # Core imports
-from core.llm import LocalLLMClient
+from core.llm import GROQ_DEFAULT_MODEL, CloudLLMClient, LocalLLMClient
 from core.models import ContactCandidate, EmailDraft, JobPosting, SearchQuery
 from core.outreach import ComplianceConfig, LIARecord
 from core.personalization import PersonalizationEngine
 from core.storage import LocalStorage
 from core.validators import DraftValidator
+
+load_dotenv()
 
 # Page config
 st.set_page_config(
@@ -97,7 +101,10 @@ def render_sidebar():
     """Render sidebar with navigation and settings"""
     with st.sidebar:
         st.title("CareerAgent")
-        st.caption("Local AI Career Agent")
+        st.markdown(
+            '<p class="wordmark-sub">Local AI Career Agent</p>',
+            unsafe_allow_html=True,
+        )
 
         st.divider()
 
@@ -112,8 +119,14 @@ def render_sidebar():
             "export": "Export & Logs",
         }
 
+        current = st.session_state.get("page", "onboarding")
         for key, label in pages.items():
-            if st.button(label, key=f"nav_{key}", use_container_width=True):
+            if st.button(
+                label,
+                key=f"nav_{key}",
+                use_container_width=True,
+                type="primary" if key == current else "secondary",
+            ):
                 st.session_state.page = key
                 st.rerun()
 
@@ -122,19 +135,55 @@ def render_sidebar():
         # LLM Settings
         st.subheader("LLM Settings")
 
-        model = st.selectbox(
-            "Model",
-            ["llama3.1:8b", "llama3.2:3b", "qwen2.5:7b", "mistral:7b"],
-            key="selected_model",
+        provider = st.radio(
+            "Provider",
+            ["Ollama (local)", "Groq (cloud, free tier)"],
+            key="llm_provider",
         )
+        use_cloud = (provider or "").startswith("Groq")
+
+        if use_cloud:
+            model = (
+                st.text_input(
+                    "Model",
+                    value=GROQ_DEFAULT_MODEL,
+                    key="selected_cloud_model",
+                    help="Any model id your Groq key can access.",
+                )
+                or GROQ_DEFAULT_MODEL
+            )
+            st.caption(
+                "Prompts leave this machine. CLAUDE.md reserves cloud "
+                "inference for non-PII work - your CV is PII."
+            )
+        else:
+            model = (
+                st.selectbox(
+                    "Model",
+                    ["llama3.1:8b", "llama3.2:3b", "qwen2.5:7b", "mistral:7b"],
+                    key="selected_model",
+                )
+                or "llama3.1:8b"
+            )
 
         if st.button("Initialize LLM", use_container_width=True):
-            with st.spinner("Connecting to Ollama..."):
+            target = "Groq" if use_cloud else "Ollama"
+            with st.spinner(f"Connecting to {target}..."):
                 try:
-                    llm = LocalLLMClient(model=model)
+                    if use_cloud:
+                        llm = CloudLLMClient(
+                            api_key=os.getenv("GROQ_API_KEY", ""), model=model
+                        )
+                    else:
+                        llm = LocalLLMClient(model=model)
+
                     if llm.check_connection():
                         st.session_state.llm_client = llm
                         st.success(f"Connected to {model}")
+                    elif use_cloud:
+                        st.error(
+                            "Groq unreachable or key rejected. Check GROQ_API_KEY."
+                        )
                     else:
                         st.error("Ollama not running. Run `ollama serve`")
                 except Exception as e:
@@ -155,6 +204,62 @@ def render_sidebar():
         st.metric("Drafts Created", len(st.session_state.draft_history))
 
 
+# Stage rail: the six screens are gated, not merely ordered - Discovery
+# refuses to run until Onboarding completes. The rail reports that real
+# dependency chain so a locked screen explains itself before it's clicked.
+STAGES = [
+    ("onboarding", "Onboarding"),
+    ("discovery", "Job Discovery"),
+    ("pipeline", "Pipeline"),
+    ("contacts", "Contact Finder"),
+    ("draft", "Draft Studio"),
+    ("export", "Export & Logs"),
+]
+
+
+def _completed_stages() -> set:
+    """Which stages have produced their output yet (presentation state only)."""
+    done = set()
+    if st.session_state.cv_profile:
+        done.add("onboarding")
+    if st.session_state.selected_jobs:
+        done.add("discovery")
+        done.add("pipeline")
+    if st.session_state.found_contacts:
+        done.add("contacts")
+    if st.session_state.draft_history:
+        done.add("draft")
+    return done
+
+
+def render_stage_rail(current: str) -> None:
+    """Draw the pipeline rail above the active screen."""
+    done = _completed_stages()
+    unlocked = bool(st.session_state.cv_profile)
+
+    cells = []
+    for index, (key, label) in enumerate(STAGES, start=1):
+        if key == current:
+            state = "is-active"
+        elif key in done:
+            state = "is-done"
+        elif key == "onboarding" or unlocked:
+            state = "is-ready"
+        else:
+            state = "is-locked"
+        cells.append(
+            f'<div class="stage {state}">'
+            f'<span class="stage-lamp"></span>'
+            f'<span class="stage-num">{index:02d}</span>'
+            f'<span class="stage-name">{label}</span>'
+            f"</div>"
+        )
+
+    st.markdown(
+        f'<div class="stage-rail">{"".join(cells)}</div>', unsafe_allow_html=True
+    )
+
+
 # Page 1: Onboarding
 def page_onboarding():
     """Onboarding screen - CV upload and preferences"""
@@ -163,7 +268,9 @@ def page_onboarding():
 
     # Check LLM connection
     if not st.session_state.llm_client:
-        st.error("Please initialize LLM from sidebar first")
+        st.info(
+            "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+        )
         return
 
     col1, col2 = st.columns([2, 1])
@@ -356,7 +463,7 @@ def page_discovery():
     )
 
     if not st.session_state.cv_profile:
-        st.warning("Please complete onboarding first")
+        st.info("Upload your CV in Onboarding first - matching reads from it.")
         return
 
     # Search mode. Ordered best-data-first; the DuckDuckGo path is retained as
@@ -478,7 +585,9 @@ def page_discovery():
             "careers URL when you have one. Requires the local LLM."
         )
         if not st.session_state.llm_client:
-            st.error("Please initialize the LLM from the sidebar to use search.")
+            st.info(
+                "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+            )
             return
 
         col1, col2 = st.columns([3, 1])
@@ -539,7 +648,9 @@ def page_discovery():
 
         if st.button("Fetch Job Details", type="primary"):
             if not st.session_state.llm_client:
-                st.error("Please initialize the LLM from the sidebar first.")
+                st.info(
+                    "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+                )
                 return
             with st.spinner("Fetching job details..."):
                 try:
@@ -613,7 +724,9 @@ def page_contacts():
         return
 
     if not st.session_state.llm_client:
-        st.error("Please initialize LLM first")
+        st.info(
+            "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+        )
         return
 
     # For each selected job
@@ -753,7 +866,9 @@ def page_draft_studio():
         return
 
     if not st.session_state.llm_client:
-        st.error("Please initialize LLM first")
+        st.info(
+            "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+        )
         return
 
     # Job selector
@@ -829,6 +944,55 @@ def page_draft_studio():
                     data=facade.resume_pdf(tailored["profile"]),
                     file_name=f"resume_{current_job.company}.pdf".replace(" ", "_"),
                     mime="application/pdf",
+                    use_container_width=True,
+                )
+
+        # --- Cover letter, grounded in the CV --- #
+        if st.session_state.cv_profile:
+            st.subheader("Cover letter")
+            st.caption(
+                "Drafted only from what your CV actually says. Generation fails "
+                "rather than ship an invented employer or metric."
+            )
+            tone = st.selectbox(
+                "Tone",
+                ["professional", "conversational", "direct"],
+                key="cover_tone",
+            )
+            if st.button("Draft cover letter", use_container_width=True):
+                with st.spinner("Drafting from your CV..."):
+                    try:
+                        st.session_state.cover = facade.cover_letter_for_job(
+                            st.session_state.llm_client,
+                            st.session_state.cv_profile,
+                            current_job,
+                            tone=tone,
+                        )
+                    except Exception as e:
+                        st.session_state.cover = None
+                        st.error(f"Cover letter rejected: {e}")
+
+            cover = st.session_state.get("cover")
+            if cover:
+                st.text_area(
+                    "Letter", value=cover["letter"], height=300, key="cover_text"
+                )
+                st.caption(f"{cover['word_count']} words")
+                if cover["cited_metrics"]:
+                    st.success(
+                        "Metrics cited (all verified against your CV): "
+                        + ", ".join(cover["cited_metrics"][:6])
+                    )
+                if cover["gaps"]:
+                    st.warning(
+                        "Asked for but not evidenced in your CV - address "
+                        "honestly: " + ", ".join(cover["gaps"][:6])
+                    )
+                st.download_button(
+                    "Download cover letter",
+                    data=st.session_state.get("cover_text", cover["letter"]),
+                    file_name=f"cover_{current_job.company}.md".replace(" ", "_"),
+                    mime="text/markdown",
                     use_container_width=True,
                 )
 
@@ -1346,6 +1510,7 @@ def page_pipeline():
 
 # Router
 render_sidebar()
+render_stage_rail(st.session_state.get("page", "onboarding"))
 
 if st.session_state.get("page") == "onboarding":
     page_onboarding()

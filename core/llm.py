@@ -1,11 +1,12 @@
 """
-Ollama LLM client for local inference
+LLM clients: Ollama for local inference, plus an OpenAI-compatible cloud
+client for hosted free tiers.
 Handles JSON parsing, retries, and streaming
 """
 
 import json
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 from pydantic import BaseModel
@@ -184,3 +185,114 @@ class LocalLLMClient:
             raise Exception(
                 f"Response validation failed: {str(e)}\nResponse: {json_response}"
             )
+
+
+# Default free-tier cloud endpoint. Groq is OpenAI-compatible and serves the
+# same Llama family the local prompts are tuned for, so behaviour carries over.
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile"
+
+
+class CloudLLMClient(LocalLLMClient):
+    """OpenAI-compatible cloud client (Groq free tier by default).
+
+    PRIVACY: unlike LocalLLMClient this sends prompt content off-machine.
+    CLAUDE.md reserves cloud inference for non-PII work; using it for CV
+    parsing or draft generation means resume data leaves the device.
+
+    Only the three HTTP-touching methods differ from the Ollama client; the
+    JSON cleaning, retry, and schema-validation logic is inherited unchanged.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = GROQ_BASE_URL,
+        model: str = GROQ_DEFAULT_MODEL,
+    ):
+        if not api_key or not api_key.strip():
+            raise ValueError(
+                "No API key. Set GROQ_API_KEY in .env (get one free at "
+                "https://console.groq.com/keys)."
+            )
+        super().__init__(base_url=base_url.rstrip("/"), model=model)
+        self.api_key = api_key.strip()
+
+    @property
+    def _headers(self) -> Dict[str, str]:
+        return {"Authorization": f"Bearer {self.api_key}"}
+
+    def _fetch_models(self) -> Optional[list]:
+        """GET /models -> model ids, or None if unreachable/key rejected.
+
+        None and [] mean different things here: None is "couldn't ask",
+        [] is "asked, key has no models".
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/models", headers=self._headers, timeout=10
+            )
+            if response.status_code == 200:
+                return [m["id"] for m in response.json().get("data", [])]
+        except Exception:
+            pass
+        return None
+
+    def check_connection(self) -> bool:
+        """Verify the endpoint is reachable and the key is accepted"""
+        return self._fetch_models() is not None
+
+    def list_models(self) -> list:
+        """List models the key has access to"""
+        return self._fetch_models() or []
+
+    def generate_text(
+        self, prompt: str, temperature: float = 0.7, max_tokens: int = 2000
+    ) -> str:
+        """Generate text via the chat-completions endpoint.
+
+        JSON mode mirrors the Ollama client's hardcoded `format: json`. Every
+        caller reaches this through generate_json(), whose prompt already
+        contains the word "json" that OpenAI-compatible JSON mode requires.
+        """
+        try:
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "response_format": {"type": "json_object"},
+            }
+
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                json=payload,
+                headers=self._headers,
+                timeout=self.timeout,
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                return result["choices"][0]["message"]["content"].strip()
+            if response.status_code == 401:
+                raise Exception("API key rejected. Check GROQ_API_KEY in .env.")
+            if response.status_code == 404:
+                raise Exception(
+                    f"Model '{self.model}' not available on this endpoint. "
+                    "Cloud providers retire models; pick a current one."
+                )
+            if response.status_code == 429:
+                raise Exception(
+                    "Free-tier rate limit hit. Wait for the quota window to "
+                    "reset, or switch to a local Ollama model."
+                )
+            raise Exception(
+                f"Cloud API error {response.status_code}: {response.text[:200]}"
+            )
+
+        except requests.exceptions.Timeout:
+            raise Exception(
+                "LLM request timed out. Try a smaller model or reduce prompt size."
+            )
+        except Exception as e:
+            raise Exception(f"LLM generation failed: {str(e)}")

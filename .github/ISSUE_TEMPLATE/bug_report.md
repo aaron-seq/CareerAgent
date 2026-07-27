@@ -23,7 +23,7 @@ assignees: []
 ## Environment
 - OS:
 - Python version:
-- Ollama model:
+- LLM provider (Ollama model, or Groq):
 - CareerAgent commit/branch:
 
 ## Additional context
