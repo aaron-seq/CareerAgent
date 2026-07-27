@@ -4,7 +4,89 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from core.llm import LocalLLMClient
+from core.llm import CloudLLMClient, LocalLLMClient
+
+
+class TestCloudLLMClient:
+    """Test suite for the OpenAI-compatible cloud client"""
+
+    def test_requires_api_key(self):
+        """Empty/whitespace keys fail loudly instead of 401ing later"""
+        with pytest.raises(ValueError):
+            CloudLLMClient(api_key="")
+        with pytest.raises(ValueError):
+            CloudLLMClient(api_key="   ")
+
+    def test_defaults_to_groq(self):
+        client = CloudLLMClient(api_key="test-key")
+        assert client.base_url == "https://api.groq.com/openai/v1"
+        assert client.model == "llama-3.3-70b-versatile"
+        assert client._headers == {"Authorization": "Bearer test-key"}
+
+    def test_trailing_slash_stripped(self):
+        """Avoids '//models' when a base_url is pasted with a trailing slash"""
+        client = CloudLLMClient(api_key="k", base_url="https://x.test/v1/")
+        assert client.base_url == "https://x.test/v1"
+
+    @patch("core.llm.requests.post")
+    def test_generate_text_parses_openai_shape(self, mock_post):
+        """Cloud response shape differs from Ollama's - unwrap choices[0]"""
+        mock_post.return_value = Mock(
+            status_code=200,
+            json=Mock(
+                return_value={"choices": [{"message": {"content": '  {"a": 1}  '}}]}
+            ),
+        )
+        client = CloudLLMClient(api_key="k")
+        assert client.generate_text("prompt") == '{"a": 1}'
+
+    @patch("core.llm.requests.post")
+    def test_bad_key_surfaces_actionable_error(self, mock_post):
+        mock_post.return_value = Mock(status_code=401, text="unauthorized")
+        client = CloudLLMClient(api_key="wrong")
+        with pytest.raises(Exception, match="API key rejected"):
+            client.generate_text("prompt")
+
+    @patch("core.llm.requests.post")
+    def test_rate_limit_surfaces_actionable_error(self, mock_post):
+        mock_post.return_value = Mock(status_code=429, text="slow down")
+        client = CloudLLMClient(api_key="k")
+        with pytest.raises(Exception, match="rate limit"):
+            client.generate_text("prompt")
+
+    @patch("core.llm.requests.get")
+    def test_list_models_unwraps_data(self, mock_get):
+        mock_get.return_value = Mock(
+            status_code=200,
+            json=Mock(return_value={"data": [{"id": "m1"}, {"id": "m2"}]}),
+        )
+        assert CloudLLMClient(api_key="k").list_models() == ["m1", "m2"]
+
+    @patch("core.llm.requests.get")
+    def test_check_connection_rejects_bad_key(self, mock_get):
+        """A 401 is 'not connected', not an empty model list"""
+        mock_get.return_value = Mock(status_code=401, text="unauthorized")
+        client = CloudLLMClient(api_key="wrong")
+        assert client.check_connection() is False
+        assert client.list_models() == []
+
+    @patch("core.llm.requests.get", side_effect=OSError("no network"))
+    def test_check_connection_survives_transport_failure(self, mock_get):
+        """Offline must return False, not raise into the Streamlit sidebar"""
+        assert CloudLLMClient(api_key="k").check_connection() is False
+
+    @patch("core.llm.requests.post")
+    def test_inherits_json_pipeline(self, mock_post):
+        """generate_json/schema logic is reused, not reimplemented"""
+        mock_post.return_value = Mock(
+            status_code=200,
+            json=Mock(
+                return_value={
+                    "choices": [{"message": {"content": '```json\n{"ok": true}\n```'}}]
+                }
+            ),
+        )
+        assert CloudLLMClient(api_key="k").generate_json("p") == {"ok": True}
 
 
 class TestLocalLLMClient:
