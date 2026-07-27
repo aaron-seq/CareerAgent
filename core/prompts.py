@@ -14,9 +14,9 @@ Extract and return ONLY valid JSON with this exact structure:
     "name": "Full Name",
     "email": "email@example.com",
     "phone": "+1234567890",
-    "linkedin": "linkedin.com/in/username",
-    "github": "github.com/username",
-    "portfolio": "portfolio-url.com",
+    "linkedin": "<copy the linkedin URL from the text, else null>",
+    "github": "<copy the github URL from the text, else null>",
+    "portfolio": "<copy the portfolio URL from the text, else null>",
     "summary": "Brief summary",
     "experiences": [
         {{
@@ -42,8 +42,17 @@ Extract and return ONLY valid JSON with this exact structure:
 }}
 
 RULES:
-1. Extract ALL details.
-2. Return ONLY valid JSON."""
+1. Extract ALL details that are actually present.
+2. NEVER invent a URL. Copy URLs only from the CV text or the DOCUMENT LINKS
+   section. Do not construct one from the person's name or company -- a
+   recruiter clicking a guessed link gets a dead page, which is worse than
+   showing no link. If a profile is not present, use null.
+3. Never invent or embellish employers, titles, dates, metrics, or
+   credentials. If a field is not stated in the CV, use null or omit it.
+4. Assign each URL to the field it belongs to: a linkedin.com URL is
+   linkedin, a github.com profile URL is github, a repository URL belongs to
+   that project, a company URL is not a personal link.
+5. Return ONLY valid JSON."""
 
 
 JOB_PARSE_PROMPT = """You are a job posting analyzer. Extract key structured information.
@@ -213,3 +222,45 @@ Use patterns like:
 - "{company_name} {role_keyword} team lead"
 
 Return ONLY JSON array of 5 queries, no other text."""
+
+
+COVER_LETTER_PROMPT = """You are helping {name} write a cover letter for a specific role.
+
+CANDIDATE PROFILE
+Summary: {summary}
+
+Experience:
+{experience}
+
+Skills: {skills}
+
+TARGET ROLE
+Title: {job_title}
+Company: {company}
+Description:
+{job_description}
+
+Write a {tone} cover letter of 250-350 words.
+
+RULES:
+1. Every claim must come from the CANDIDATE PROFILE above. Do not invent
+   employers, job titles, dates, metrics, or credentials.
+2. DO quote the candidate's real metrics -- they are the strongest thing in
+   the letter. Every number in the Experience block above is verified, so use
+   them: write "cut document retrieval time by 65%", not "significantly
+   improved retrieval". Aim for at least two concrete figures.
+   The one hard limit: never write a number that is NOT in the profile above.
+   If you have no figure for a point, make it qualitatively instead. A
+   fabricated metric is worse than a vague sentence.
+3. Name the company and connect the candidate's real experience to what the
+   posting actually asks for. No generic filler.
+4. If the role requires something the candidate does not demonstrably have,
+   do NOT claim it. List it in "gaps" so the human can address it honestly.
+5. No greeting placeholders like "[Hiring Manager]" -- use "Dear Hiring
+   Manager" if no name is known.
+
+Return ONLY valid JSON:
+{{
+    "letter": "Full cover letter text with paragraph breaks as \n\n",
+    "gaps": ["Requirement asked for but not evidenced in the CV"]
+}}"""
