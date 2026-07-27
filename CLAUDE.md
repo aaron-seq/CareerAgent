@@ -41,6 +41,12 @@ autofill).
   layer** (`app.py`). Streamlit calls into `core/`.
 - Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`,
   `refactor:`). One feature branch per phase where practical.
+- **`assets/style.css` is dark-native and must stay in step with the theme
+  in `.streamlit/config.toml`.** These drifted once — the CSS was authored
+  for a light theme while config set a dark one, rendering every heading
+  near-black on near-black. Change one, check the other.
+- No webfont CDN in the UI. Local-first is the product's premise; type is
+  built from OS-resident faces so nothing phones home and offline works.
 
 ## Testing
 - Every new module ships with pytest tests.
@@ -82,3 +88,16 @@ streamlit run app.py         # launch the UI
 pytest                       # run tests
 ruff check .                 # lint
 ```
+
+## Environment quirks (verified 2026-07-26)
+- No repo-local venv. Global interpreter here is Python 3.13.7 — ruff,
+  mypy, pytest, and streamlit all ran clean against it directly, but CI
+  matrix-tests only 3.9-3.11; don't rely on 3.13-only syntax.
+- `pytest` needs `requirements-test.txt` installed, not just
+  `requirements.txt` (`sqlmodel` etc. live there). Skipping it fails
+  collection at `tests/conftest.py` with `ModuleNotFoundError: sqlmodel`.
+  Run `pip install -r requirements.txt -r requirements-test.txt` first.
+- `extension/` is a separate Node/Chrome-extension subproject (own
+  `package.json`; tests via `node --test`, run from inside `extension/`).
+  It's outside the Python package and untouched by root `pytest`/`ruff`/
+  `mypy`.
