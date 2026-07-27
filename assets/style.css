@@ -1,283 +1,535 @@
-/* CareerAgent Custom Streamlit Styling */
+/* ============================================================
+   CareerAgent - instrument panel for a gated job-search pipeline
 
-/* Global Styles */
-* {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+   Design notes for whoever touches this next:
+   - This file is DARK-NATIVE. It must stay in step with
+     .streamlit/config.toml. The previous version was authored for a
+     light theme (near-black headings) while config.toml set a dark
+     one, which rendered headings almost invisible.
+   - No @import / no webfont CDN. This app's premise is local-first
+     privacy; fetching fonts from Google would leak a request per
+     load and break offline use. Type is built from OS-resident faces.
+   ============================================================ */
+
+:root {
+    /* Surfaces: warm-cool charcoal, lifted off pure black */
+    --ink: #0B0C0E;
+    --panel: #14161A;
+    --panel-raised: #1B1E24;
+    --line: #262B33;
+    --line-bright: #333A44;
+
+    /* Signal: amber is the brand. Used sparingly - active state only. */
+    --signal: #FF6F00;
+    --signal-dim: #B24E00;
+    --signal-wash: rgba(255, 111, 0, 0.10);
+
+    /* Status */
+    --verify: #4ADE80;
+    --caution: #FBBF24;
+    --fault: #F87171;
+
+    /* Text */
+    --text: #E9E7E4;
+    --muted: #878D97;
+    --faint: #5A616B;
+
+    /* Type roles. Mono carries data + structural labels, which is where
+       the instrument-panel character lives. All OS-resident. */
+    --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-body: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace, "SF Mono", monospace;
 }
 
-/* Main Container */
+/* ---------- Base ---------- */
+
+html, body, [class*="css"] {
+    font-family: var(--font-body);
+}
+
 .main .block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    max-width: 1200px;
+    padding-top: 2.5rem;
+    padding-bottom: 4rem;
+    max-width: 1180px;
 }
 
-/* Headers */
+/* ---------- Type scale ----------
+   Tight display headings, wide-tracked mono eyebrows. The contrast
+   between the two is the type system's whole idea. */
+
 h1 {
-    color: #1f2937;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
+    font-family: var(--font-display);
+    color: var(--text);
+    font-weight: 650;
+    font-size: 2.1rem;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 0.35rem;
 }
 
 h2 {
-    color: #374151;
+    font-family: var(--font-display);
+    color: var(--text);
     font-weight: 600;
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
+    font-size: 1.35rem;
+    letter-spacing: -0.01em;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
 }
 
 h3 {
-    color: #4b5563;
+    font-family: var(--font-mono);
+    color: var(--muted);
     font-weight: 500;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 1.5rem;
+    margin-bottom: 0.6rem;
 }
 
-/* Buttons */
-.stButton > button {
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    border: none;
-}
-
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Primary Button */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-/* Secondary Button */
-.stButton > button[kind="secondary"] {
-    background-color: #f3f4f6;
-    color: #374151;
-}
-
-/* Input Fields */
-.stTextInput > div > div > input,
-.stTextArea > div > div > textarea,
-.stSelectbox > div > div > select {
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    padding: 0.5rem;
+/* Subtitle directly under an h1 */
+h1 + div p,
+h1 + p {
+    color: var(--muted);
     font-size: 0.95rem;
 }
 
-.stTextInput > div > div > input:focus,
-.stTextArea > div > div > textarea:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+/* ---------- Stage rail (signature element) ----------
+   The six screens are genuinely gated - Discovery refuses to run before
+   Onboarding completes. The numbering encodes that real dependency
+   rather than decorating the page. */
+
+.stage-rail {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    margin: 0 0 2.5rem 0;
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 
-/* File Uploader */
-.stFileUploader {
-    border: 2px dashed #e5e7eb;
-    border-radius: 8px;
-    padding: 1rem;
-    background-color: #f9fafb;
+.stage-rail::-webkit-scrollbar { display: none; }
+
+.stage {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 96px;
+    padding: 0 0 0 0;
+    text-align: left;
 }
 
-.stFileUploader:hover {
-    border-color: #667eea;
-    background-color: #f3f4f6;
+/* Connecting rail between lamps */
+.stage:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--line);
 }
 
-/* Expander */
-.streamlit-expanderHeader {
-    background-color: #f9fafb;
-    border-radius: 8px;
+.stage-lamp {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1px solid var(--line-bright);
+    background: var(--ink);
+    margin-bottom: 0.7rem;
+}
+
+.stage-num {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: var(--faint);
+    margin-bottom: 0.15rem;
+}
+
+.stage-name {
+    display: block;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
     font-weight: 500;
-    color: #374151;
+    color: var(--faint);
+    padding-right: 0.75rem;
+    line-height: 1.3;
 }
 
-.streamlit-expanderHeader:hover {
-    background-color: #f3f4f6;
+/* Locked is the default (styles above). Then: */
+
+.stage.is-ready .stage-lamp { border-color: var(--muted); }
+.stage.is-ready .stage-num  { color: var(--muted); }
+.stage.is-ready .stage-name { color: var(--muted); }
+
+.stage.is-done .stage-lamp {
+    border-color: var(--verify);
+    background: var(--verify);
+}
+.stage.is-done .stage-num  { color: var(--faint); }
+.stage.is-done .stage-name { color: var(--muted); }
+.stage.is-done:not(:last-child)::after { background: var(--verify); opacity: 0.35; }
+
+.stage.is-active .stage-lamp {
+    border-color: var(--signal);
+    background: var(--signal);
+    box-shadow: 0 0 0 4px var(--signal-wash);
+}
+.stage.is-active .stage-num  { color: var(--signal); }
+.stage.is-active .stage-name { color: var(--text); font-weight: 650; }
+
+/* ---------- Chrome ---------- */
+
+/* Streamlit's default rainbow header bar reads as someone else's brand */
+[data-testid="stDecoration"] {
+    background: linear-gradient(90deg, var(--signal) 0%, var(--signal-dim) 100%);
 }
 
-/* Metrics */
-.stMetric {
-    background-color: #f9fafb;
-    padding: 1rem;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
+/* ---------- Sidebar ---------- */
+
+[data-testid="stSidebar"] {
+    background: var(--panel);
+    border-right: 1px solid var(--line);
 }
 
-.stMetric > label {
-    color: #6b7280;
+/* Default block gap leaves nav items adrift; a nav is a list, not a stack
+   of unrelated widgets. Section rhythm is restored on the headings below. */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    gap: 0.2rem;
+}
+
+[data-testid="stSidebar"] h3 {
+    margin-top: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+[data-testid="stSidebar"] hr {
+    margin: 1.1rem 0 0.5rem 0;
+}
+
+[data-testid="stSidebar"] h1 {
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    margin-bottom: 0.1rem;
+}
+
+/* Wordmark keyline - the one place amber appears at rest */
+[data-testid="stSidebar"] h1::after {
+    content: "";
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--signal);
+    margin-top: 0.55rem;
+}
+
+/* Only the wordmark tagline takes the mono-caps treatment. Captions in
+   general carry real prose (the cloud-privacy warning) and must stay
+   readable - uppercase mono turned that warning into shouting. */
+.wordmark-sub {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0;
+}
+
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+/* Sidebar nav buttons read as a list, not a stack of pills */
+[data-testid="stSidebar"] .stButton > button {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--muted);
+    font-weight: 500;
     font-size: 0.875rem;
-    font-weight: 500;
+    text-align: left;
+    justify-content: flex-start;
+    padding: 0.5rem 0.7rem;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.stMetric > div {
-    color: #1f2937;
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: var(--panel-raised);
+    border-color: var(--line);
+    color: var(--text);
+    transform: none;
+    box-shadow: none;
+}
+
+/* Current screen. Primary is the only per-button hook Streamlit exposes
+   without keyed DOM classes, so it marks "you are here" - restyled to a
+   marker rather than the default solid amber fill, which would shout. */
+[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--signal);
+    border-radius: 0 6px 6px 0;
+    color: var(--text);
+    font-weight: 650;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+    background: #22262E;
+    border-left-color: var(--signal);
+    color: var(--text);
+}
+
+/* ---------- Buttons ---------- */
+
+.stButton > button {
+    font-family: var(--font-body);
+    border-radius: 6px;
+    font-weight: 550;
+    font-size: 0.875rem;
+    border: 1px solid var(--line-bright);
+    background: var(--panel-raised);
+    color: var(--text);
+    padding: 0.5rem 1rem;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.stButton > button:hover {
+    background: #22262E;
+    border-color: var(--muted);
+    color: var(--text);
+}
+
+.stButton > button[kind="primary"] {
+    background: var(--signal);
+    border-color: var(--signal);
+    color: #17120C;
+    font-weight: 650;
+}
+
+.stButton > button[kind="primary"]:hover {
+    background: #FF8524;
+    border-color: #FF8524;
+    color: #17120C;
+}
+
+.stButton > button:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+}
+
+/* ---------- Inputs ---------- */
+
+.stTextInput input,
+.stTextArea textarea,
+.stNumberInput input,
+[data-baseweb="select"] > div {
+    background: var(--ink) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 6px !important;
+    color: var(--text) !important;
+    font-size: 0.9rem;
+}
+
+.stTextInput input:focus,
+.stTextArea textarea:focus {
+    border-color: var(--signal) !important;
+    box-shadow: 0 0 0 3px var(--signal-wash) !important;
+}
+
+/* Field labels share the mono utility voice with h3 eyebrows.
+   Scoped to stWidgetLabel - the widget's own caption - because a blanket
+   `.stRadio label` also catches each radio OPTION, which shouted
+   "OLLAMA (LOCAL)" in uppercase mono. Options are content, not chrome. */
+[data-testid="stWidgetLabel"] p {
+    font-family: var(--font-mono) !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    color: var(--muted) !important;
+    font-weight: 500 !important;
+}
+
+/* Choice text stays in the body voice */
+[data-baseweb="radio"] div[data-testid="stMarkdownContainer"] p,
+[data-testid="stCheckbox"] label span,
+[data-baseweb="radio"] label {
+    font-family: var(--font-body) !important;
+    font-size: 0.85rem !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    color: var(--text) !important;
+    font-weight: 450 !important;
+}
+
+/* ---------- File uploader ---------- */
+
+[data-testid="stFileUploader"] section {
+    background: var(--panel);
+    border: 1px dashed var(--line-bright);
+    border-radius: 8px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+[data-testid="stFileUploader"] section:hover {
+    border-color: var(--signal-dim);
+    background: var(--panel-raised);
+}
+
+/* ---------- Metrics ---------- */
+
+[data-testid="stMetric"] {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+}
+
+[data-testid="stMetricLabel"] p {
+    font-family: var(--font-mono);
+    font-size: 0.64rem !important;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+[data-testid="stMetricValue"] {
+    font-family: var(--font-display);
     font-size: 1.5rem;
-    font-weight: 700;
+    font-weight: 650;
+    color: var(--text);
+    letter-spacing: -0.01em;
 }
 
-/* Progress Bar */
-.stProgress > div > div > div {
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+/* ---------- Alerts ----------
+   Shape and voice only. Streamlit's dark theme already assigns the
+   per-kind hues; overriding them here would just fight the framework
+   and rot on the next release. */
+
+[data-testid="stAlert"] {
+    border-radius: 6px;
+    font-size: 0.875rem;
+    border-left-width: 3px;
+    border-left-style: solid;
 }
 
-/* Sidebar */
-.css-1d391kg {
-    background-color: #f9fafb;
-}
+/* ---------- Expander ---------- */
 
-/* Success/Error Messages */
-.stSuccess {
-    background-color: #d1fae5;
-    border-left: 4px solid #10b981;
-    padding: 1rem;
+[data-testid="stExpander"] {
+    border: 1px solid var(--line);
     border-radius: 8px;
+    background: var(--panel);
+    overflow: hidden;
 }
 
-.stError {
-    background-color: #fee2e2;
-    border-left: 4px solid #ef4444;
-    padding: 1rem;
-    border-radius: 8px;
+[data-testid="stExpander"] summary {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 550;
+    color: var(--muted);
 }
 
-.stWarning {
-    background-color: #fef3c7;
-    border-left: 4px solid #f59e0b;
-    padding: 1rem;
-    border-radius: 8px;
-}
+[data-testid="stExpander"] summary:hover { color: var(--text); }
 
-.stInfo {
-    background-color: #dbeafe;
-    border-left: 4px solid #3b82f6;
-    padding: 1rem;
-    border-radius: 8px;
-}
+/* ---------- Tabs ---------- */
 
-/* Code Blocks */
-.stCodeBlock {
-    border-radius: 8px;
-    background-color: #1f2937;
-}
-
-/* Divider */
-hr {
-    margin: 2rem 0;
-    border: none;
-    border-top: 2px solid #e5e7eb;
-}
-
-/* Tabs */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
 }
 
 .stTabs [data-baseweb="tab"] {
-    border-radius: 8px 8px 0 0;
-    padding: 0.75rem 1.5rem;
-    font-weight: 500;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-radius: 0;
+    padding: 0.6rem 1rem;
 }
 
 .stTabs [aria-selected="true"] {
-    background-color: #667eea;
-    color: white;
+    color: var(--signal);
+    border-bottom: 2px solid var(--signal);
+    background: transparent;
 }
 
-/* Spinner */
-.stSpinner > div {
-    border-top-color: #667eea;
+/* ---------- Tags / chips ----------
+   Solid amber chips fought the amber primary button for attention.
+   Outline form keeps them legible as data without competing. */
+
+[data-baseweb="tag"] {
+    background: var(--signal-wash) !important;
+    border: 1px solid var(--signal-dim) !important;
+    color: var(--signal) !important;
+    border-radius: 4px !important;
+    font-size: 0.78rem !important;
 }
 
-/* Radio Buttons */
-.stRadio > label {
-    font-weight: 500;
-    color: #374151;
-}
+[data-baseweb="tag"] span,
+[data-baseweb="tag"] svg { color: var(--signal) !important; fill: var(--signal) !important; }
 
-/* Checkbox */
-.stCheckbox > label {
-    font-weight: 400;
-    color: #4b5563;
-}
+/* ---------- Dataframe ---------- */
 
-/* Popover */
-.stPopover {
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--line);
     border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
-/* Toast Notifications */
-.stToast {
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+/* ---------- Misc ---------- */
+
+hr {
+    margin: 1.5rem 0;
+    border: none;
+    border-top: 1px solid var(--line);
 }
 
-/* Custom Classes */
-.quality-check-pass {
-    color: #10b981;
-    font-weight: 600;
+.stProgress > div > div > div {
+    background: var(--signal);
 }
 
-.quality-check-fail {
-    color: #ef4444;
-    font-weight: 600;
+code {
+    font-family: var(--font-mono);
+    background: var(--panel-raised);
+    color: var(--signal);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
 }
 
-.contact-confidence-high {
-    color: #10b981;
-}
+a { color: var(--signal); text-decoration-color: var(--signal-dim); }
+a:hover { color: #FF8524; }
 
-.contact-confidence-med {
-    color: #f59e0b;
-}
+/* Semantic states used by the draft quality checks */
+.quality-check-pass { color: var(--verify); font-weight: 600; }
+.quality-check-fail { color: var(--fault); font-weight: 600; }
+.contact-confidence-high { color: var(--verify); }
+.contact-confidence-med  { color: var(--caution); }
+.contact-confidence-low  { color: var(--fault); }
 
-.contact-confidence-low {
-    color: #ef4444;
-}
+/* ---------- Quality floor ---------- */
 
-/* Loading States */
-.loading-shimmer {
-    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-}
-
-@keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-}
-
-/* Responsive Design */
 @media (max-width: 768px) {
-    .main .block-container {
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    
-    h1 {
-        font-size: 1.75rem;
-    }
-    
-    h2 {
-        font-size: 1.25rem;
-    }
+    .main .block-container { padding-left: 1rem; padding-right: 1rem; }
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.15rem; }
+    .stage-rail { gap: 0; }
+    .stage { min-width: 84px; }
+    .stage-name { font-size: 0.72rem; }
 }
 
-/* Dark Mode Overrides (if user has dark mode enabled) */
-@media (prefers-color-scheme: dark) {
-    h1, h2, h3 {
-        color: #f9fafb;
-    }
-    
-    .stMetric {
-        background-color: #1f2937;
-        border-color: #374151;
-    }
-    
-    .streamlit-expanderHeader {
-        background-color: #1f2937;
-        color: #f9fafb;
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
     }
 }

@@ -1,7 +1,9 @@
 [theme]
 base="dark"
+# Amber signal on warm-cool charcoal. Pure #000 halates against pure #FFF text,
+# so the base lifts to #0B0C0E and text pulls back to a warm off-white.
 primaryColor="#FF6F00"
-backgroundColor="#000000"
-secondaryBackgroundColor="#121212"
-textColor="#FFFFFF"
+backgroundColor="#0B0C0E"
+secondaryBackgroundColor="#14161A"
+textColor="#E9E7E4"
 font="sans serif"
