@@ -1,6 +1,7 @@
 """
 CareerAgent - Main Streamlit Application
-Complete UI with 5 screens: Onboarding, Discovery, Contacts, Draft Studio, Export
+6 screens: Onboarding, Job Discovery, Pipeline, Contact Finder, Draft Studio,
+Export & Logs. Calls only core/facade.py -- no business logic here.
 """
 
 import os

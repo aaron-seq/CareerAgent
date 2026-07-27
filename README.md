@@ -4,9 +4,16 @@ A local AI-powered career assistant for personalized job outreach. This applicat
 
 ## Features
 
-- **Local LLM Integration**: Uses Ollama (Llama 3, Mistral, Qwen) for privacy-focused, zero-cost inference.
-- **Job Discovery**: Integrated DuckDuckGo search for finding relevant job postings.
+- **Local-first LLM, cloud opt-in**: Ollama (Llama 3, Mistral, Qwen) by
+  default for privacy-focused, zero-cost inference; Groq's free tier as an
+  alternative when Ollama isn't installed (see ADR 0005 for the PII tradeoff
+  this involves).
+- **Job Discovery**: API-first ingestion (Greenhouse/Lever/Ashby, Adzuna, The
+  Muse, Remotive) with DuckDuckGo search as a fallback mode.
 - **Contact Finder**: Automated search for hiring managers and contact permutation generation.
+- **Resume tailoring & cover letters**: Truthfully reorders/emphasizes your
+  real CV content per job, and drafts cover letters grounded in it — both
+  raise rather than invent an employer, credential, or metric you don't have.
 - **Personalized Outreach**: Generates technical, product, or impact-focused email drafts based on your CV and the job description.
 - **Quality Assurance**: Built-in validation to ensure emails meet professional standards (no fluff, concrete metrics, clear CTA).
 - **Multi-Channel Support**: Creates Gmail drafts directly or generates WhatsApp click-to-chat links.
@@ -25,8 +32,12 @@ The application is built with a modern Python stack:
 
 ### Prerequisites
 
-- Python 3.9 or higher
-- Ollama installed and running (standard default port 11434)
+- Python 3.9 or higher (CI matrix-tests 3.9-3.11; also verified working
+  directly on 3.13 with no venv, see `CLAUDE.md`)
+- An LLM provider — either:
+  - **Ollama** installed and running locally (standard default port 11434), or
+  - A free **Groq** API key (no credit card: console.groq.com/keys) — faster
+    to get running, but sends prompts off-machine; see ADR 0005.
 
 ### Installation
 
@@ -38,13 +49,14 @@ The application is built with a modern Python stack:
 
 2.  Install dependencies:
     ```bash
-    pip install -r requirements.txt
+    pip install -r requirements.txt -r requirements-test.txt
     ```
 
-3.  Pull a model (e.g., Llama 3.1 8b):
+3.  Set up an LLM provider — either:
     ```bash
     ollama pull llama3.1:8b
     ```
+    or copy `.env.example` to `.env` and set `GROQ_API_KEY`.
 
 4.  Run the application:
     ```bash
@@ -80,7 +92,7 @@ for decisions.
 | `core/ingestion` | API-first job ingestion: Greenhouse/Lever/Ashby public feeds + Adzuna/The Muse/Remotive → canonical `JobPosting`. |
 | `core/fetching` | ATS detection (regex), JSON-LD `JobPosting` extraction, robots-respecting rate-limited fetcher (scraping fallback only). |
 | `core/matching` | Pluggable embeddings, fuzzy dedup, and **explainable** resume↔job scoring (matched/missing keywords). |
-| `core/resume` | JSON Resume interchange, ATS-friendliness linter, single-column PDF, and **truthful** tailoring (never fabricates). |
+| `core/resume` | JSON Resume interchange, ATS-friendliness linter, single-column PDF, **truthful** tailoring and cover-letter generation (both raise rather than fabricate an employer or metric). |
 | `core/tracking` | Kanban application pipeline, follow-up reminders, duplicate-apply prevention, company blacklist. |
 | `core/outreach` | Email verification + CAN-SPAM/GDPR compliance (postal address, opt-out, per-campaign LIA), send caps, suppression list, single pre-send gate. |
 | `core/enrichment` | Salary parsing, company signals (Glassdoor/layoffs), visa-sponsor filter, ghost-job detection, filters. |
@@ -105,7 +117,7 @@ for decisions.
 pip install -r requirements-test.txt   # includes runtime + test deps
 export CAREERAGENT_ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 alembic upgrade head                    # create the schema (SQLite by default)
-pytest                                  # 143 Python tests
+pytest                                  # 204+ Python tests (see PROGRESS.md for current count)
 (cd extension && node --test)           # 11 extension tests
 python -m scripts.send_digest --dry-run # build a job digest
 ```

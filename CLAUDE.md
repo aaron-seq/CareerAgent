@@ -5,24 +5,26 @@ first. The full plan is in `ROADMAP.md`, current status in `PROGRESS.md`, and
 the platform research in `docs/RESEARCH.md`.
 
 ## What this project is
-CareerAgent is a **local, privacy-first AI career assistant**. Today it drafts
-personalized job-outreach emails from your CV using local Ollama LLMs. The
-roadmap grows it into an API-first, compliant job-search-and-application
-platform (job ingestion, matching, resume tooling, tracking, human-in-the-loop
-autofill).
+CareerAgent is a **local-first, privacy-first AI career assistant** — an
+API-first, compliant job-search-and-application platform: job ingestion and
+explainable matching, truthful resume tailoring and cover letters, application
+tracking, compliant outreach, and human-in-the-loop autofill. LLM inference
+runs against local Ollama by default; a free-tier cloud provider (Groq) is
+available as an opt-in alternative (ADR 0005).
 
 ## Architecture snapshot (current)
-- **UI:** Streamlit single-file `app.py` (5 screens: Onboarding, Discovery,
-  Contacts, Draft Studio, Export).
-- **Logic:** `core/` package — `llm.py` (Ollama client), `models.py` (Pydantic
-  v2), `validators.py`, `cv_parser.py`, `job_finder.py`, `contact_finder.py`,
-  `personalization.py`, `gmail_drafts.py`, `whatsapp.py`, `prompts.py`,
-  `storage.py`.
-- **LLM:** Ollama local inference (`llama3.1:8b`, `llama3.2:3b`, `qwen2.5:7b`,
-  `mistral:7b`).
-- **Storage:** local JSON under `careeragent_data/` (to be replaced by Postgres
-  in Phase 1).
-- **Tests:** `tests/` (pytest); CI in `.github/workflows/ci.yml`.
+- **UI:** Streamlit single-file `app.py` (6 screens: Onboarding, Job Discovery,
+  Pipeline, Contact Finder, Draft Studio, Export & Logs). Calls into `core/`
+  only through `core/facade.py` — no business logic in `app.py` itself.
+- **Logic:** `core/` package — see `ARCHITECTURE.md` for the full module map
+  (ingestion, matching, resume, tracking, outreach, enrichment, analytics,
+  db, plus the original CV/contact/personalization/LLM modules).
+- **LLM:** Ollama local inference by default (`llama3.1:8b`, `llama3.2:3b`,
+  `qwen2.5:7b`, `mistral:7b`); Groq (free-tier cloud, opt-in) as an
+  alternative when Ollama isn't installed — see ADR 0005 for the PII tradeoff.
+- **Storage:** SQLModel on SQLite for dev (Postgres in prod, ADR 0003); legacy
+  JSON under `careeragent_data/` for drafts/exports.
+- **Tests:** `tests/` (pytest, 204+); CI in `.github/workflows/ci.yml`.
 
 ## Tech stack & direction
 - **Language:** Python (target 3.11+). Stay in Python.

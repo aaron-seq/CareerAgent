@@ -7,7 +7,8 @@ Thank you for your interest in contributing to CareerAgent! This document provid
 ### Prerequisites
 
 - Python 3.9 or higher
-- Ollama installed and running locally
+- An LLM provider: Ollama installed and running locally, **or** a free Groq
+  API key (console.groq.com/keys) set as `GROQ_API_KEY` — see ADR 0005
 - Git for version control
 
 ### Development Setup
@@ -25,15 +26,17 @@ Thank you for your interest in contributing to CareerAgent! This document provid
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-4. Install dependencies:
+4. Install dependencies (test tools included; `pytest` fails at collection
+   without them):
    ```bash
-   pip install -r requirements.txt
+   pip install -r requirements.txt -r requirements-test.txt
    ```
 
-5. Install Ollama and pull a model:
+5. Pick an LLM provider:
    ```bash
    ollama pull llama3.1:8b
    ```
+   or set `GROQ_API_KEY` after the next step.
 
 6. Copy environment template:
    ```bash
@@ -140,12 +143,15 @@ def function_name(param1: str, param2: int) -> bool:
 
 Before submitting a PR, test the following:
 
-- [ ] Ollama connection works
-- [ ] CV parsing from PDF works
+- [ ] LLM connection works (both Ollama and Groq providers)
+- [ ] CV parsing from PDF works, and contact links (GitHub/LinkedIn/project
+      repos) match the PDF's real hyperlinks rather than a guessed URL
 - [ ] CV parsing from text works
 - [ ] Job discovery search works
 - [ ] Contact finder returns results
 - [ ] Email draft generation works
+- [ ] Cover letter generation works, and any metric it cites actually
+      appears in the CV
 - [ ] Draft quality validation works
 - [ ] Gmail draft creation works (if configured)
 - [ ] WhatsApp link generation works
@@ -206,32 +212,11 @@ Add screenshots for UI changes
 
 ## Core Modules Overview
 
-### `core/llm.py`
-Handles Ollama API communication, JSON parsing, retry logic
-
-### `core/cv_parser.py`
-Extracts structured data from CV PDFs using LLM
-
-### `core/job_finder.py`
-Searches for jobs using DuckDuckGo and extracts details
-
-### `core/contact_finder.py`
-Finds hiring managers and generates email permutations
-
-### `core/personalization.py`
-Generates personalized email drafts using LLM
-
-### `core/validators.py`
-Validates draft quality against professional standards
-
-### `core/storage.py`
-Handles local JSON-based persistence
-
-### `core/gmail_drafts.py`
-Creates Gmail drafts via Google API
-
-### `core/models.py`
-Pydantic data models for type safety
+See `ARCHITECTURE.md` for the full module map and diagrams — it's the single
+source of truth for this, kept in sync with the code. In short: `app.py`
+calls only `core/facade.py`; everything else (CV parsing, resume/cover-letter
+generation, job ingestion/matching, tracking, outreach compliance,
+enrichment, analytics) lives in its own `core/` package or module.
 
 ## Questions or Issues?
 
