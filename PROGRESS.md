@@ -26,6 +26,31 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-25 — Apply flow: job link -> autofilled application form
+Closed the gap between the tracked jobs and the browser extension. Previously
+the extension needed its profile typed in by hand and knew nothing about the
+pipeline.
+- **`core/apply.py`** — `resolve_apply_url()` classifies a posting URL
+  (supported ATS / recognized-but-unsupported / unknown) so the UI sets honest
+  expectations; `build_autofill_profile()` derives the extension profile from
+  the **parsed CV** and embeds the ATS-clean resume PDF for the file input.
+  Fields the CV lacks stay empty — nothing invented onto a real application.
+- **App** — Onboarding gains **Export autofill profile**; every Pipeline job
+  card gains **Apply** (opens the real form) and **I applied** (creates and
+  advances the tracked application, starting the follow-up reminder).
+- **Extension** — imports that JSON instead of manual entry; auto-fills on load
+  when it detects a real application form (>= 2 mappable fields, so it won't
+  fire on a search box); attaches the resume via `DataTransfer`; shows a banner
+  saying what was filled. Manifest broadened to the EU Greenhouse/Lever hosts
+  and `all_frames` for embedded forms.
+- **Still never submits.** The banner and popup both say so, and
+  `meta.never_submits` is carried in the profile itself.
+- 16 Python + 6 JS new tests. Totals: **207 Python + 17 JS green; ruff clean.**
+
+Not verified here: a real browser filling a live ATS form (no browser/DOM in
+this environment). That remains the one manual QA step.
+
+
 ### 2026-07-25 — Keyless live job sources + a live verifier
 Added four job boards that need **no API key and no account**, so the app
 returns real listings out of the box:

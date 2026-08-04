@@ -9,10 +9,12 @@ session or the schema directly.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 from .alerting import build_digest
 from .analytics import compute_funnel, generate_interview_questions
+from .apply import apply_context, build_autofill_profile
 from .db import get_session, init_db
 from .db.repository import (
     ApplicationRepository,
@@ -373,6 +375,80 @@ def digest_rss(limit: int = 10) -> str:
 def interview_questions(job: JobPosting, limit: int = 10) -> list[str]:
     """Likely interview questions derived from the job description."""
     return generate_interview_questions(job, limit=limit)
+
+
+# --------------------------------------------------------------------------- #
+# Apply flow (job link -> autofilled application form)
+# --------------------------------------------------------------------------- #
+
+
+def apply_target(job_id: int) -> dict[str, Any]:
+    """Where to apply for a stored job, and whether autofill covers it."""
+    with get_session() as session:
+        row = JobRepository(session).get(job_id)
+        if row is None:
+            return {"url": None, "note": "Job not found."}
+        return apply_context(row_to_job(row))
+
+
+def autofill_profile(
+    cv: CVProfile,
+    include_resume: bool = True,
+    location: str | None = None,
+) -> dict[str, Any]:
+    """Build the extension profile from the parsed CV.
+
+    With ``include_resume`` the ATS-clean PDF is embedded so the extension can
+    populate the file input too. Everything here is PII and stays local: the
+    app writes a file the user imports into the extension by hand.
+    """
+    pdf = render_pdf(to_json_resume(cv)) if include_resume else None
+    filename = f"{(cv.name or 'resume').replace(' ', '_')}.pdf"
+    profile = build_autofill_profile(
+        cv, resume_pdf=pdf, resume_filename=filename, location=location
+    )
+    return profile.to_dict()
+
+
+def autofill_profile_json(
+    cv: CVProfile, include_resume: bool = True, location: str | None = None
+) -> str:
+    """The profile as an indented JSON string, ready to download and import."""
+    return json.dumps(
+        autofill_profile(cv, include_resume=include_resume, location=location),
+        indent=2,
+    )
+
+
+def mark_applied(job_id: int, cv_profile_id: int | None = None) -> dict[str, Any]:
+    """Record that the user applied to a job.
+
+    Creates the application if it isn't tracked yet, then moves it to APPLIED
+    (which also schedules the follow-up reminder). Idempotent-ish: if it is
+    already past APPLIED we leave the further-along status alone.
+    """
+    from .db.tables import ApplicationRow
+
+    init_persistence()
+    with get_session() as session:
+        job = JobRepository(session).get(job_id)
+        if job is None:
+            return {"ok": False, "error": "job not found"}
+
+        tracker = TrackingService(session)
+        app: ApplicationRow | None = tracker.apps.get_by_dedup(
+            job.dedup_key, cv_profile_id
+        )
+        if app is None:
+            try:
+                app = tracker.create_application(job, cv_profile_id)
+            except (DuplicateApplicationError, BlacklistedCompanyError) as exc:
+                return {"ok": False, "error": str(exc)}
+
+        if app.status == ApplicationStatus.SAVED:
+            tracker.transition(app, ApplicationStatus.APPLIED)
+            return {"ok": True, "status": app.status.value, "changed": True}
+        return {"ok": True, "status": app.status.value, "changed": False}
 
 
 # --------------------------------------------------------------------------- #

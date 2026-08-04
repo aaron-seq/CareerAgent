@@ -3,30 +3,60 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      body { font-family: system-ui, sans-serif; width: 300px; padding: 12px; }
-      h1 { font-size: 15px; margin: 0 0 8px; }
+      body { font-family: system-ui, sans-serif; width: 320px; padding: 12px; }
+      h1 { font-size: 15px; margin: 0 0 4px; }
+      .sub { font-size: 11px; color: #666; margin-bottom: 10px; }
       label { display: block; font-size: 12px; margin-top: 6px; }
-      input { width: 100%; box-sizing: border-box; padding: 4px; }
+      input[type=text] { width: 100%; box-sizing: border-box; padding: 4px; }
       button { margin-top: 10px; width: 100%; padding: 8px; cursor: pointer; }
-      .fill { background: #4caf50; color: #fff; border: none; }
-      .note { font-size: 11px; color: #666; margin-top: 8px; }
+      .fill { background: #4caf50; color: #fff; border: none; font-weight: 600; }
+      .note { font-size: 11px; color: #666; margin-top: 8px; line-height: 1.4; }
       #status { font-size: 12px; margin-top: 8px; }
+      #summary { font-size: 12px; background: #f3f4f6; padding: 8px;
+                 border-radius: 4px; margin-top: 8px; }
+      details { margin-top: 10px; }
+      summary { font-size: 12px; cursor: pointer; }
+      .row { display: flex; align-items: center; gap: 6px; margin-top: 8px;
+             font-size: 12px; }
     </style>
   </head>
   <body>
     <h1>CareerAgent Autofill</h1>
-    <label>Full name <input id="fullName" /></label>
-    <label>Email <input id="email" /></label>
-    <label>Phone <input id="phone" /></label>
-    <label>LinkedIn <input id="linkedin" /></label>
-    <label>GitHub <input id="github" /></label>
-    <label>Portfolio <input id="portfolio" /></label>
-    <label>Location <input id="location" /></label>
-    <button id="save">Save profile</button>
-    <button id="fill" class="fill">Autofill this page</button>
+    <div class="sub">Fills application forms. You review and submit.</div>
+
+    <label for="import">Import profile from CareerAgent</label>
+    <input type="file" id="import" accept="application/json,.json" />
     <div class="note">
-      Fills fields only. You review and click submit yourself &mdash; this
-      extension never submits a form for you.
+      Generate this in the app: <strong>Onboarding &rarr; Export autofill
+      profile</strong>. It carries your details and ATS-clean resume, and
+      stays on this device.
+    </div>
+
+    <div id="summary">No profile imported yet.</div>
+
+    <div class="row">
+      <input type="checkbox" id="autoOnLoad" checked />
+      <label for="autoOnLoad" style="margin:0">
+        Autofill automatically on supported forms
+      </label>
+    </div>
+
+    <button id="fill" class="fill">Autofill this page now</button>
+
+    <details>
+      <summary>Edit fields manually</summary>
+      <label>Full name <input type="text" id="fullName" /></label>
+      <label>Email <input type="text" id="email" /></label>
+      <label>Phone <input type="text" id="phone" /></label>
+      <label>LinkedIn <input type="text" id="linkedin" /></label>
+      <label>GitHub <input type="text" id="github" /></label>
+      <label>Portfolio <input type="text" id="portfolio" /></label>
+      <label>Location <input type="text" id="location" /></label>
+      <button id="save">Save changes</button>
+    </details>
+
+    <div class="note">
+      This extension never submits a form for you.
     </div>
     <div id="status"></div>
     <script src="popup.js"></script>

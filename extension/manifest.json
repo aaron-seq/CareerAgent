@@ -11,16 +11,21 @@
   "background": {
     "service_worker": "src/service_worker.js"
   },
+  "optional_host_permissions": ["https://*/*"],
   "content_scripts": [
     {
       "matches": [
         "https://boards.greenhouse.io/*",
         "https://job-boards.greenhouse.io/*",
+        "https://boards.eu.greenhouse.io/*",
+        "https://*.greenhouse.io/*",
         "https://jobs.lever.co/*",
+        "https://jobs.eu.lever.co/*",
         "https://jobs.ashbyhq.com/*"
       ],
       "js": ["src/field_mapping.js", "src/content_script.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "icons": {

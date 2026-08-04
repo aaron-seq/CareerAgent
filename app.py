@@ -340,6 +340,44 @@ def page_onboarding():
                 use_container_width=True,
             )
 
+        # --- Autofill profile for the browser extension --- #
+        st.divider()
+        st.subheader("Browser autofill")
+        st.markdown(
+            "Export this profile once, import it into the **CareerAgent "
+            "Autofill** extension, and application forms on Greenhouse, Lever, "
+            "and Ashby will fill themselves when you click **Apply**. "
+            "You always review and submit."
+        )
+        af1, af2 = st.columns([2, 1])
+        with af1:
+            autofill_location = st.text_input(
+                "Location for application forms (optional)",
+                placeholder="e.g. London, UK",
+                help="Your CV has no location field; supply one to fill that input.",
+            )
+        with af2:
+            include_resume = st.checkbox("Include resume PDF", value=True)
+
+        st.download_button(
+            "Export autofill profile",
+            data=facade.autofill_profile_json(
+                profile,
+                include_resume=include_resume,
+                location=autofill_location or None,
+            ),
+            file_name="careeragent_autofill_profile.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+        st.caption(
+            "This file contains your personal details"
+            + (" and resume" if include_resume else "")
+            + " — it stays on your machine. Load the extension from the "
+            "`extension/` folder via chrome://extensions (Developer mode → "
+            "Load unpacked)."
+        )
+
         if st.button("Next: Job Discovery", type="primary", use_container_width=True):
             st.session_state.page = "discovery"
             st.rerun()
@@ -1279,8 +1317,32 @@ def page_pipeline():
                 st.success("Matched: " + ", ".join(job["matched"][:12]))
             if job["missing"]:
                 st.warning("Missing: " + ", ".join(job["missing"][:12]))
-            if job["url"]:
-                st.write(f"[View posting]({job['url']})")
+
+            # --- Apply: open the real form, extension autofills it --- #
+            target = facade.apply_target(job["id"])
+            if target.get("url"):
+                acol1, acol2 = st.columns([1, 1])
+                with acol1:
+                    st.link_button("Apply", target["url"], use_container_width=True)
+                with acol2:
+                    if st.button(
+                        "I applied",
+                        key=f"applied_{job['id']}",
+                        use_container_width=True,
+                    ):
+                        res = facade.mark_applied(job["id"], st.session_state.cv_id)
+                        if res["ok"]:
+                            st.success(f"Tracked as {res['status']}.")
+                            st.rerun()
+                        else:
+                            st.warning(res["error"])
+                if target.get("autofill_supported"):
+                    st.caption(f"✓ {target['note']}")
+                else:
+                    st.caption(target.get("note", ""))
+            else:
+                st.caption("No application link recorded for this posting.")
+
             if st.button("Add to pipeline", key=f"track_{job['id']}"):
                 res = facade.add_to_pipeline(job["id"], st.session_state.cv_id)
                 if res["ok"]:
