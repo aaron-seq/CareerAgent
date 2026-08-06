@@ -191,6 +191,53 @@ class CVRepository:
             return None
         return CVProfile.model_validate_json(row.payload)
 
+    # -- Candidate profile (CV + application answers) ---------------------- #
+
+    def save_candidate(self, candidate) -> CVProfileRow:
+        """Persist a full CandidateProfile, encrypted at rest."""
+        profile = candidate.cv
+        row = CVProfileRow(
+            name=profile.name,
+            email=profile.email,
+            phone=profile.phone,
+            linkedin=profile.linkedin,
+            github=profile.github,
+            summary=profile.summary,
+            payload=profile.model_dump_json(),
+            candidate_payload=candidate.model_dump_json(),
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def get_candidate(self, cv_id: int):
+        """Load a CandidateProfile, upgrading a CV-only row if needed."""
+        from ..candidate import CandidateProfile
+
+        row = self.session.get(CVProfileRow, cv_id)
+        if row is None:
+            return None
+        if row.candidate_payload:
+            return CandidateProfile.model_validate_json(row.candidate_payload)
+        # Older rows predate the candidate profile: wrap the CV so the caller
+        # gets a usable object rather than None.
+        if row.payload:
+            return CandidateProfile(cv=CVProfile.model_validate_json(row.payload))
+        return None
+
+    def update_candidate(self, cv_id: int, candidate) -> Optional[CVProfileRow]:
+        row = self.session.get(CVProfileRow, cv_id)
+        if row is None:
+            return None
+        row.candidate_payload = candidate.model_dump_json()
+        row.payload = candidate.cv.model_dump_json()
+        row.name = candidate.cv.name
+        row.email = candidate.cv.email
+        row.phone = candidate.cv.phone
+        self.session.add(row)
+        self.session.flush()
+        return row
+
 
 # --------------------------------------------------------------------------- #
 # Contacts

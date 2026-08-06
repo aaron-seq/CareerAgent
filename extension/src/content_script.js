@@ -76,22 +76,114 @@ function attachResume(resume) {
   return attached;
 }
 
+/** Mark a control as touched by us. */
+function highlight(el) {
+  el.style.outline = '2px solid #4caf50';
+}
+
+/** Answer a <select> question. Returns true if an option was chosen. */
+function answerSelect(el, answer) {
+  const options = Array.from(el.options || []);
+  if (!options.length) return false;
+  let index = -1;
+  if (answer.type === 'boolean') {
+    index = CareerAgentFieldMapping.matchOptionForBoolean(
+      options.map((o) => o.textContent || o.value),
+      answer.value
+    );
+  } else {
+    const wanted = String(answer.value).toLowerCase();
+    index = options.findIndex((o) =>
+      (o.textContent || o.value || '').toLowerCase().includes(wanted)
+    );
+  }
+  if (index < 0) return false;
+  el.selectedIndex = index;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  highlight(el);
+  return true;
+}
+
+/** Answer a yes/no radio group. */
+function answerRadioGroup(name, answer, root) {
+  if (answer.type !== 'boolean') return false;
+  const radios = Array.from(root.querySelectorAll(`input[type=radio][name="${name}"]`));
+  if (!radios.length) return false;
+  const labels = radios.map((r) => {
+    if (r.labels && r.labels.length) return r.labels[0].textContent || '';
+    return r.value || '';
+  });
+  const index = CareerAgentFieldMapping.matchOptionForBoolean(labels, answer.value);
+  if (index < 0) return false;
+  radios[index].checked = true;
+  radios[index].dispatchEvent(new Event('change', { bubbles: true }));
+  highlight(radios[index]);
+  return true;
+}
+
 function fillForm(profile) {
+  const mapping = CareerAgentFieldMapping;
+  let filled = 0;
+  let answered = 0;
+
+  // 1. Plain identity fields.
   const inputs = document.querySelectorAll(
     'input[type=text], input[type=email], input[type=tel], input[type=url], input:not([type])'
   );
-  let filled = 0;
   inputs.forEach((el) => {
     if (el.disabled || el.readOnly || el.value) return; // don't clobber
-    const value = CareerAgentFieldMapping.fillValueFor(describeField(el), profile);
+    const value = mapping.fillValueFor(describeField(el), profile);
     if (value) {
       setNativeValue(el, value);
-      el.style.outline = '2px solid #4caf50'; // visual confirmation
+      highlight(el);
       filled += 1;
+      return;
+    }
+    // The same input might be an application question ("Salary expectation").
+    const answer = mapping.answerFor(describeField(el), profile);
+    if (answer && answer.type === 'text') {
+      setNativeValue(el, answer.value);
+      highlight(el);
+      answered += 1;
     }
   });
+
+  // 2. Textareas (cover note, "why this company").
+  document.querySelectorAll('textarea').forEach((el) => {
+    if (el.disabled || el.readOnly || el.value) return;
+    const answer = mapping.answerFor(describeField(el), profile);
+    if (answer && answer.type === 'text') {
+      setNativeValue(el, answer.value);
+      highlight(el);
+      answered += 1;
+    }
+  });
+
+  // 3. Selects (work authorization, sponsorship — usually dropdowns).
+  document.querySelectorAll('select').forEach((el) => {
+    if (el.disabled || el.selectedIndex > 0) return; // leave answered ones
+    const answer = mapping.answerFor(describeField(el), profile);
+    if (answer && answerSelect(el, answer)) answered += 1;
+  });
+
+  // 4. Radio groups, keyed by name so we only touch each group once.
+  const seenGroups = new Set();
+  document.querySelectorAll('input[type=radio]').forEach((el) => {
+    const name = el.getAttribute('name');
+    if (!name || seenGroups.has(name)) return;
+    seenGroups.add(name);
+    if (Array.from(document.querySelectorAll(`input[type=radio][name="${name}"]`)).some((r) => r.checked)) {
+      return; // already answered
+    }
+    // A radio group's question usually sits on a fieldset/legend, so describe
+    // the group via the first radio's label plus its name attribute.
+    const answer = mapping.answerFor(describeField(el), profile);
+    if (answer && answerRadioGroup(name, answer, document)) answered += 1;
+  });
+
   const attached = attachResume(profile.resume);
-  return { filled, attached };
+  return { filled, answered, attached };
 }
 
 /** A small, dismissible banner so the user knows what just happened. */
@@ -104,9 +196,11 @@ function showBanner(result) {
     'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#1f2937;' +
     'color:#fff;font:14px system-ui,sans-serif;padding:10px 16px;display:flex;' +
     'justify-content:space-between;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.3)';
-  const resumeNote = result.attached ? ` and attached your resume` : '';
+  const parts = [`filled ${result.filled} field(s)`];
+  if (result.answered) parts.push(`answered ${result.answered} question(s)`);
+  if (result.attached) parts.push('attached your resume');
   bar.innerHTML =
-    `<span>CareerAgent filled ${result.filled} field(s)${resumeNote}. ` +
+    `<span>CareerAgent ${parts.join(', ')}. ` +
     `<strong>Review everything, then submit yourself.</strong></span>`;
   const close = document.createElement('button');
   close.textContent = 'Dismiss';

@@ -26,6 +26,31 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-25 — Structured candidate profile (Wellfound-style capture)
+Researched how candidate-profile platforms capture applicants and applied the
+core lesson: **you build a structured profile, not upload a document**, with
+work authorization, compensation, and preferences as first-class fields.
+- **`core/candidate.py`** — `CandidateProfile` wraps the parsed CV and adds
+  work authorization, compensation, availability, job preferences, and
+  optional EEO. Every field is tri-state/optional.
+- **Completeness meter** — weighted checklist where each gap explains what it
+  costs ("work authorization: the most common blocking question"). Weights
+  reflect how often a field blocks a submission, so work auth outranks a
+  portfolio link. Drives a "next best action" nudge in the UI.
+- **Autofill can now answer questions, not just fill text.** `build_answers()`
+  derives work-authorized / requires-sponsorship / salary / notice period /
+  relocation; the extension gained `<select>`, radio-group, and `<textarea>`
+  handling to actually answer them.
+- **Onboarding redesigned** into tabs (Basics / Work eligibility / Preferences
+  / Compensation / Optional EEO) with the completeness meter alongside.
+- **Two safety properties, both tested:** an unanswered question is *absent*
+  from the payload rather than a guessed "No", and demographics are only ever
+  shared with explicit opt-in.
+- Storage: new encrypted `candidate_payload` column (migration `a27f58a5e51c`,
+  up/down verified); legacy CV-only rows upgrade transparently.
+- 14 Python + 10 JS new tests. Totals: **221 Python + 27 JS green; ruff clean.**
+
+
 ### 2026-07-25 — Apply flow: job link -> autofilled application form
 Closed the gap between the tracked jobs and the browser extension. Previously
 the extension needed its profile typed in by hand and knew nothing about the

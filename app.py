@@ -3,6 +3,7 @@ CareerAgent - Main Streamlit Application
 Complete UI with 5 screens: Onboarding, Discovery, Contacts, Draft Studio, Export
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -155,6 +156,266 @@ def render_sidebar():
         st.metric("Drafts Created", len(st.session_state.draft_history))
 
 
+def _current_candidate():
+    """The candidate profile held in session, seeded from the parsed CV."""
+    from core.candidate import CandidateProfile
+
+    candidate = st.session_state.get("candidate")
+    if candidate is None:
+        candidate = CandidateProfile()
+    # Keep the CV half in step with whatever onboarding parsed.
+    if st.session_state.get("cv_profile") is not None:
+        candidate.cv = st.session_state.cv_profile
+    st.session_state.candidate = candidate
+    return candidate
+
+
+def _persist_candidate(candidate):
+    """Save the profile, remembering the row id so we update rather than insert."""
+    try:
+        st.session_state.cv_id = facade.save_candidate(
+            candidate, cv_id=st.session_state.get("cv_id")
+        )
+        return True
+    except Exception as e:  # pragma: no cover - defensive UI guard
+        st.error(f"Could not save profile: {e}")
+        return False
+
+
+def render_profile_builder(candidate):
+    """Structured profile capture: the answers application forms demand.
+
+    Grouped into tabs so the form never looks like a wall of inputs, following
+    the pattern used by candidate-profile platforms: eligibility and
+    compensation are first-class fields, not resume afterthoughts.
+    """
+    from core.candidate import CompanyStage, RemotePreference
+
+    st.subheader("Your profile")
+    st.caption(
+        "These answers are what application forms actually block on. "
+        "Anything you leave blank is left blank on the form too — nothing is "
+        "guessed on your behalf."
+    )
+
+    tab_basics, tab_elig, tab_prefs, tab_comp, tab_eeo = st.tabs(
+        ["Basics", "Work eligibility", "Preferences", "Compensation", "Optional (EEO)"]
+    )
+
+    with tab_basics:
+        b1, b2 = st.columns(2)
+        with b1:
+            candidate.location = st.text_input(
+                "Location",
+                value=candidate.location or "",
+                placeholder="London, UK",
+                help="Fills the 'City' field on application forms.",
+            )
+        with b2:
+            websites = st.text_input(
+                "Personal site / portfolio",
+                value=candidate.websites[0] if candidate.websites else "",
+                placeholder="https://yoursite.com",
+            )
+            candidate.websites = [websites] if websites else []
+        candidate.default_cover_note = st.text_area(
+            "Default answer for 'Why do you want to work here?'",
+            value=candidate.default_cover_note or "",
+            height=90,
+            help="Reused as a starting point; edit per company before submitting.",
+        )
+
+    with tab_elig:
+        st.markdown(
+            "**The most common reason autofill stalls.** Without these, the "
+            "extension leaves the question for you rather than guessing."
+        )
+        auth = candidate.work_authorization
+        e1, e2 = st.columns(2)
+        with e1:
+            auth.country = st.text_input(
+                "Country you're applying in",
+                value=auth.country or "",
+                placeholder="United States",
+            )
+            auth.visa_status = st.text_input(
+                "Current visa status (optional)",
+                value=auth.visa_status or "",
+                placeholder="e.g. H-1B, Skilled Worker, Citizen",
+            )
+        with e2:
+            auth.authorized = _tristate(
+                "Legally authorized to work there?", auth.authorized, "auth_ok"
+            )
+            auth.requires_sponsorship = _tristate(
+                "Will you require visa sponsorship?",
+                auth.requires_sponsorship,
+                "auth_sponsor",
+            )
+
+    with tab_prefs:
+        p = candidate.preferences
+        titles = st.text_area(
+            "Target roles (one per line)",
+            value="\n".join(p.desired_titles),
+            height=90,
+            placeholder="Senior Software Engineer\nML Engineer",
+        )
+        p.desired_titles = [t.strip() for t in titles.splitlines() if t.strip()]
+
+        pf1, pf2 = st.columns(2)
+        with pf1:
+            remote_options = ["(not set)"] + [r.value for r in RemotePreference]
+            current = p.remote_preference.value if p.remote_preference else "(not set)"
+            chosen = st.selectbox(
+                "Work style",
+                remote_options,
+                index=remote_options.index(current),
+            )
+            p.remote_preference = (
+                RemotePreference(chosen) if chosen != "(not set)" else None
+            )
+            p.seniority = (
+                st.selectbox(
+                    "Seniority",
+                    ["", "Junior", "Mid-level", "Senior", "Staff", "Principal"],
+                    index=0
+                    if not p.seniority
+                    else [
+                        "",
+                        "Junior",
+                        "Mid-level",
+                        "Senior",
+                        "Staff",
+                        "Principal",
+                    ].index(p.seniority),
+                )
+                or None
+            )
+        with pf2:
+            locs = st.text_area(
+                "Preferred locations (one per line)",
+                value="\n".join(p.locations),
+                height=90,
+                placeholder="Remote\nLondon",
+            )
+            p.locations = [x.strip() for x in locs.splitlines() if x.strip()]
+            p.open_to_relocation = _tristate(
+                "Open to relocation?", p.open_to_relocation, "relocate"
+            )
+
+        p.company_stages = [
+            CompanyStage(s)
+            for s in st.multiselect(
+                "Company stage",
+                [s.value for s in CompanyStage],
+                default=[s.value for s in p.company_stages],
+            )
+        ]
+        excluded = st.text_area(
+            "Never show me these companies (one per line)",
+            value="\n".join(p.excluded_companies),
+            height=70,
+        )
+        p.excluded_companies = [x.strip() for x in excluded.splitlines() if x.strip()]
+
+    with tab_comp:
+        c = candidate.compensation
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            minimum = st.number_input(
+                "Minimum acceptable",
+                min_value=0,
+                step=1000,
+                value=int(c.minimum) if c.minimum else 0,
+                help="Roles below this are filtered out.",
+            )
+            c.minimum = float(minimum) if minimum else None
+        with c2:
+            target = st.number_input(
+                "Target",
+                min_value=0,
+                step=1000,
+                value=int(c.target) if c.target else 0,
+            )
+            c.target = float(target) if target else None
+        with c3:
+            c.currency = st.selectbox(
+                "Currency",
+                ["USD", "GBP", "EUR", "CAD", "AUD", "INR"],
+                index=["USD", "GBP", "EUR", "CAD", "AUD", "INR"].index(c.currency),
+            )
+            c.period = st.selectbox(
+                "Per",
+                ["year", "day", "hour"],
+                index=["year", "day", "hour"].index(c.period),
+            )
+
+        a = candidate.availability
+        av1, av2 = st.columns(2)
+        with av1:
+            weeks = st.number_input(
+                "Notice period (weeks)",
+                min_value=0,
+                max_value=52,
+                value=a.notice_period_weeks or 0,
+            )
+            a.notice_period_weeks = weeks if weeks else None
+        with av2:
+            a.earliest_start_date = (
+                st.text_input(
+                    "Earliest start date",
+                    value=a.earliest_start_date or "",
+                    placeholder="Immediately / 2026-09-01",
+                )
+                or None
+            )
+
+    with tab_eeo:
+        d = candidate.demographics
+        st.caption(
+            "Entirely optional. US forms often ask these for EEO reporting. "
+            "They are **never** inferred, and are only ever put on a form if "
+            "you tick the box below."
+        )
+        d.share_on_applications = st.checkbox(
+            "Use these answers on application forms",
+            value=d.share_on_applications,
+        )
+        d1, d2 = st.columns(2)
+        with d1:
+            d.pronouns = st.text_input("Pronouns", value=d.pronouns or "") or None
+            d.gender = st.text_input("Gender", value=d.gender or "") or None
+            d.ethnicity = st.text_input("Ethnicity", value=d.ethnicity or "") or None
+        with d2:
+            d.veteran_status = (
+                st.text_input("Veteran status", value=d.veteran_status or "") or None
+            )
+            d.disability_status = (
+                st.text_input("Disability status", value=d.disability_status or "")
+                or None
+            )
+
+    st.session_state.candidate = candidate
+    if st.button("Save profile", type="primary", use_container_width=True):
+        if _persist_candidate(candidate):
+            st.success("Profile saved.")
+            st.rerun()
+    return candidate
+
+
+def _tristate(label: str, value, key: str):
+    """A yes/no control that keeps 'not answered' as a real, distinct state."""
+    options = ["Not answered", "Yes", "No"]
+    index = 0 if value is None else (1 if value else 2)
+    choice = st.radio(label, options, index=index, key=key, horizontal=True)
+    if choice == "Yes":
+        return True
+    if choice == "No":
+        return False
+    return None
+
+
 # Page 1: Onboarding
 def page_onboarding():
     """Onboarding screen - CV upload and preferences"""
@@ -238,42 +499,24 @@ def page_onboarding():
                 st.warning("Please upload a CV or paste text")
 
     with col2:
-        st.subheader("Preferences")
+        st.subheader("Profile strength")
+        candidate = _current_candidate()
+        report = facade.profile_completeness(candidate)
+        st.progress(report["percent"] / 100, text=f"{report['percent']}% complete")
 
-        target_roles = st.text_area(
-            "Target Roles (one per line)",
-            value="Senior Software Engineer\nML Engineer\nFull Stack Developer",
-            height=100,
-        )
+        nba = report["next_best_action"]
+        if nba:
+            st.info(f"**Next: {nba['label']}** — {nba['why']}")
+        else:
+            st.success("Profile complete. Applications will fill end to end.")
 
-        target_locations = st.text_area(
-            "Target Locations (one per line)",
-            value="Remote\nSan Francisco\nBerlin",
-            height=100,
-        )
-
-        industries = st.multiselect(
-            "Preferred Industries",
-            ["Tech/Software", "AI/ML", "Finance", "Healthcare", "E-commerce", "Other"],
-            default=["Tech/Software", "AI/ML"],
-        )
-
-        seniority = st.select_slider(
-            "Seniority Level",
-            options=["Junior", "Mid-level", "Senior", "Staff", "Principal"],
-            value="Senior",
-        )
-
-        # Persist collected preferences so they survive Streamlit reruns and can
-        # be consumed by downstream discovery/personalization steps.
-        st.session_state.preferences = {
-            "target_roles": [r.strip() for r in target_roles.splitlines() if r.strip()],
-            "target_locations": [
-                loc.strip() for loc in target_locations.splitlines() if loc.strip()
-            ],
-            "industries": industries,
-            "seniority": seniority,
-        }
+        missing = report["missing"]
+        if missing:
+            with st.expander(f"{len(missing)} item(s) still missing"):
+                for item in missing:
+                    st.markdown(
+                        f"- **{item['label']}** ({item['section']}) — {item['why']}"
+                    )
 
     # Show parsed CV
     if st.session_state.cv_profile:
@@ -330,15 +573,17 @@ def page_onboarding():
                 use_container_width=True,
             )
         with exp3:
-            import json as _json
-
             st.download_button(
                 "Download JSON Resume",
-                data=_json.dumps(facade.resume_json(profile), indent=2),
+                data=json.dumps(facade.resume_json(profile), indent=2),
                 file_name="resume.json",
                 mime="application/json",
                 use_container_width=True,
             )
+
+        # --- Structured profile: the answers forms block on --- #
+        st.divider()
+        candidate = render_profile_builder(_current_candidate())
 
         # --- Autofill profile for the browser extension --- #
         st.divider()
@@ -349,26 +594,26 @@ def page_onboarding():
             "and Ashby will fill themselves when you click **Apply**. "
             "You always review and submit."
         )
-        af1, af2 = st.columns([2, 1])
-        with af1:
-            autofill_location = st.text_input(
-                "Location for application forms (optional)",
-                placeholder="e.g. London, UK",
-                help="Your CV has no location field; supply one to fill that input.",
-            )
-        with af2:
-            include_resume = st.checkbox("Include resume PDF", value=True)
+        include_resume = st.checkbox("Include resume PDF", value=True)
 
         st.download_button(
             "Export autofill profile",
-            data=facade.autofill_profile_json(
-                profile,
-                include_resume=include_resume,
-                location=autofill_location or None,
+            data=facade.candidate_autofill_json(
+                candidate, include_resume=include_resume
             ),
             file_name="careeragent_autofill_profile.json",
             mime="application/json",
             use_container_width=True,
+        )
+        answer_count = len(
+            json.loads(
+                facade.candidate_autofill_json(candidate, include_resume=False)
+            ).get("answers", {})
+        )
+        st.caption(
+            f"Includes {answer_count} pre-answered application question(s) "
+            "(work authorization, salary, notice period). Fill more of your "
+            "profile above to raise that number."
         )
         st.caption(
             "This file contains your personal details"

@@ -102,6 +102,12 @@ class CVProfileRow(SQLModel, table=True):
     summary: Optional[str] = None
     # Full CVProfile serialized + encrypted (contains raw resume text = PII).
     payload: Optional[str] = Field(default=None, sa_column=Column(EncryptedString))
+    # Full CandidateProfile (CV + work auth, compensation, preferences, and
+    # optional demographics). Encrypted: this is the most sensitive record we
+    # hold.
+    candidate_payload: Optional[str] = Field(
+        default=None, sa_column=Column(EncryptedString)
+    )
     embedding: Optional[list] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow)
 

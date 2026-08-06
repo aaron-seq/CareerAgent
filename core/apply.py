@@ -103,6 +103,10 @@ class AutofillProfile:
     portfolio: str = ""
     location: str = ""
     resume: Optional[dict[str, str]] = None
+    #: Answers to the yes/no and free-text questions forms block on. Values
+    #: are ``True``/``False``/string, or omitted entirely when unknown -- the
+    #: extension skips anything absent rather than guessing.
+    answers: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -118,6 +122,8 @@ class AutofillProfile:
             "location": self.location,
             "meta": self.meta,
         }
+        if self.answers:
+            data["answers"] = self.answers
         if self.resume:
             data["resume"] = self.resume
         return data
@@ -167,6 +173,78 @@ def build_autofill_profile(
         "source": "CareerAgent",
         "never_submits": True,
     }
+    return profile
+
+
+def build_answers(candidate) -> dict[str, Any]:
+    """Collect the form answers we can make truthfully from the profile.
+
+    A key is only present when the candidate actually supplied it. An absent
+    key means "we don't know" and the extension leaves that question for the
+    human -- we never answer a work-authorization question by default.
+    """
+    answers: dict[str, Any] = {}
+    auth = candidate.work_authorization
+    if auth.authorized is not None:
+        answers["work_authorized"] = auth.authorized
+    if auth.requires_sponsorship is not None:
+        answers["requires_sponsorship"] = auth.requires_sponsorship
+    if auth.visa_status:
+        answers["visa_status"] = auth.visa_status
+
+    comp = candidate.compensation
+    if comp.minimum is not None:
+        answers["salary_expectation"] = (
+            f"{comp.currency} {int(comp.minimum):,} per {comp.period}"
+        )
+
+    avail = candidate.availability
+    if avail.notice_period_weeks is not None:
+        answers["notice_period"] = f"{avail.notice_period_weeks} weeks"
+    if avail.earliest_start_date:
+        answers["start_date"] = avail.earliest_start_date
+
+    prefs = candidate.preferences
+    if prefs.open_to_relocation is not None:
+        answers["willing_to_relocate"] = prefs.open_to_relocation
+    if prefs.remote_preference is not None:
+        answers["remote_preference"] = prefs.remote_preference.value
+
+    if candidate.default_cover_note:
+        answers["cover_note"] = candidate.default_cover_note
+
+    # Demographics are opt-in only. Without explicit consent we send nothing,
+    # so EEO questions stay untouched.
+    demo = candidate.demographics
+    if demo.share_on_applications:
+        for key in (
+            "pronouns",
+            "gender",
+            "ethnicity",
+            "veteran_status",
+            "disability_status",
+        ):
+            value = getattr(demo, key)
+            if value:
+                answers[key] = value
+    return answers
+
+
+def build_profile_from_candidate(
+    candidate,
+    resume_pdf: bytes | None = None,
+    resume_filename: str = "resume.pdf",
+) -> AutofillProfile:
+    """Full autofill profile: CV fields plus the blocking-question answers."""
+    profile = build_autofill_profile(
+        candidate.cv,
+        resume_pdf=resume_pdf,
+        resume_filename=resume_filename,
+        location=candidate.location,
+    )
+    profile.answers = build_answers(candidate)
+    if candidate.websites and not profile.portfolio:
+        profile.portfolio = candidate.websites[0]
     return profile
 
 

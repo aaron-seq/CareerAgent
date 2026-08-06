@@ -121,7 +121,144 @@ function fillValueFor(field, profile) {
   return null;
 }
 
-const api = { mapFieldToProfileKey, fillValueFor, PROFILE_KEYS };
+// ---------------------------------------------------------------------------
+// Application questions (work authorization, salary, availability)
+//
+// These are the questions that stall an autofill run: they are usually a
+// <select> or a radio pair rather than a text input, and the wording varies.
+// A rule matches on keywords and declares which answer key it needs; if the
+// profile has no answer, we leave the question alone for the human.
+// ---------------------------------------------------------------------------
+
+const QUESTION_RULES = [
+  {
+    key: 'requires_sponsorship',
+    type: 'boolean',
+    // Check sponsorship BEFORE authorization: "will you require sponsorship"
+    // also contains none of the auth keywords, but auth phrasing sometimes
+    // contains "sponsor", so order matters.
+    any: [
+      'require sponsorship',
+      'need sponsorship',
+      'require visa sponsorship',
+      'need visa sponsorship',
+      'require immigration',
+      'sponsorship for an employment visa',
+      'sponsorship now or in the future',
+    ],
+  },
+  {
+    key: 'work_authorized',
+    type: 'boolean',
+    any: [
+      'legally authorized to work',
+      'authorized to work',
+      'authorised to work',
+      'legally eligible to work',
+      'right to work',
+      'work authorization',
+      'work authorisation',
+    ],
+  },
+  {
+    key: 'willing_to_relocate',
+    type: 'boolean',
+    any: ['willing to relocate', 'open to relocation', 'able to relocate'],
+  },
+  {
+    key: 'salary_expectation',
+    type: 'text',
+    any: [
+      'salary expectation',
+      'expected salary',
+      'desired salary',
+      'compensation expectation',
+      'salary requirement',
+    ],
+  },
+  {
+    key: 'notice_period',
+    type: 'text',
+    any: ['notice period', 'how much notice'],
+  },
+  {
+    key: 'start_date',
+    type: 'text',
+    any: ['start date', 'when can you start', 'earliest start', 'available to start'],
+  },
+  { key: 'visa_status', type: 'text', any: ['visa status', 'current visa'] },
+  { key: 'pronouns', type: 'text', any: ['pronoun'] },
+  {
+    key: 'cover_note',
+    type: 'text',
+    any: ['why do you want', 'why are you interested', 'cover letter', 'tell us about'],
+  },
+];
+
+/**
+ * Identify which application question a field is asking, if any.
+ * @returns {{key: string, type: string}|null}
+ */
+function mapFieldToQuestion(field) {
+  if (!field) return null;
+  const haystacks = [field.ariaLabel, field.label, field.name, field.id, field.placeholder]
+    .map(normalizeForFuzzy)
+    .filter(Boolean);
+  for (const rule of QUESTION_RULES) {
+    for (const hay of haystacks) {
+      if (rule.any.some((kw) => hay.includes(kw))) {
+        return { key: rule.key, type: rule.type };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The answer to type/select for a question field, or null to leave it alone.
+ *
+ * Returning null for an unknown answer is the whole point: an unanswered
+ * work-authorization question is far better than a wrong one.
+ */
+function answerFor(field, profile) {
+  const question = mapFieldToQuestion(field);
+  if (!question || !profile || !profile.answers) return null;
+  const value = profile.answers[question.key];
+  if (value === undefined || value === null || value === '') return null;
+  if (question.type === 'boolean') {
+    if (typeof value !== 'boolean') return null;
+    return { type: 'boolean', value };
+  }
+  return { type: 'text', value: String(value) };
+}
+
+/** Pick the <option> that represents a yes/no answer. */
+function matchOptionForBoolean(optionTexts, value) {
+  const yes = ['yes', 'true', 'i am', 'i do'];
+  const no = ['no', 'false', 'i am not', 'i do not', "i don't"];
+  const wanted = value ? yes : no;
+  const unwanted = value ? no : yes;
+  for (let i = 0; i < optionTexts.length; i += 1) {
+    const text = normalize(optionTexts[i]);
+    if (!text) continue;
+    // Require an exact-ish match so "No" doesn't match "Not sure".
+    if (wanted.some((w) => text === w || text.startsWith(`${w},`) || text.startsWith(`${w} `))) {
+      // Guard against the opposite answer also matching a prefix.
+      if (!unwanted.some((u) => text === u)) return i;
+    }
+  }
+  return -1;
+}
+
+const api = {
+  mapFieldToProfileKey,
+  fillValueFor,
+  mapFieldToQuestion,
+  answerFor,
+  matchOptionForBoolean,
+  PROFILE_KEYS,
+  QUESTION_RULES,
+};
 
 // Work both as a CommonJS module (node --test) and a browser global.
 if (typeof module !== 'undefined' && module.exports) {

@@ -14,7 +14,8 @@ from typing import Any, Optional
 
 from .alerting import build_digest
 from .analytics import compute_funnel, generate_interview_questions
-from .apply import apply_context, build_autofill_profile
+from .apply import apply_context, build_autofill_profile, build_profile_from_candidate
+from .candidate import CandidateProfile, compute_completeness
 from .db import get_session, init_db
 from .db.repository import (
     ApplicationRepository,
@@ -418,6 +419,67 @@ def autofill_profile_json(
         autofill_profile(cv, include_resume=include_resume, location=location),
         indent=2,
     )
+
+
+def save_candidate(candidate: CandidateProfile, cv_id: int | None = None) -> int:
+    """Create or update the candidate profile. Returns its row id."""
+    init_persistence()
+    with get_session() as session:
+        repo = CVRepository(session)
+        if cv_id is not None:
+            row = repo.update_candidate(cv_id, candidate)
+            if row is not None:
+                return row.id
+        return repo.save_candidate(candidate).id
+
+
+def load_candidate(cv_id: int) -> Optional[CandidateProfile]:
+    with get_session() as session:
+        return CVRepository(session).get_candidate(cv_id)
+
+
+def profile_completeness(candidate: CandidateProfile) -> dict[str, Any]:
+    """Completeness score plus a prioritized list of what's missing and why."""
+    result = compute_completeness(candidate)
+    return {
+        "percent": result.percent,
+        "items": [
+            {
+                "key": i.key,
+                "label": i.label,
+                "done": i.done,
+                "weight": i.weight,
+                "why": i.why,
+                "section": i.section,
+            }
+            for i in result.items
+        ],
+        "missing": [
+            {"key": i.key, "label": i.label, "why": i.why, "section": i.section}
+            for i in result.missing
+        ],
+        "next_best_action": (
+            {
+                "key": result.next_best_action().key,
+                "label": result.next_best_action().label,
+                "why": result.next_best_action().why,
+            }
+            if result.next_best_action()
+            else None
+        ),
+    }
+
+
+def candidate_autofill_json(
+    candidate: CandidateProfile, include_resume: bool = True
+) -> str:
+    """Autofill profile including work-authorization and salary answers."""
+    pdf = render_pdf(to_json_resume(candidate.cv)) if include_resume else None
+    filename = f"{(candidate.cv.name or 'resume').replace(' ', '_')}.pdf"
+    profile = build_profile_from_candidate(
+        candidate, resume_pdf=pdf, resume_filename=filename
+    )
+    return json.dumps(profile.to_dict(), indent=2)
 
 
 def mark_applied(job_id: int, cv_profile_id: int | None = None) -> dict[str, Any]:
