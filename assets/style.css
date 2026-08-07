@@ -1,283 +1,261 @@
-/* CareerAgent Custom Streamlit Styling */
+/* CareerAgent styling.
+ *
+ * Theme-aware by construction: colours come from Streamlit's own theme
+ * variables, so this works whether the user runs the bundled dark theme or
+ * switches to light. The previous stylesheet hardcoded dark-grey text
+ * (#1f2937), which was invisible against the dark background configured in
+ * .streamlit/config.toml.
+ */
 
-/* Global Styles */
-* {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+:root {
+  --ca-text: var(--text-color, #e6e6e6);
+  --ca-bg: var(--background-color, #000);
+  --ca-surface: var(--secondary-background-color, #121212);
+  --ca-primary: var(--primary-color, #ff6f00);
+
+  /* Semantic tones, readable on both light and dark surfaces. */
+  --ca-good: #2fbf71;
+  --ca-warn: #e0a800;
+  --ca-bad: #e5534b;
+  --ca-muted: color-mix(in srgb, var(--ca-text) 62%, transparent);
+  --ca-border: color-mix(in srgb, var(--ca-text) 16%, transparent);
+  --ca-raised: color-mix(in srgb, var(--ca-text) 6%, transparent);
+
+  --ca-radius: 10px;
+  --ca-gap: 0.6rem;
 }
 
-/* Main Container */
+/* ------------------------------------------------------------------ layout */
+
 .main .block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    max-width: 1200px;
+  padding-top: 2.2rem;
+  padding-bottom: 3rem;
+  max-width: 1100px;
 }
 
-/* Headers */
+/* Inherit the theme's text colour instead of pinning a light-mode grey. */
+h1,
+h2,
+h3,
+h4 {
+  color: var(--ca-text);
+  letter-spacing: -0.01em;
+}
+
 h1 {
-    color: #1f2937;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
+  font-weight: 700;
+  font-size: 1.9rem;
+  margin-bottom: 0.15rem;
 }
 
 h2 {
-    color: #374151;
-    font-weight: 600;
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
+  font-weight: 600;
+  font-size: 1.3rem;
+  margin-top: 1.75rem;
 }
 
 h3 {
-    color: #4b5563;
-    font-weight: 500;
+  font-weight: 600;
+  font-size: 1.05rem;
 }
 
-/* Buttons */
+/* The one-line explainer under a page title. */
+.ca-subtitle {
+  color: var(--ca-muted);
+  font-size: 0.95rem;
+  margin: 0 0 1.25rem;
+}
+
+/* ----------------------------------------------------------------- buttons */
+
 .stButton > button {
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    border: none;
+  border-radius: var(--ca-radius);
+  font-weight: 500;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.stButton > button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
 }
 
-/* Primary Button */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+.stButton > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-/* Secondary Button */
-.stButton > button[kind="secondary"] {
-    background-color: #f3f4f6;
-    color: #374151;
+/* Keyboard focus must stay visible for accessibility. */
+.stButton > button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ca-primary);
+  outline-offset: 2px;
 }
 
-/* Input Fields */
-.stTextInput > div > div > input,
-.stTextArea > div > div > textarea,
-.stSelectbox > div > div > select {
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    padding: 0.5rem;
-    font-size: 0.95rem;
+/* --------------------------------------------------------------- step nav */
+
+.ca-step {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.1rem 0 0.35rem;
 }
 
-.stTextInput > div > div > input:focus,
-.stTextArea > div > div > textarea:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+.ca-step-hint {
+  color: var(--ca-muted);
+  font-size: 0.78rem;
+  margin: -0.3rem 0 0.5rem 1.6rem;
 }
 
-/* File Uploader */
-.stFileUploader {
-    border: 2px dashed #e5e7eb;
-    border-radius: 8px;
-    padding: 1rem;
-    background-color: #f9fafb;
+.ca-current {
+  border-left: 3px solid var(--ca-primary);
+  padding-left: 0.6rem;
+  margin-left: -0.75rem;
 }
 
-.stFileUploader:hover {
-    border-color: #667eea;
-    background-color: #f3f4f6;
+/* ------------------------------------------------------------------- cards */
+
+.ca-card {
+  border: 1px solid var(--ca-border);
+  border-radius: var(--ca-radius);
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--ca-raised);
 }
 
-/* Expander */
-.streamlit-expanderHeader {
-    background-color: #f9fafb;
-    border-radius: 8px;
-    font-weight: 500;
-    color: #374151;
+.ca-card-title {
+  font-weight: 650;
+  font-size: 1.02rem;
+  color: var(--ca-text);
+  margin: 0;
 }
 
-.streamlit-expanderHeader:hover {
-    background-color: #f3f4f6;
+.ca-card-company {
+  color: var(--ca-muted);
+  font-size: 0.9rem;
+  margin: 0.1rem 0 0.5rem;
 }
 
-/* Metrics */
-.stMetric {
-    background-color: #f9fafb;
-    padding: 1rem;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
+/* --------------------------------------------------------------- chips */
+
+.ca-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
 }
 
-.stMetric > label {
-    color: #6b7280;
-    font-size: 0.875rem;
-    font-weight: 500;
+.ca-chip {
+  font-size: 0.76rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--ca-border);
+  color: var(--ca-muted);
+  white-space: nowrap;
 }
 
-.stMetric > div {
-    color: #1f2937;
+/* ------------------------------------------------------------------ badges */
+
+.ca-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.ca-badge-good {
+  background: color-mix(in srgb, var(--ca-good) 20%, transparent);
+  color: var(--ca-good);
+}
+
+.ca-badge-warn {
+  background: color-mix(in srgb, var(--ca-warn) 20%, transparent);
+  color: var(--ca-warn);
+}
+
+.ca-badge-bad {
+  background: color-mix(in srgb, var(--ca-bad) 20%, transparent);
+  color: var(--ca-bad);
+}
+
+.ca-badge-neutral {
+  background: var(--ca-raised);
+  color: var(--ca-muted);
+}
+
+/* ------------------------------------------------------------ empty states */
+
+.ca-empty {
+  border: 1px dashed var(--ca-border);
+  border-radius: var(--ca-radius);
+  padding: 1.75rem 1.25rem;
+  text-align: center;
+  margin: 0.5rem 0 1rem;
+}
+
+.ca-empty-headline {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--ca-text);
+  margin-bottom: 0.3rem;
+}
+
+.ca-empty-body {
+  color: var(--ca-muted);
+  font-size: 0.9rem;
+  max-width: 34rem;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ inputs */
+
+.stTextInput input,
+.stTextArea textarea,
+.stNumberInput input {
+  border-radius: 8px;
+}
+
+/* Streamlit renders help text small; keep it legible. */
+.stCaption,
+[data-testid="stCaptionContainer"] {
+  color: var(--ca-muted);
+}
+
+/* ------------------------------------------------------------------ tables */
+
+[data-testid="stMetricValue"] {
+  font-size: 1.5rem;
+}
+
+/* ----------------------------------------------------------------- sidebar */
+
+[data-testid="stSidebar"] .stButton > button {
+  text-align: left;
+  justify-content: flex-start;
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .stButton > button,
+  .stButton > button:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------ small screens */
+
+@media (max-width: 640px) {
+  .main .block-container {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  h1 {
     font-size: 1.5rem;
-    font-weight: 700;
-}
-
-/* Progress Bar */
-.stProgress > div > div > div {
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-}
-
-/* Sidebar */
-.css-1d391kg {
-    background-color: #f9fafb;
-}
-
-/* Success/Error Messages */
-.stSuccess {
-    background-color: #d1fae5;
-    border-left: 4px solid #10b981;
-    padding: 1rem;
-    border-radius: 8px;
-}
-
-.stError {
-    background-color: #fee2e2;
-    border-left: 4px solid #ef4444;
-    padding: 1rem;
-    border-radius: 8px;
-}
-
-.stWarning {
-    background-color: #fef3c7;
-    border-left: 4px solid #f59e0b;
-    padding: 1rem;
-    border-radius: 8px;
-}
-
-.stInfo {
-    background-color: #dbeafe;
-    border-left: 4px solid #3b82f6;
-    padding: 1rem;
-    border-radius: 8px;
-}
-
-/* Code Blocks */
-.stCodeBlock {
-    border-radius: 8px;
-    background-color: #1f2937;
-}
-
-/* Divider */
-hr {
-    margin: 2rem 0;
-    border: none;
-    border-top: 2px solid #e5e7eb;
-}
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-}
-
-.stTabs [data-baseweb="tab"] {
-    border-radius: 8px 8px 0 0;
-    padding: 0.75rem 1.5rem;
-    font-weight: 500;
-}
-
-.stTabs [aria-selected="true"] {
-    background-color: #667eea;
-    color: white;
-}
-
-/* Spinner */
-.stSpinner > div {
-    border-top-color: #667eea;
-}
-
-/* Radio Buttons */
-.stRadio > label {
-    font-weight: 500;
-    color: #374151;
-}
-
-/* Checkbox */
-.stCheckbox > label {
-    font-weight: 400;
-    color: #4b5563;
-}
-
-/* Popover */
-.stPopover {
-    border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-}
-
-/* Toast Notifications */
-.stToast {
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Custom Classes */
-.quality-check-pass {
-    color: #10b981;
-    font-weight: 600;
-}
-
-.quality-check-fail {
-    color: #ef4444;
-    font-weight: 600;
-}
-
-.contact-confidence-high {
-    color: #10b981;
-}
-
-.contact-confidence-med {
-    color: #f59e0b;
-}
-
-.contact-confidence-low {
-    color: #ef4444;
-}
-
-/* Loading States */
-.loading-shimmer {
-    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-}
-
-@keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .main .block-container {
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    
-    h1 {
-        font-size: 1.75rem;
-    }
-    
-    h2 {
-        font-size: 1.25rem;
-    }
-}
-
-/* Dark Mode Overrides (if user has dark mode enabled) */
-@media (prefers-color-scheme: dark) {
-    h1, h2, h3 {
-        color: #f9fafb;
-    }
-    
-    .stMetric {
-        background-color: #1f2937;
-        border-color: #374151;
-    }
-    
-    .streamlit-expanderHeader {
-        background-color: #1f2937;
-        color: #f9fafb;
-    }
+  }
 }

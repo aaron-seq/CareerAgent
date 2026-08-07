@@ -20,6 +20,7 @@ from core.llm import LocalLLMClient
 from core.models import ContactCandidate, EmailDraft, JobPosting, SearchQuery
 from core.outreach import ComplianceConfig, LIARecord
 from core.personalization import PersonalizationEngine
+from core.presentation import empty_state, job_chips, match_quality, risk_notes
 from core.storage import LocalStorage
 from core.validators import DraftValidator
 
@@ -93,67 +94,111 @@ except Exception:  # pragma: no cover - defensive UI guard
     pass
 
 
+def render_empty_state(screen: str, has_profile: bool = False):
+    """A blank screen that says what to do next, not just that it's blank."""
+    state = empty_state(screen, has_profile=has_profile)
+    st.markdown(
+        f'<div class="ca-empty">'
+        f'<div class="ca-empty-headline">{state.headline}</div>'
+        f'<div class="ca-empty-body">{state.body}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    if state.action_label and state.action_page:
+        if st.button(state.action_label, type="primary", key=f"empty_{screen}"):
+            st.session_state.page = state.action_page
+            st.rerun()
+
+
+def _pipeline_has_applications() -> bool:
+    try:
+        board = facade.pipeline_board()
+        return any(cards for cards in board.values())
+    except Exception:
+        return False
+
+
+def _has_jobs() -> bool:
+    try:
+        return bool(facade.top_jobs(limit=1))
+    except Exception:
+        return False
+
+
 # Sidebar configuration
 def render_sidebar():
-    """Render sidebar with navigation and settings"""
+    """Sidebar: a numbered flow rather than a flat list of destinations.
+
+    Optional detours are labelled as such and finished steps get a tick, so
+    it's obvious at a glance what still needs doing.
+    """
+    from core.presentation import build_steps, next_step
+
     with st.sidebar:
         st.title("CareerAgent")
-        st.caption("Local AI Career Agent")
+        st.caption("Find jobs, apply faster, keep track.")
 
         st.divider()
 
-        # Navigation
-        st.subheader("Navigation")
-        pages = {
-            "onboarding": "Onboarding",
-            "discovery": "Job Discovery",
-            "pipeline": "Pipeline",
-            "contacts": "Contact Finder",
-            "draft": "Draft Studio",
-            "export": "Export & Logs",
-        }
-
-        for key, label in pages.items():
-            if st.button(label, key=f"nav_{key}", use_container_width=True):
-                st.session_state.page = key
-                st.rerun()
-
-        st.divider()
-
-        # LLM Settings
-        st.subheader("LLM Settings")
-
-        model = st.selectbox(
-            "Model",
-            ["llama3.1:8b", "llama3.2:3b", "qwen2.5:7b", "mistral:7b"],
-            key="selected_model",
+        steps = build_steps(
+            current_page=st.session_state.get("page", "onboarding"),
+            has_profile=st.session_state.cv_profile is not None,
+            has_jobs=_has_jobs(),
+            has_applications=_pipeline_has_applications(),
         )
 
-        if st.button("Initialize LLM", use_container_width=True):
-            with st.spinner("Connecting to Ollama..."):
-                try:
-                    llm = LocalLLMClient(model=model)
-                    if llm.check_connection():
-                        st.session_state.llm_client = llm
-                        st.success(f"Connected to {model}")
-                    else:
-                        st.error("Ollama not running. Run `ollama serve`")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+        for step in steps:
+            if step.current:
+                st.markdown('<div class="ca-current">', unsafe_allow_html=True)
+            if st.button(
+                step.display,
+                key=f"nav_{step.key}",
+                use_container_width=True,
+                type="primary" if step.current else "secondary",
+            ):
+                st.session_state.page = step.key
+                st.rerun()
+            if step.current:
+                st.markdown(
+                    f'<div class="ca-step-hint">{step.hint}</div></div>',
+                    unsafe_allow_html=True,
+                )
 
-        # Show connection status
-        if st.session_state.llm_client:
-            st.success("LLM Connected")
-        else:
-            st.warning("LLM Not Connected")
+        upcoming = next_step(steps)
+        if upcoming:
+            st.divider()
+            st.caption(f"**Next up:** {upcoming.label} — {upcoming.hint.lower()}")
 
+        # LLM settings are an optional enhancement, not the first thing a new
+        # user should have to deal with — so they live at the bottom, closed.
         st.divider()
+        with st.expander("AI settings (optional)"):
+            st.caption(
+                "A local Ollama model is only needed to *read* your CV "
+                "automatically and to write outreach emails. Everything else "
+                "works without it."
+            )
+            model = st.selectbox(
+                "Model",
+                ["llama3.1:8b", "llama3.2:3b", "qwen2.5:7b", "mistral:7b"],
+                key="selected_model",
+            )
+            if st.button("Connect", use_container_width=True):
+                with st.spinner("Connecting to Ollama..."):
+                    try:
+                        llm = LocalLLMClient(model=model)
+                        if llm.check_connection():
+                            st.session_state.llm_client = llm
+                            st.success(f"Connected to {model}")
+                        else:
+                            st.error("Ollama not running. Run `ollama serve`")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
-        # Stats
-        st.subheader("Session Stats")
-        st.metric("CV Parsed", "Yes" if st.session_state.cv_profile else "No")
-        st.metric("Jobs Selected", len(st.session_state.selected_jobs))
-        st.metric("Drafts Created", len(st.session_state.draft_history))
+            if st.session_state.llm_client:
+                st.success("Connected")
+            else:
+                st.caption("Not connected — optional features are hidden.")
 
 
 def _current_candidate():
@@ -203,6 +248,17 @@ def render_profile_builder(candidate):
     )
 
     with tab_basics:
+        # Editable here too, so a profile built by hand (no AI model) can be
+        # completed without ever parsing a CV.
+        cv = candidate.cv
+        n1, n2, n3 = st.columns(3)
+        with n1:
+            cv.name = st.text_input("Full name", value=cv.name or "") or None
+        with n2:
+            cv.email = st.text_input("Email", value=cv.email or "") or None
+        with n3:
+            cv.phone = st.text_input("Phone", value=cv.phone or "") or None
+
         b1, b2 = st.columns(2)
         with b1:
             candidate.location = st.text_input(
@@ -211,6 +267,14 @@ def render_profile_builder(candidate):
                 placeholder="London, UK",
                 help="Fills the 'City' field on application forms.",
             )
+            cv.linkedin = (
+                st.text_input(
+                    "LinkedIn",
+                    value=cv.linkedin or "",
+                    placeholder="https://linkedin.com/in/you",
+                )
+                or None
+            )
         with b2:
             websites = st.text_input(
                 "Personal site / portfolio",
@@ -218,6 +282,23 @@ def render_profile_builder(candidate):
                 placeholder="https://yoursite.com",
             )
             candidate.websites = [websites] if websites else []
+            cv.github = (
+                st.text_input(
+                    "GitHub",
+                    value=cv.github or "",
+                    placeholder="https://github.com/you",
+                )
+                or None
+            )
+
+        if not cv.skills:
+            skills_text = st.text_input(
+                "Skills (comma separated)",
+                placeholder="Python, SQL, Docker",
+                help="Match scoring is mostly skill overlap, so this matters.",
+            )
+            if skills_text:
+                cv.skills = [s.strip() for s in skills_text.split(",") if s.strip()]
         candidate.default_cover_note = st.text_area(
             "Default answer for 'Why do you want to work here?'",
             value=candidate.default_cover_note or "",
@@ -418,32 +499,54 @@ def _tristate(label: str, value, key: str):
 
 # Page 1: Onboarding
 def page_onboarding():
-    """Onboarding screen - CV upload and preferences"""
-    st.title("Onboarding")
-    st.markdown("Upload your CV and define your target roles")
+    """Your profile: the one screen everything else depends on."""
+    st.title("Your profile")
+    st.markdown(
+        '<p class="ca-subtitle">Add your details once. We reuse them to score '
+        "jobs, tailor your resume, and fill application forms.</p>",
+        unsafe_allow_html=True,
+    )
 
-    # Check LLM connection
-    if not st.session_state.llm_client:
-        st.error("Please initialize LLM from sidebar first")
-        return
+    has_llm = st.session_state.llm_client is not None
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("Upload CV")
+        st.subheader("Add your CV")
+
+        if not has_llm:
+            st.info(
+                "**Reading a CV automatically needs a local AI model.** "
+                "Connect one under *AI settings* in the sidebar, or just fill "
+                "in your details by hand below — everything else on this page "
+                "works either way.",
+                icon=None,
+            )
 
         # PDF upload
         cv_file = st.file_uploader(
-            "Upload CV (PDF)", type=["pdf"], help="Drag and drop your CV PDF here"
+            "Upload CV (PDF)",
+            type=["pdf"],
+            help="Drag and drop your CV PDF here",
+            disabled=not has_llm,
         )
 
         # Text fallback
-        with st.expander("Or Paste CV Text (Fallback)"):
+        with st.expander("Or paste your CV as text"):
             cv_text = st.text_area(
-                "Paste CV text", height=200, help="Use this if PDF upload fails"
+                "Paste CV text",
+                height=200,
+                help="Use this if PDF upload fails",
+                disabled=not has_llm,
             )
 
-        if st.button("Parse CV", type="primary", use_container_width=True):
+        if st.button(
+            "Read my CV",
+            type="primary",
+            use_container_width=True,
+            disabled=not has_llm,
+            help=None if has_llm else "Connect a model in the sidebar first.",
+        ):
             if cv_file or cv_text:
                 with st.spinner("Parsing CV with local LLM..."):
                     try:
@@ -518,10 +621,22 @@ def page_onboarding():
                         f"- **{item['label']}** ({item['section']}) — {item['why']}"
                     )
 
+        # Without a parsed CV there's nothing below this point, which would
+        # leave a user with no AI model staring at a dead screen. Let them
+        # start an empty profile and type their details in instead.
+        if st.session_state.cv_profile is None:
+            st.divider()
+            if st.button("Start a profile by hand", use_container_width=True):
+                from core.models import CVProfile as _CVProfile
+
+                st.session_state.cv_profile = _CVProfile()
+                st.rerun()
+            st.caption("No AI model needed — you can fill everything in yourself.")
+
     # Show parsed CV
     if st.session_state.cv_profile:
         st.divider()
-        st.subheader("Parsed CV Profile")
+        st.subheader("Your details")
 
         profile = st.session_state.cv_profile
 
@@ -890,11 +1005,18 @@ def page_contacts():
     st.markdown("Find hiring managers and generate email permutations")
 
     if not st.session_state.selected_jobs:
-        st.warning("Please select jobs first")
+        st.info(
+            "Pick a job first — add one from **Find jobs**, then come back "
+            "and this screen will work from that posting."
+        )
         return
 
     if not st.session_state.llm_client:
-        st.error("Please initialize LLM first")
+        st.info(
+            "This screen needs a local AI model to write text for you. "
+            "Connect one under **AI settings** in the sidebar — it's optional, "
+            "and the rest of the app works without it."
+        )
         return
 
     # For each selected job
@@ -1030,11 +1152,18 @@ def page_draft_studio():
     st.markdown("Generate and refine personalized outreach messages")
 
     if not st.session_state.selected_jobs:
-        st.warning("Please select jobs first")
+        st.info(
+            "Pick a job first — add one from **Find jobs**, then come back "
+            "and this screen will work from that posting."
+        )
         return
 
     if not st.session_state.llm_client:
-        st.error("Please initialize LLM first")
+        st.info(
+            "This screen needs a local AI model to write text for you. "
+            "Connect one under **AI settings** in the sidebar — it's optional, "
+            "and the rest of the app works without it."
+        )
         return
 
     # Job selector
@@ -1534,29 +1663,33 @@ def page_pipeline():
         st.error(f"Could not load jobs: {e}")
 
     if not jobs:
-        st.info("No jobs match. Ingest more above, or relax the filters.")
-    for job in jobs:
-        score = f"{job['score']:.0f}%" if job["score"] is not None else "unscored"
-        with st.expander(f"[{score}] {job['title']} - {job['company']}"):
-            st.write(f"**Location:** {job['location'] or 'N/A'}")
-            if job["salary_min"]:
-                st.write(f"**Salary:** {int(job['salary_min']):,}+")
+        # Distinguish "you have nothing" from "your filters hid everything" —
+        # they need different advice.
+        any_jobs = _has_jobs()
+        screen = "filtered" if any_jobs else "jobs"
+        render_empty_state(screen, has_profile=st.session_state.cv_profile is not None)
 
-            # Company + risk signals from enrichment.
-            signals = []
-            if job.get("sponsors_visa"):
-                signals.append("Visa sponsor")
-            if job.get("glassdoor_rating"):
-                signals.append(f"Glassdoor {job['glassdoor_rating']}")
-            if job.get("had_layoffs"):
-                signals.append("Recent layoffs")
-            if signals:
-                st.caption(" · ".join(signals))
-            if job.get("ghost_score") and job["ghost_score"] > 0.6:
-                st.warning(
-                    f"Possible ghost job (risk {job['ghost_score']:.0%}) - "
-                    "stale or vague posting."
+    for job in jobs:
+        quality, tone = match_quality(job["score"])
+        score_text = f"{job['score']:.0f}%" if job["score"] is not None else "—"
+        with st.expander(f"{score_text}  ·  {job['title']} — {job['company']}"):
+            st.markdown(
+                f'<span class="ca-badge ca-badge-{tone}">{quality}</span>',
+                unsafe_allow_html=True,
+            )
+
+            chips = job_chips(job)
+            if chips:
+                st.markdown(
+                    '<div class="ca-chips">'
+                    + "".join(f'<span class="ca-chip">{c}</span>' for c in chips)
+                    + "</div>",
+                    unsafe_allow_html=True,
                 )
+            if job.get("glassdoor_rating"):
+                st.caption(f"Glassdoor {job['glassdoor_rating']}")
+            for note in risk_notes(job):
+                st.warning(note)
 
             if job["matched"]:
                 st.success("Matched: " + ", ".join(job["matched"][:12]))

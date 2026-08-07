@@ -26,6 +26,41 @@ Totals: **143 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-07-25 — Frontend + UX: fixed an invisible-text bug, simplified the flow
+Two real defects, not just styling opinions:
+- **The stylesheet fought the theme.** `.streamlit/config.toml` sets a dark
+  theme (`#000000`), but `assets/style.css` hardcoded light-mode text
+  (`h1 { color: #1f2937 }`) — headings were near-black on black. Rewrote the
+  stylesheet to inherit Streamlit's theme variables, so it works in both
+  themes, plus focus-visible outlines, reduced-motion support, and a mobile
+  breakpoint.
+- **Onboarding was entirely blocked without Ollama.** A first-time user with
+  no local model hit `st.error` and a dead screen, despite the profile
+  builder, autofill export, and resume tools needing no LLM. Now only *CV
+  parsing* requires a model; there's a "Start a profile by hand" path and the
+  Basics tab edits name/email/phone/links/skills directly.
+
+Simpler by default:
+- Sidebar is a **numbered flow** (1–6) with ticks for finished steps, optional
+  detours labelled, the current step highlighted with its hint, and a
+  "Next up" nudge. AI settings moved to a collapsed expander at the bottom —
+  model selection was previously the first thing a new user saw.
+- **Empty states that say what to do**, and which distinguish "you have no
+  jobs" from "your filters hid them all" — different problems, different fixes.
+- Job cards show a **worded match quality** ("Strong match") beside the score,
+  fact chips (remote / location / salary / posted / visa sponsor), and risk
+  warnings, instead of a bare percentage.
+- Remaining LLM-gated screens now explain the feature is optional rather than
+  raising an error.
+
+- **`core/presentation.py`** — all formatting and copy decisions as pure,
+  testable functions (no Streamlit import), so this is verifiable rather than
+  vibes: 36 new tests. Totals: **257 Python + 27 JS green; ruff clean.**
+
+Not verified here: how it actually looks. No browser in this environment —
+`streamlit run app.py` is the check.
+
+
 ### 2026-07-25 — Structured candidate profile (Wellfound-style capture)
 Researched how candidate-profile platforms capture applicants and applied the
 core lesson: **you build a structured profile, not upload a document**, with
