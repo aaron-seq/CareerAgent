@@ -214,9 +214,11 @@ Add screenshots for UI changes
 
 See `ARCHITECTURE.md` for the full module map and diagrams — it's the single
 source of truth for this, kept in sync with the code. In short: `app.py`
-calls only `core/facade.py`; everything else (CV parsing, resume/cover-letter
-generation, job ingestion/matching, tracking, outreach compliance,
-enrichment, analytics) lives in its own `core/` package or module.
+holds no business logic; the DB-backed platform services (job ingestion/
+matching, tracking, outreach compliance, enrichment, analytics, resume/
+cover-letter generation) go through `core/facade.py`, while CV parsing,
+contact finding, personalization, and Gmail drafts are still called
+directly (a known gap worth unifying behind the facade, not yet done).
 
 ## Questions or Issues?
 

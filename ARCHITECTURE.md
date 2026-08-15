@@ -6,8 +6,14 @@ AI-powered career assistant for personalized job search and outreach.
 ## System overview
 
 CareerAgent is a Streamlit UI over a `core/` package of independent business-
-logic services, called only through `core/facade.py` — `app.py` holds no
-business logic itself. LLM inference runs against Ollama locally by default,
+logic services — `app.py` holds no business logic itself. It reaches `core/`
+two ways: the DB-backed platform services (ingestion, matching, resume,
+tracking, outreach, analytics) go through `core/facade.py`; the original
+CV/contact/personalization/Gmail/storage modules are instantiated directly
+by `app.py` (see the diagram below — the `UI --> CF/PE/DV/Gmail/WA` edges
+are that direct path, not routed through the facade). A 2026-08 repo audit
+flagged this as worth unifying behind the facade; not yet done. LLM
+inference runs against Ollama locally by default,
 with an OpenAI-compatible cloud provider (Groq's free tier) as an opt-in
 alternative (see ADR 0005). Persistence is SQLModel on SQLite for dev
 (Postgres in production, ADR 0003), with a legacy local-JSON path still used
@@ -60,7 +66,6 @@ graph TB
     end
 
     UI --> Facade
-    Facade --> CV
     Facade --> Resume
     Facade --> Ingestion
     Facade --> Fetching
@@ -70,11 +75,13 @@ graph TB
     Facade --> Enrichment
     Facade --> Analytics
     Facade --> Alerting
+    UI --> CV
     UI --> CF
     UI --> PE
     UI --> DV
     UI --> Gmail
     UI --> WA
+    CV -.->|persist_cv| Facade
 
     CV --> LLM
     Resume --> LLM
@@ -229,7 +236,7 @@ address, opt-out, and a per-campaign LIA are all present.
 
 ```
 CareerAgent/
-├── app.py                    # Streamlit UI (calls only core/facade.py)
+├── app.py                    # Streamlit UI (no business logic)
 ├── core/
 │   ├── facade.py             # Single tested entry point for app.py
 │   ├── llm.py                # LocalLLMClient (Ollama) + CloudLLMClient (Groq)
