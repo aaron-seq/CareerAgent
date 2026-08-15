@@ -51,7 +51,12 @@ const KEYWORD_RULES = [
   { key: 'phone', any: ['phone', 'mobile', 'telephone', 'tel'] },
   { key: 'linkedin', any: ['linkedin'] },
   { key: 'github', any: ['github'] },
-  { key: 'portfolio', any: ['portfolio', 'website', 'personal site', 'url'] },
+  // Deliberately no bare "url" here: real ATS forms have several "<service>
+  // URL" fields (LinkedIn URL, GitHub URL, Twitter URL, Portfolio URL...);
+  // matching on "url" alone stole unrelated ones (e.g. "Twitter URL", seen
+  // on a real live Lever form) since it's checked before any service-less
+  // fallback. "portfolio"/"website" are specific enough signals on their own.
+  { key: 'portfolio', any: ['portfolio', 'website', 'personal site'] },
   { key: 'location', any: ['location', 'city', 'address'] },
   { key: 'fullName', any: ['full name', 'fullname', 'your name', 'name'] },
 ];
@@ -60,10 +65,21 @@ function normalize(text) {
   return (text || '').toString().trim().toLowerCase();
 }
 
-// For fuzzy matching, treat separators (_ -) as spaces so "given_name" and
-// "given-name" match the "given name" keyword.
+// For fuzzy matching, treat any run of non-alphanumeric characters (_ - : .
+// * etc.) as a space, so "given_name", "given-name", and "Phone:" all match
+// on plain words ("given name", "phone").
 function normalizeForFuzzy(text) {
-  return normalize(text).replace(/[_-]+/g, ' ');
+  return normalize(text).replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Word/phrase-boundary substring check. Plain `.includes()` false-positives
+// on short keywords hiding inside unrelated words -- e.g. rule keyword "tel"
+// (for phone) matching inside a label like "...complete the Constellation
+// application form" (seen on a real live Greenhouse posting). Both sides are
+// pre-normalized to single-space-separated words, so padding with spaces and
+// checking for " phrase " gives a cheap exact word/phrase match.
+function includesWord(haystack, phrase) {
+  return phrase !== '' && (' ' + haystack + ' ').includes(' ' + phrase + ' ');
 }
 
 /**
@@ -90,7 +106,7 @@ function mapFieldToProfileKey(field) {
 
   for (const rule of KEYWORD_RULES) {
     for (const hay of haystacks) {
-      if (rule.any.some((kw) => hay.includes(kw))) {
+      if (rule.any.some((kw) => includesWord(hay, normalizeForFuzzy(kw)))) {
         return rule.key;
       }
     }
