@@ -26,6 +26,21 @@ def _utcnow() -> datetime:
     return datetime.utcnow()
 
 
+# Streamlit's hot-reload re-execs this module's class bodies on every `.py`
+# save (any file -- it re-runs the whole import chain), which would
+# re-register every table below on the same shared ``SQLModel.metadata`` and
+# raise ``InvalidRequestError: Table '...' is already defined for this
+# MetaData instance``. ``extend_existing=True`` silences that, but it merges
+# into the existing Table object rather than replacing it, so auto-created
+# indexes (from ``Field(index=True)``) pile up duplicates on every reload and
+# eventually break ``create_all()`` against a fresh database. This module is
+# the sole owner of ``SQLModel.metadata`` (nothing else in the codebase
+# defines a ``table=True`` model), so it's safe to drop everything it
+# previously registered before redefining -- each execution is then a clean
+# rebuild instead of an accumulating merge.
+SQLModel.metadata.clear()
+
+
 class ApplicationStatus(str, Enum):
     """Kanban states for an application's lifecycle."""
 
