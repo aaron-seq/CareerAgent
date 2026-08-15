@@ -25,8 +25,15 @@ _TOKEN = re.compile(r"[a-z0-9+#.]+")
 
 
 def tokenize(text: str) -> list[str]:
-    """Lowercase word/skill tokens (keeps c++, c#, .net, node.js-ish tokens)."""
-    return _TOKEN.findall((text or "").lower())
+    """Lowercase word/skill tokens (keeps c++, c#, .net, node.js-ish tokens).
+
+    Strips a trailing sentence-ending period ("built." -> "built") since the
+    token regex keeps '.' for embedded dots (.net, node.js) and can't tell
+    those apart from one glued on by prose -- but a *trailing* dot is always
+    punctuation, never part of a real token, so it's safe to drop.
+    """
+    tokens = (t.rstrip(".") for t in _TOKEN.findall((text or "").lower()))
+    return [t for t in tokens if t]
 
 
 @runtime_checkable
