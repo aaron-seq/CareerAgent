@@ -12,6 +12,7 @@ from core.matching import (
     cosine_similarity,
     score_job,
 )
+from core.matching.embeddings import tokenize
 from core.models import CVProfile, Experience, JobPosting, Project
 
 # --------------------------------------------------------------------------- #
@@ -40,6 +41,17 @@ def test_cosine_similarity_reflects_overlap():
 
 def test_cosine_empty_is_zero():
     assert cosine_similarity([], [1.0]) == 0.0
+
+
+def test_tokenize_strips_trailing_period_but_keeps_dotted_tokens():
+    # Sentence-ending periods glue onto the previous word (the [.] in the
+    # token regex is there for c++/.net/node.js, not prose punctuation).
+    assert tokenize("Built on Node.js.") == ["built", "on", "node.js"]
+    assert tokenize("Our API.") == ["our", "api"]
+    # Legitimate dotted/symbol tokens must survive untouched.
+    assert tokenize("c++") == ["c++"]
+    assert tokenize(".net") == [".net"]
+    assert tokenize("node.js") == ["node.js"]
 
 
 # --------------------------------------------------------------------------- #
@@ -106,6 +118,54 @@ def test_score_fuzzy_keyword_match():
     job = JobPosting(title="SRE", company="X", tech_stack=["kubernetes"])
     result = score_job(cv, job, embedder=HashingEmbedder())
     assert "kubernetes" in result.matched_keywords
+
+
+def test_score_job_description_fallback_filters_stopwords_and_punctuation():
+    # No tech_stack/requirements -- exactly the aggregator-ingestion case
+    # (Greenhouse/Lever/Ashby/Adzuna/etc. never populate those fields), so
+    # _job_keywords falls back to tokenizing raw prose.
+    cv = _ml_cv()
+    job = JobPosting(
+        title="Applied AI Architect",
+        company="Acme",
+        description=(
+            "You will work directly with customers who are building on top "
+            "of our API. This role is not just about writing code -- it is "
+            "about understanding why a customer's workflow is failing. You "
+            "should be comfortable working with Python, Kubernetes, and "
+            "Node.js. Prior experience with .NET or C++ is a plus, but is "
+            "not required."
+        ),
+    )
+    result = score_job(cv, job, embedder=HashingEmbedder())
+    all_keywords = set(result.matched_keywords) | set(result.missing_keywords)
+
+    # Plain-English function words must not surface as "missing skills".
+    leaked_stopwords = all_keywords & {
+        "at",
+        "is",
+        "it",
+        "not",
+        "than",
+        "who",
+        "why",
+        "you",
+        "we",
+        "our",
+        "your",
+        "was",
+        "are",
+        "this",
+        "about",
+    }
+    assert not leaked_stopwords, f"stopwords leaked into keywords: {leaked_stopwords}"
+
+    # Sentence-ending periods must not glue onto the previous word.
+    glued = {k for k in all_keywords if k.endswith(".")}
+    assert not glued, f"punctuation-glued tokens: {glued}"
+
+    # Real tech terms -- including dotted/symbol ones -- must still surface.
+    assert {"python", "kubernetes", "node.js", ".net", "c++"} <= all_keywords
 
 
 # --------------------------------------------------------------------------- #

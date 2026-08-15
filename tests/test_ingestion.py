@@ -15,6 +15,41 @@ from core.ingestion import (
     RemotiveSource,
     TheMuseSource,
 )
+from core.ingestion.ats import html_to_text
+
+
+class TestHtmlToText:
+    """Greenhouse's real API double-encodes: the JSON `content` field is
+    itself HTML-escaped HTML (literal "&lt;div&gt;" instead of "<div>").
+    Confirmed against a live board (boards-api.greenhouse.io/.../anthropic):
+    a single BeautifulSoup pass only unwraps the outer escaping and returns
+    the revealed-but-still-tagged markup as plain text -- "<div>...</div>"
+    showed up verbatim in the stored description. The original mock fixture
+    below used single-encoded HTML, which is why this went uncaught."""
+
+    def test_single_encoded_html_still_works(self):
+        out = html_to_text("<p>Build <b>payments</b>.</p>")
+        assert "Build" in out and "payments" in out
+        assert "<b>" not in out and "<p>" not in out
+
+    def test_double_encoded_html_is_fully_stripped(self):
+        double_encoded = (
+            "&lt;div&gt;&lt;p&gt;Anthropic&amp;#8217;s mission&lt;/p&gt;&lt;/div&gt;"
+        )
+        out = html_to_text(double_encoded)
+        assert "<div" not in out
+        assert "<p" not in out
+        assert "&amp;" not in out
+        assert "&lt;" not in out
+
+    def test_empty_input(self):
+        assert html_to_text(None) == ""
+        assert html_to_text("") == ""
+
+    def test_plain_text_is_a_no_op(self):
+        assert (
+            html_to_text("Just plain text, no markup.") == "Just plain text, no markup."
+        )
 
 
 @respx.mock
@@ -48,6 +83,36 @@ def test_greenhouse_adapter_parses_board():
     assert fj.remote is True
     assert "payments" in fj.job.description
     assert "<b>" not in fj.job.description  # HTML stripped
+
+
+@respx.mock
+def test_greenhouse_adapter_handles_real_double_encoded_content():
+    """Real Greenhouse boards double-encode `content` (see TestHtmlToText)."""
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 456,
+                        "title": "Backend Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "https://boards.greenhouse.io/stripe/jobs/456",
+                        "content": "&lt;div&gt;&lt;p&gt;Build &lt;b&gt;payments&lt;/b&gt;.&lt;/p&gt;&lt;/div&gt;",
+                    }
+                ]
+            },
+        )
+    )
+    src = GreenhouseSource("stripe", company_name="Stripe")
+    with httpx.Client() as client:
+        jobs = src.fetch(client)
+    desc = jobs[0].job.description
+    assert "payments" in desc
+    assert "<div" not in desc
+    assert "<b>" not in desc
 
 
 @respx.mock
@@ -189,6 +254,37 @@ def test_remotive_adapter_is_always_remote():
         )
     )
     src = RemotiveSource()
+    with httpx.Client() as client:
+        jobs = src.fetch(client)
+    assert jobs[0].remote is True
+
+
+@respx.mock
+def test_themuse_adapter_detects_bare_remote_location():
+    """The existing fixture's "Flexible / Remote" location contains both
+    words, so it couldn't distinguish a "flexible"-substring check from a
+    "remote"-substring one -- the adapter used to check for "flexible",
+    inconsistent with every other adapter's "remote" check, which silently
+    mis-tagged a bare "Remote" location (with no "flexible" in it) as
+    non-remote."""
+    respx.get(url__regex=r"https://www\.themuse\.com/api/public/v2/jobs.*").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 88,
+                        "name": "Data Engineer",
+                        "company": {"name": "Acme"},
+                        "locations": [{"name": "Remote"}],
+                        "refs": {"landing_page": "https://muse.example/88"},
+                        "contents": "<p>Pipelines.</p>",
+                    }
+                ]
+            },
+        )
+    )
+    src = TheMuseSource()
     with httpx.Client() as client:
         jobs = src.fetch(client)
     assert jobs[0].remote is True

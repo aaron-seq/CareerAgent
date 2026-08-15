@@ -45,6 +45,31 @@ test('unknown fields return null', () => {
   assert.equal(mapFieldToProfileKey(null), null);
 });
 
+test('a bare "URL" suffix does not steal unrelated service fields', () => {
+  // Seen on a real live Lever form: "Twitter URL" was wrongly mapped to
+  // "portfolio" because the portfolio rule used to match on "url" alone.
+  // There's no profile key for Twitter, so it should now map to nothing.
+  assert.equal(mapFieldToProfileKey({ label: 'Twitter URL' }), null);
+  // Fields that are actually about the portfolio/website still match.
+  assert.equal(mapFieldToProfileKey({ label: 'Portfolio URL' }), 'portfolio');
+  assert.equal(mapFieldToProfileKey({ label: 'Personal Website' }), 'portfolio');
+});
+
+test('short keywords do not false-positive inside unrelated words', () => {
+  // Seen on a real live Greenhouse posting: a custom question labeled
+  // "...complete the Constellation application form" was wrongly mapped to
+  // "phone" because "tel" is a substring of "Constellation".
+  assert.equal(
+    mapFieldToProfileKey({ label: 'Please complete the Constellation application form' }),
+    null
+  );
+  // But real phone labels/abbreviations still match, including a trailing
+  // colon (a very common label convention this fix must not break).
+  assert.equal(mapFieldToProfileKey({ label: 'Tel:' }), 'phone');
+  assert.equal(mapFieldToProfileKey({ label: 'Home tel number' }), 'phone');
+  assert.equal(mapFieldToProfileKey({ label: 'Telephone' }), 'phone');
+});
+
 test('fillValueFor resolves values from the profile', () => {
   const profile = { email: 'a@b.com', firstName: 'Ada', lastName: 'Lovelace' };
   assert.equal(fillValueFor({ autocomplete: 'email' }, profile), 'a@b.com');

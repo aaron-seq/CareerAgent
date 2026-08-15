@@ -18,9 +18,30 @@ from .base import FetchedJob, JobSource
 
 
 def html_to_text(html: Optional[str]) -> str:
+    """Strip HTML down to plain text.
+
+    Greenhouse's `content` field is double-encoded: the JSON value is itself
+    HTML-escaped HTML (literal "&lt;div&gt;" instead of "<div>"). A single
+    BeautifulSoup pass only unwraps that outer escaping -- there's no real
+    tag structure yet, so get_text() returns the now-revealed-but-still-
+    tagged markup as plain text (confirmed against a live Greenhouse job:
+    "<div>...</div>" showed up verbatim in the stored description). Looping
+    until a pass stops changing the string handles both single- and double-
+    encoded input; ordinary single-encoded HTML (Lever/Ashby) converges after
+    one pass, so this is a no-op cost for them. Bounded to avoid pathological
+    input looping indefinitely.
+    """
     if not html:
         return ""
-    return BeautifulSoup(html, "html.parser").get_text(separator="\n", strip=True)
+    text = html
+    for _ in range(3):
+        stripped = BeautifulSoup(text, "html.parser").get_text(
+            separator="\n", strip=True
+        )
+        if stripped == text:
+            break
+        text = stripped
+    return text
 
 
 class GreenhouseSource(JobSource):

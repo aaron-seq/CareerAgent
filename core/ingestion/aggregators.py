@@ -117,7 +117,7 @@ class TheMuseSource(JobSource):
                     job=job,
                     source=self.source,
                     source_id=str(item.get("id")),
-                    remote=bool(location and "flexible" in location.lower()),
+                    remote=bool(location and "remote" in location.lower()),
                     employment_type=item.get("type"),
                     date_posted=_parse_date(item.get("publication_date")),
                 )

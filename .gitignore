@@ -1,3 +1,6 @@
+# Claude Code agent worktrees (isolated checkouts for background agents)
+.claude/worktrees/
+
 # Python
 __pycache__/
 *.py[cod]

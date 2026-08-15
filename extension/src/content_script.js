@@ -43,13 +43,18 @@ function setNativeValue(el, value) {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function fillForm(profile) {
+function fillOnce(profile) {
   const inputs = document.querySelectorAll(
     'input[type=text], input[type=email], input[type=tel], input[type=url], input:not([type])'
   );
   let filled = 0;
   inputs.forEach((el) => {
     if (el.disabled || el.readOnly || el.value) return; // don't clobber
+    // Custom-dropdown widgets (React-select style comboboxes, seen on real
+    // Greenhouse forms for Country/custom questions) need a real option
+    // selected, not just a text value -- forcing text in leaves them looking
+    // filled without actually registering a valid selection.
+    if (el.getAttribute('role') === 'combobox') return;
     const value = CareerAgentFieldMapping.fillValueFor(describeField(el), profile);
     if (value) {
       setNativeValue(el, value);
@@ -57,6 +62,18 @@ function fillForm(profile) {
       filled += 1;
     }
   });
+  return filled;
+}
+
+function fillForm(profile) {
+  const filled = fillOnce(profile);
+  // ponytail: some ATS forms (observed live on Greenhouse) still finish a
+  // React hydration-mismatch recovery shortly after document_idle, which can
+  // silently wipe a field we just filled. One delayed re-pass self-heals
+  // that race; it's not a MutationObserver watch, so a slower/second
+  // recovery after ~800ms could still win -- upgrade to an observer if that
+  // shows up in practice.
+  setTimeout(() => fillOnce(profile), 800);
   return filled;
 }
 

@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+
+import core.db.tables as tables_module
 from core.db.crypto import decrypt, deterministic_hash, encrypt
 from core.db.repository import (
     ApplicationRepository,
@@ -200,3 +205,36 @@ def test_import_legacy_json(session, tmp_path):
 def test_import_legacy_json_missing_dir_is_safe(session, tmp_path):
     counts = import_legacy_json(session, str(tmp_path / "nope"))
     assert counts == {"job_postings": 0, "cv_profiles": 0, "email_drafts": 0}
+
+
+# --------------------------------------------------------------------------- #
+# Hot-reload safety
+# --------------------------------------------------------------------------- #
+
+
+def test_tables_module_survives_reload():
+    """Streamlit's dev server re-execs a changed module's whole import chain
+    on every save, which re-runs core.db.tables' class bodies against the
+    same shared SQLModel.metadata. Naively silencing the resulting
+    InvalidRequestError with extend_existing=True merges into the existing
+    Table instead of replacing it, which duplicates auto-created indexes on
+    every reload and then breaks create_all() against a fresh database.
+    Reload twice (to catch accumulation, not just the first re-registration)
+    and build a real database from the result to catch both failure modes.
+    """
+    importlib.reload(tables_module)
+    importlib.reload(tables_module)
+
+    company = tables_module.SQLModel.metadata.tables["company"]
+    index_names = [ix.name for ix in company.indexes]
+    assert len(index_names) == len(set(index_names)), (
+        f"duplicate indexes after reload: {index_names}"
+    )
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    try:
+        tables_module.SQLModel.metadata.create_all(engine)  # must not raise
+    finally:
+        engine.dispose()

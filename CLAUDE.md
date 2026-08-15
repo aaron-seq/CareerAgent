@@ -14,8 +14,14 @@ available as an opt-in alternative (ADR 0005).
 
 ## Architecture snapshot (current)
 - **UI:** Streamlit single-file `app.py` (6 screens: Onboarding, Job Discovery,
-  Pipeline, Contact Finder, Draft Studio, Export & Logs). Calls into `core/`
-  only through `core/facade.py` — no business logic in `app.py` itself.
+  Pipeline, Contact Finder, Draft Studio, Export & Logs). No business logic
+  lives in `app.py` itself. In practice it calls `core/` two ways: the
+  DB-backed platform services (ingestion, matching, resume, tracking,
+  outreach, analytics) go through `core/facade.py`; the original CV/contact/
+  personalization/Gmail/storage modules are instantiated directly by
+  `app.py` (`CVParser`, `JobFinder`, `ContactFinder`, `PersonalizationEngine`,
+  `DraftValidator`, `GmailDraftClient`, `LocalStorage`) — a repo-audit finding
+  (2026-08) worth routing through the facade too, not yet done.
 - **Logic:** `core/` package — see `ARCHITECTURE.md` for the full module map
   (ingestion, matching, resume, tracking, outreach, enrichment, analytics,
   db, plus the original CV/contact/personalization/LLM modules).
@@ -61,8 +67,11 @@ available as an opt-in alternative (ADR 0005).
   schema in `.env.example`).
 - **Encrypt PII at rest** (resume/contact data) once the DB lands — `pgcrypto`
   or app-level Fernet (`cryptography`).
-- Keep PII-heavy work (resume parsing/tailoring) on the **local** LLM; reserve
-  cloud free tiers for non-PII scale tasks (job extraction, dedup).
+- Keep PII-heavy work (resume parsing/tailoring) on the **local** LLM by
+  default; reserve cloud free tiers for non-PII scale tasks (job extraction,
+  dedup). Narrowed by ADR 0005: the user can opt into a cloud provider (Groq)
+  for PII-heavy work too, per-session, with the tradeoff surfaced at the
+  point of choice — see that ADR before treating "local for PII" as absolute.
 
 ## Ethics guardrails (non-negotiable)
 1. **Human-in-the-loop before every submit** — autofill fills, the human
@@ -103,3 +112,12 @@ ruff check .                 # lint
   `package.json`; tests via `node --test`, run from inside `extension/`).
   It's outside the Python package and untouched by root `pytest`/`ruff`/
   `mypy`.
+- `mypy .` cannot complete on this machine's global environment as of
+  2026-08: `requirements-test.txt` pins `mypy==1.7.1` (Nov 2023), but
+  `numpy`'s installed stub file uses PEP 695 `type` statement syntax that
+  version can't parse, so the run aborts before checking any project code.
+  Low severity in practice — `pyproject.toml` already marks mypy advisory,
+  and CI installs an unpinned newer `mypy` with `continue-on-error: true` —
+  but the exact `pip install -r requirements-test.txt` + `mypy .` path this
+  doc describes for local dev doesn't work as written. Fix is bumping the
+  `mypy` pin; not done here since it's a version-pin decision, not a bug.
