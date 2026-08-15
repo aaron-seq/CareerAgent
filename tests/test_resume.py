@@ -162,3 +162,39 @@ def test_assert_no_fabrication_catches_injected_skill():
     except FabricationError:
         raised = True
     assert raised
+
+
+def test_assert_no_fabrication_catches_recombined_title_and_company():
+    """Company and title must match as a PAIR, not independently.
+
+    Checking each field against its own set (all real companies, all real
+    titles) would pass a resume claiming "Manager at Analytical Engines" for
+    a candidate who was only ever "Engineer at Analytical Engines" and
+    "Manager at Babbage Ltd" -- both fields are individually real, just
+    never true together.
+    """
+    cv = _sample_cv()
+    cv = cv.model_copy(
+        update={
+            "experiences": cv.experiences
+            + [
+                Experience(
+                    title="Manager",
+                    company="Babbage Ltd",
+                    duration="2018-2020",
+                    achievements=["Shipped the difference engine"],
+                )
+            ]
+        }
+    )
+    recombined = cv.model_copy(
+        update={
+            "experiences": [cv.experiences[0].model_copy(update={"title": "Manager"})]
+        }
+    )
+    try:
+        assert_no_fabrication(cv, recombined)
+        raised = False
+    except FabricationError:
+        raised = True
+    assert raised

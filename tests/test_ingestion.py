@@ -259,6 +259,37 @@ def test_remotive_adapter_is_always_remote():
     assert jobs[0].remote is True
 
 
+@respx.mock
+def test_themuse_adapter_detects_bare_remote_location():
+    """The existing fixture's "Flexible / Remote" location contains both
+    words, so it couldn't distinguish a "flexible"-substring check from a
+    "remote"-substring one -- the adapter used to check for "flexible",
+    inconsistent with every other adapter's "remote" check, which silently
+    mis-tagged a bare "Remote" location (with no "flexible" in it) as
+    non-remote."""
+    respx.get(url__regex=r"https://www\.themuse\.com/api/public/v2/jobs.*").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 88,
+                        "name": "Data Engineer",
+                        "company": {"name": "Acme"},
+                        "locations": [{"name": "Remote"}],
+                        "refs": {"landing_page": "https://muse.example/88"},
+                        "contents": "<p>Pipelines.</p>",
+                    }
+                ]
+            },
+        )
+    )
+    src = TheMuseSource()
+    with httpx.Client() as client:
+        jobs = src.fetch(client)
+    assert jobs[0].remote is True
+
+
 # --------------------------------------------------------------------------- #
 # IngestionService: persistence + idempotency + error isolation
 # --------------------------------------------------------------------------- #

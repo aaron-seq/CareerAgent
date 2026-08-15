@@ -39,14 +39,24 @@ def _skill_set(cv: CVProfile) -> set[str]:
 
 
 def assert_no_fabrication(original: CVProfile, tailored: CVProfile) -> None:
-    """Guarantee the tailored resume adds no new skills/companies/titles."""
+    """Guarantee the tailored resume adds no new skills, and no experience
+    entry claims a (company, title) combination the candidate didn't
+    actually hold.
+
+    Checking company and title against independent sets (rather than as a
+    pair) would pass a resume claiming "Manager at Foo" for a candidate who
+    was only ever "Engineer at Foo" and "Manager at Bar" -- both fields are
+    individually real, just never true together. Unreachable through
+    tailor_resume() today (it only reorders existing Experience objects,
+    never recombines their fields), but this function's contract should
+    hold regardless of how it's called.
+    """
     orig_skills = set(original.skills)
     if not set(tailored.skills).issubset(orig_skills):
         raise FabricationError("Tailored resume introduced new skills.")
-    orig_companies = {e.company for e in original.experiences}
-    orig_titles = {e.title for e in original.experiences}
+    orig_pairs = {(e.company, e.title) for e in original.experiences}
     for exp in tailored.experiences:
-        if exp.company not in orig_companies or exp.title not in orig_titles:
+        if (exp.company, exp.title) not in orig_pairs:
             raise FabricationError("Tailored resume introduced new experience.")
 
 
