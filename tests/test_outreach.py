@@ -66,6 +66,41 @@ def test_verify_email_unknown_mx_not_blocked():
     assert r.has_mx is None and r.deliverable is True
 
 
+def test_default_resolver_distinguishes_nonexistent_from_transient_error(monkeypatch):
+    from core.outreach.verification import _default_resolver
+    import sys
+    from types import ModuleType
+
+    # Mock dnspython
+    mock_dns = ModuleType("dns")
+    mock_resolver = ModuleType("resolver")
+    class NXDOMAIN(Exception): pass
+    class NoAnswer(Exception): pass
+    class Timeout(Exception): pass
+
+    mock_resolver.NXDOMAIN = NXDOMAIN
+    mock_resolver.NoAnswer = NoAnswer
+    mock_resolver.Timeout = Timeout
+
+    def resolve_fake(domain, rdtype):
+        if domain == "nxdomain.com":
+            raise NXDOMAIN()
+        if domain == "timeout.com":
+            raise Timeout()
+        class Answer:
+            exchange = "mx.example.com."
+        return [Answer()]
+
+    mock_resolver.resolve = resolve_fake
+    mock_dns.resolver = mock_resolver
+    monkeypatch.setitem(sys.modules, "dns", mock_dns)
+    monkeypatch.setitem(sys.modules, "dns.resolver", mock_resolver)
+
+    assert _default_resolver("nxdomain.com") == []
+    assert _default_resolver("timeout.com") is None
+    assert _default_resolver("example.com") == ["mx.example.com"]
+
+
 # --------------------------------------------------------------------------- #
 # Compliance footer
 # --------------------------------------------------------------------------- #
