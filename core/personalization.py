@@ -124,6 +124,11 @@ class PersonalizationEngine:
             company_name=job_posting.company,
             candidate_name=cv_profile.name or "I",
             anchor_project=project_name,
+            # WHATSAPP_DRAFT_PROMPT's example line references {project}
+            # (distinct from the {anchor_project} placeholder used in the
+            # main body) -- str.format needs both keys present or it raises
+            # KeyError before the prompt ever reaches the LLM.
+            project=project_name,
             metric=metric,
             link=project_link,
         )

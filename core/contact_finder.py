@@ -174,6 +174,68 @@ class ContactFinder:
             confidence_score=confidence,
         )
 
+    # Words that show up capitalized in recruiting-page titles but are never
+    # part of a person's name (team labels, role words, generic CTAs). The
+    # capitalized-first-letter heuristic below can't tell "Jane Smith" from
+    # "Hiring Committee" without this.
+    _NON_NAME_WORDS = {
+        "hiring",
+        "team",
+        "committee",
+        "talent",
+        "acquisition",
+        "recruiting",
+        "recruiter",
+        "careers",
+        "jobs",
+        "apply",
+        "now",
+        "join",
+        "our",
+        "we",
+        "human",
+        "resources",
+        "people",
+        "operations",
+        "staffing",
+        "department",
+        "group",
+        "manager",
+        "director",
+        "engineer",
+        "developer",
+        "lead",
+        "senior",
+        "staff",
+        "officer",
+        "executive",
+        "specialist",
+        "coordinator",
+        "analyst",
+        "associate",
+        "president",
+        "chief",
+        "head",
+        "position",
+        "opening",
+        "opportunity",
+        "role",
+        "job",
+    }
+
+    def _looks_like_name(self, candidate: str) -> bool:
+        """Reject obvious non-names: shouting-case labels and role/recruiting words."""
+        words = candidate.split()
+        if not words:
+            return False
+        # "TALENT ACQUISITION" / "ENGINEERING MANAGER" -- all-caps titles are
+        # team or role labels, not how a real name is capitalized in a title.
+        if candidate.isupper():
+            return False
+        if any(w.strip(",.").lower() in self._NON_NAME_WORDS for w in words):
+            return False
+        return True
+
     def _extract_name_from_title(self, title: str) -> Optional[str]:
         """Extract person name from title"""
         # LinkedIn pattern: "Name - Position | LinkedIn"
@@ -181,14 +243,16 @@ class ContactFinder:
             parts = title.split("|")[0].strip()
             if "-" in parts:
                 name = parts.split("-")[0].strip()
-                return name
+                return name if self._looks_like_name(name) else None
 
         # General pattern: look for capitalized words
         words = title.split()
         if len(words) >= 2:
             # Check if first two words are capitalized (likely a name)
             if words[0][0].isupper() and words[1][0].isupper():
-                return f"{words[0]} {words[1]}"
+                candidate = f"{words[0]} {words[1]}"
+                if self._looks_like_name(candidate):
+                    return candidate
 
         return None
 
