@@ -41,11 +41,15 @@ class Digest:
                 lines.append(f"  - {meta}")
         return "\n".join(lines) + "\n"
 
-    def to_rss(self, feed_title: str = "CareerAgent Jobs") -> str:
+    def to_rss(self, feed_title: str = "CareerAgent Jobs", feed_link: str = "") -> str:
+        # RSS 2.0 requires <link> on <channel>; fall back to the top item's
+        # URL so feeds validate even when the caller has no site URL to pass.
+        link = feed_link or next((it.url for it in self.items if it.url), "")
         parts = [
             '<?xml version="1.0" encoding="UTF-8"?>',
             '<rss version="2.0"><channel>',
             f"<title>{escape(feed_title)}</title>",
+            f"<link>{escape(link)}</link>",
             "<description>Matched job postings from CareerAgent</description>",
         ]
         for it in self.items:

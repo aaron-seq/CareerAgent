@@ -64,6 +64,27 @@ class TestVerifyGrounded:
         cv.experiences[0].metrics.append("Processed 2100+ samples")
         assert verify_grounded(cv, _job(), "I processed 2,100+ samples.") == []
 
+    def test_decimal_metric_quoted_from_the_cv_is_accepted(self):
+        """Live-testing bug: a real CV metric with a decimal point ("99.5%")
+        always false-triggered. `_normalize_number` stripped commas/
+        whitespace from the CV corpus but kept the decimal point, while the
+        letter-side claim stripped every non-digit character including the
+        point -- "99.5%" in the CV stayed "99.5" but the same number quoted
+        in a letter reduced to "995", never a substring of "99.5". Found via
+        6/10 real Groq-generated letters rejecting a true CV metric."""
+        cv = _cv()
+        cv.experiences[0].metrics.append(
+            "Improved pipeline reliability from 92% to 99.5% uptime"
+        )
+        letter = "I improved pipeline reliability to 99.5% uptime."
+        assert verify_grounded(cv, _job(), letter) == []
+
+    def test_invented_decimal_metric_is_still_flagged(self):
+        """The digit-only normalization fix must not loosen true-positive
+        detection: a decimal metric absent from the CV is still caught."""
+        flagged = verify_grounded(_cv(), _job(), "I increased revenue by 12.7%.")
+        assert any("12.7" in f for f in flagged)
+
 
 class TestGenerateCoverLetter:
     def test_rejects_letter_citing_unsupported_metric(self):
@@ -83,6 +104,23 @@ class TestGenerateCoverLetter:
         }
         with pytest.raises(FabricationError, match="employer not in the CV"):
             generate_cover_letter(llm, _cv(), _job())
+
+    def test_accepts_counted_idiom_after_at_as_not_an_employer_claim(self):
+        """Manual live-testing repro: "at Fortune 500 companies" is a scale
+        idiom, not a claimed employer, but the "at" + capitalized-word regex
+        captured just "Fortune" (digits aren't in its char class, so "500"
+        breaks the phrase) and treated it as a fabricated employer name."""
+        llm = Mock()
+        llm.generate_json.return_value = {
+            "letter": (
+                "I have thrived at Fortune 500 companies and want to bring "
+                "that rigor to Acme, building on my time at Baker Hughes "
+                "where I reduced service downtime by 70%."
+            ),
+            "gaps": [],
+        }
+        letter, _report = generate_cover_letter(llm, _cv(), _job())
+        assert "Fortune 500" in letter
 
     def test_accepts_grounded_letter_and_reports_gaps(self):
         llm = Mock()

@@ -194,7 +194,7 @@ Return ONLY valid JSON:
     "message": "WhatsApp message text"
 }}
 
-Example style: "I'm {candidate_name}, built {project} that {metric}. Saw your {job_title} role at {company_name}. Would love a quick 10-min call to discuss fit. Available this week?"
+Example style: "I'm {candidate_name}, built {anchor_project} that {metric}. Saw your {job_title} role at {company_name}. Would love a quick 10-min call to discuss fit. Available this week?"
 
 Return ONLY valid JSON."""
 

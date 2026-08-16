@@ -260,6 +260,27 @@ def test_remotive_adapter_is_always_remote():
 
 
 @respx.mock
+def test_remotive_adapter_forwards_search_term():
+    """Remotive's API supports a `search` param (full-text, distinct from
+    `category`) per its docs (github.com/remotive-io/remote-jobs-api). The
+    adapter used to only wire up `category`, so a caller-supplied `search`
+    was silently swallowed into **params and never reached the request --
+    ingest_aggregator("remotive", search=...) looked like a scoped pull but
+    actually fetched the unfiltered feed."""
+    route = respx.get(url__regex=r"https://remotive\.com/api/remote-jobs.*").mock(
+        return_value=httpx.Response(200, json={"jobs": []})
+    )
+    src = RemotiveSource()
+    with httpx.Client() as client:
+        src.fetch(client, search="data engineer")
+    assert route.called
+    requested_url = str(route.calls.last.request.url)
+    assert "search=data+engineer" in requested_url or "search=data%20engineer" in (
+        requested_url
+    )
+
+
+@respx.mock
 def test_themuse_adapter_detects_bare_remote_location():
     """The existing fixture's "Flexible / Remote" location contains both
     words, so it couldn't distinguish a "flexible"-substring check from a
