@@ -47,8 +47,10 @@ def _default_resolver(domain: str) -> Optional[list[str]]:
     try:
         answers = dns.resolver.resolve(domain, "MX")
         return [str(r.exchange).rstrip(".") for r in answers]
-    except Exception:
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
         return []
+    except Exception:
+        return None
 
 
 def verify_email(
