@@ -8,7 +8,13 @@ import httpx
 import pytest
 import respx
 
-from core.alerting import TelegramEmitter, build_digest
+from core.alerting import (
+    Digest,
+    DigestItem,
+    DiscordEmitter,
+    TelegramEmitter,
+    build_digest,
+)
 from core.db.repository import CompanyRepository, JobRepository
 from core.enrichment import (
     CompanyEnricher,
@@ -281,3 +287,101 @@ def test_telegram_emitter_sends(session):
     with httpx.Client() as client:
         assert emitter.send(digest, client) is True
     assert route.called
+
+
+@respx.mock
+def test_telegram_emitter_truncates_oversized_digest():
+    """Bot API rejects text over 4096 chars; must truncate, not fail outright."""
+    route = respx.post("https://api.telegram.org/bot123:abc/sendMessage").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    digest = Digest(
+        items=[
+            DigestItem(
+                title=f"Role {i}" * 20, company=f"Co{i}", url=f"https://x/{i}", score=90
+            )
+            for i in range(50)
+        ]
+    )
+    assert len(digest.to_markdown()) > 4096  # sanity: the digest is actually oversized
+
+    emitter = TelegramEmitter("123:abc", "@me")
+    with httpx.Client() as client:
+        assert emitter.send(digest, client) is True
+    sent_text = route.calls.last.request.content
+    import json as _json
+
+    payload = _json.loads(sent_text)
+    assert len(payload["text"]) <= 4096
+
+
+@respx.mock
+def test_telegram_emitter_reports_failure(session):
+    respx.post("https://api.telegram.org/bot123:abc/sendMessage").mock(
+        return_value=httpx.Response(400, json={"ok": False})
+    )
+    digest = build_digest([])
+    emitter = TelegramEmitter("123:abc", "@me")
+    with httpx.Client() as client:
+        assert emitter.send(digest, client) is False
+
+
+@respx.mock
+def test_discord_emitter_sends():
+    route = respx.post("https://discord.com/api/webhooks/abc/xyz").mock(
+        return_value=httpx.Response(204)
+    )
+    digest = Digest(
+        items=[DigestItem(title="A", company="X", url="https://x/1", score=80)]
+    )
+    emitter = DiscordEmitter("https://discord.com/api/webhooks/abc/xyz")
+    with httpx.Client() as client:
+        assert emitter.send(digest, client) is True
+    assert route.called
+
+
+@respx.mock
+def test_discord_emitter_reports_failure():
+    respx.post("https://discord.com/api/webhooks/abc/xyz").mock(
+        return_value=httpx.Response(404)
+    )
+    digest = build_digest([])
+    emitter = DiscordEmitter("https://discord.com/api/webhooks/abc/xyz")
+    with httpx.Client() as client:
+        assert emitter.send(digest, client) is False
+
+
+def test_rss_channel_has_required_link_element():
+    """RSS 2.0 requires <link> on <channel>; falls back to the top item's URL."""
+    import xml.etree.ElementTree as ET
+
+    digest = Digest(
+        items=[
+            DigestItem(
+                title="A", company="X", url="https://acme.example/jobs/1", score=90
+            )
+        ]
+    )
+    rss = digest.to_rss()
+    root = ET.fromstring(rss)
+    channel = root.find("channel")
+    assert channel.find("link") is not None
+    assert channel.find("link").text == "https://acme.example/jobs/1"
+
+
+def test_rss_channel_link_explicit_override():
+    import xml.etree.ElementTree as ET
+
+    digest = Digest(items=[])
+    rss = digest.to_rss(feed_link="https://careeragent.local/feed")
+    root = ET.fromstring(rss)
+    assert root.find("channel/link").text == "https://careeragent.local/feed"
+
+
+def test_empty_digest_still_valid_rss_and_markdown():
+    import xml.etree.ElementTree as ET
+
+    digest = Digest(items=[])
+    assert "No new matching jobs" in digest.to_markdown()
+    root = ET.fromstring(digest.to_rss())  # must not raise
+    assert root.find("channel/link") is not None
