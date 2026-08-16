@@ -131,10 +131,14 @@ class RemotiveSource(JobSource):
     source = "remotive"
 
     def fetch(
-        self, client: httpx.Client, category: str = "", **params
+        self, client: httpx.Client, category: str = "", search: str = "", **params
     ) -> list[FetchedJob]:
         url = "https://remotive.com/api/remote-jobs"
-        query = {"category": category} if category else {}
+        query = {}
+        if category:
+            query["category"] = category
+        if search:
+            query["search"] = search
         data = self._get_json(client, url, params=query)
         jobs: list[FetchedJob] = []
         for item in data.get("jobs", []):
