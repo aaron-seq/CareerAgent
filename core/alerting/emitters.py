@@ -26,7 +26,12 @@ class TelegramEmitter:
             url,
             json={
                 "chat_id": self.chat_id,
-                "text": digest.to_markdown(),
+                # Bot API caps message text at 4096 chars; a large digest would
+                # otherwise get silently rejected (400) instead of delivered
+                # truncated, same as DiscordEmitter already truncates to 2000.
+                # ponytail: hard truncation, split into multiple sends if a
+                # digest routinely needs more than ~15 items.
+                "text": digest.to_markdown()[:4096],
                 "parse_mode": "Markdown",
                 "disable_web_page_preview": True,
             },

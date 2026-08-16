@@ -119,6 +119,26 @@ def test_render_pdf_handles_unicode_summary():
     assert pdf.startswith(b"%PDF")
 
 
+def test_render_pdf_roundtrips_expected_text(tmp_path):
+    """Render, then extract the text back out with pdfplumber and confirm the
+    real content -- not just PDF magic bytes -- made it onto the page."""
+    import pdfplumber
+
+    cv = _sample_cv()
+    pdf_bytes = render_pdf(to_json_resume(cv))
+    pdf_path = tmp_path / "resume.pdf"
+    pdf_path.write_bytes(pdf_bytes)
+
+    with pdfplumber.open(pdf_path) as pdf:
+        text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+
+    assert "Ada Lovelace" in text
+    assert "ada@example.com" in text
+    assert "Analytical Engines" in text
+    assert "Cut latency by 40%" in text
+    assert "Python" in text and "SQL" in text and "Docker" in text
+
+
 # --------------------------------------------------------------------------- #
 # Tailoring (truthful)
 # --------------------------------------------------------------------------- #

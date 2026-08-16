@@ -51,6 +51,14 @@ def test_funnel_counts_and_conversion(session):
     assert abs(conv - (2 / 3)) < 1e-9
 
 
+def test_funnel_empty_pipeline_does_not_divide_by_zero():
+    funnel = compute_funnel([])
+    assert funnel.total == 0
+    assert all(v == 0 for v in funnel.reached.values())
+    conv = funnel.conversion(ApplicationStatus.APPLIED, ApplicationStatus.SCREENING)
+    assert conv == 0.0  # no ZeroDivisionError
+
+
 def test_variant_response_rates():
     records = [
         ("technical", True),
@@ -77,3 +85,20 @@ def test_generate_interview_questions_from_jd():
     assert any("inference latency" in q for q in qs)
     assert len(qs) <= 8
     assert len(qs) == len(set(qs))  # de-duplicated
+
+
+def test_generate_interview_questions_falls_back_to_generic_when_jd_unstructured():
+    """Live-verified gap: real ATS ingestion never populates tech_stack /
+    requirements / problems (only raw ``description`` text), so real jobs get
+    only the generic behavioral questions -- no JD-specific ones. Pins that
+    documented behavior so a future JD-extraction fix has a test to update.
+    """
+    job = JobPosting(
+        title="Account Executive", company="GitLab", description="7000 chars of JD..."
+    )
+    qs = generate_interview_questions(job, limit=10)
+    assert qs == [
+        "Tell me about a time you disagreed with a teammate and how you resolved it.",
+        "Describe a project you're most proud of and your specific contribution.",
+        "Tell me about a time you failed and what you learned.",
+    ]
