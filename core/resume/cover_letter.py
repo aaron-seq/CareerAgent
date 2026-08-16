@@ -49,7 +49,21 @@ def _cv_corpus(cv: CVProfile) -> str:
 
 
 def _normalize_number(token: str) -> str:
-    return re.sub(r"[,\s]", "", token).lower()
+    """Strip to digits only -- the same reduction applied to a letter's claim
+    below, so both sides compare on the same footing.
+
+    Previously this only stripped commas/whitespace and kept the decimal
+    point, while the claim side (``digits`` below) stripped every non-digit
+    character. A CV metric like "99.5%" therefore stayed "99.5" in the
+    supported corpus while the identical number quoted back in a letter
+    reduced to "995" -- never a substring of "99.5" because of the period in
+    between. Any decimal-point metric was guaranteed to false-trigger the
+    fabrication guard even when quoted verbatim from the CV (confirmed live:
+    6 of 10 real Groq-generated letters were rejected over a true "99.5%"
+    CV metric). Digit-only on both sides restores the "matched on digits
+    alone" contract this function's docstring already promised.
+    """
+    return re.sub(r"[^\d]", "", token)
 
 
 def verify_grounded(cv: CVProfile, job: JobPosting, letter: str) -> list[str]:
@@ -78,7 +92,20 @@ def assert_no_fabrication(cv: CVProfile, job: JobPosting, letter: str) -> None:
     # employer of record yet.
     known.add((job.company or "").lower())
 
-    for phrase in re.findall(r"\bat ([A-Z][\w.&-]*(?: [A-Z][\w.&-]*)*)", letter):
+    for m in re.finditer(r"\bat ([A-Z][\w.&-]*(?: [A-Z][\w.&-]*)*)", letter):
+        phrase = m.group(1)
+        # A capitalized word right after "at", immediately followed by a
+        # number, is a counted idiom ("at Fortune 500 companies", "at Top 50
+        # firms") rather than an employer name -- the phrase itself matches
+        # `[A-Z][\w.&-]*` but stops at the digit (digits aren't in that
+        # class), so e.g. "Fortune 500" is captured as bare "Fortune" and
+        # read as a fabricated employer. Confirmed false-trigger: "I have
+        # thrived at Fortune 500 companies" raised FabricationError over
+        # 'Fortune'. Real employer names essentially never sit directly
+        # before a bare number in prose, so skipping this shape costs
+        # negligible true-positive coverage.
+        if re.match(r"\s*\d", letter[m.end() :]):
+            continue
         candidate = phrase.strip().lower()
         if candidate and not any(candidate.startswith(k) for k in known if k):
             raise FabricationError(
