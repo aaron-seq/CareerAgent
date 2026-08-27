@@ -9,7 +9,9 @@ combine them into a 0-1 score (higher = more likely a ghost) plus reasons.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
+
+from ..normalize import to_naive_utc, utc_now
 
 
 @dataclass
@@ -21,11 +23,11 @@ class GhostAssessment:
 def _age_days(date_posted: datetime | None, now: datetime) -> float | None:
     if date_posted is None:
         return None
-    if date_posted.tzinfo is not None:
-        date_posted = date_posted.astimezone(timezone.utc).replace(tzinfo=None)
-    if now.tzinfo is not None:
-        now = now.astimezone(timezone.utc).replace(tzinfo=None)
-    return (now - date_posted).total_seconds() / 86400.0
+    # Either side may arrive aware: ``date_posted`` comes from the boards via
+    # ``dateutil``, which keeps an offset when the source string has one, while
+    # rows reloaded from the DB are always naive. Both land on naive UTC before
+    # any arithmetic, so this never raises on a mixed pair.
+    return (to_naive_utc(now) - to_naive_utc(date_posted)).total_seconds() / 86400.0
 
 
 def ghost_score(
@@ -34,7 +36,7 @@ def ghost_score(
     repost_count: int = 0,
     description: str = "",
 ) -> GhostAssessment:
-    now = now or datetime.utcnow()
+    now = now or utc_now()
     score = 0.0
     reasons: list[str] = []
 

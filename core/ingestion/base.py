@@ -18,12 +18,30 @@ from datetime import datetime
 from typing import Optional
 
 import httpx
+from dateutil import parser as date_parser
 
 from ..db.repository import JobRepository
 from ..models import JobPosting
+from ..normalize import to_naive_utc
 
 DEFAULT_TIMEOUT = 15.0
 USER_AGENT = "CareerAgent/1.0 (+https://github.com/aaron-seq/CareerAgent)"
+
+
+def parse_date(value: Optional[str]) -> Optional[datetime]:
+    """Best-effort parse of a provider's date string; None if unusable.
+
+    Lives here rather than in ``aggregators`` so the ATS adapters can use it
+    too -- ``aggregators`` imports from ``ats``, so ``ats`` importing back
+    would be a cycle. ``aggregators._parse_date`` re-exports this name for the
+    existing callers.
+    """
+    if not value:
+        return None
+    try:
+        return date_parser.parse(value)
+    except (ValueError, OverflowError, TypeError):
+        return None
 
 
 @dataclass
@@ -101,7 +119,13 @@ class IngestionService:
             row.salary_max = fj.salary_max
             row.salary_currency = fj.salary_currency
             row.employment_type = fj.employment_type
-            row.date_posted = fj.date_posted
+            # Boards hand back aware datetimes whenever their date string
+            # carries an offset. The column is naive (SQLite DATETIME /
+            # Postgres timestamp-without-time-zone), so assigning an aware
+            # value drops the offset silently and stores e.g. +05:30 as if it
+            # were already UTC. Convert here -- every source converges on this
+            # one assignment, so it must not be patched per-connector.
+            row.date_posted = to_naive_utc(fj.date_posted) if fj.date_posted else None
             self.session.add(row)
             result.upserted += 1
         self.session.flush()

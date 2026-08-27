@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from xml.sax.saxutils import escape
 
+from ..normalize import utc_now
+
 
 @dataclass
 class DigestItem:
@@ -26,7 +28,7 @@ class DigestItem:
 @dataclass
 class Digest:
     items: list[DigestItem] = field(default_factory=list)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=utc_now)
 
     def to_markdown(self) -> str:
         if not self.items:

@@ -528,29 +528,32 @@ def page_discovery():
 
     elif mode == "Job boards (API)":
         st.caption(
-            "Structured results from aggregator APIs. Remotive needs no key; "
-            "The Muse works keyless at a lower rate limit; Adzuna requires "
-            "ADZUNA_APP_ID / ADZUNA_APP_KEY in your environment."
+            "Structured results from aggregator APIs. Remotive, Arbeitnow, "
+            "Jobicy, RemoteOK and Himalayas need no key; The Muse works "
+            "keyless at a lower rate limit; Adzuna requires ADZUNA_APP_ID / "
+            "ADZUNA_APP_KEY in your environment."
         )
         bcol1, bcol2 = st.columns([1, 2])
         with bcol1:
-            provider = st.selectbox("Provider", ["remotive", "themuse", "adzuna"])
+            provider = st.selectbox("Provider", facade.aggregator_providers())
+        searchable = facade.aggregator_supports_keywords(provider)
         with bcol2:
             keywords = st.text_input(
-                "Keywords (optional)", placeholder="machine learning"
+                "Keywords (optional)",
+                placeholder="machine learning",
+                disabled=not searchable,
+                help=(
+                    "This provider has no server-side search - it returns its "
+                    "newest postings. Filter them on the Pipeline screen."
+                )
+                if not searchable
+                else None,
             )
 
         if st.button("Search job boards", type="primary"):
             with st.spinner(f"Querying {provider}..."):
                 try:
-                    params = {}
-                    if keywords:
-                        # Each provider names its query parameter differently.
-                        if provider == "adzuna":
-                            params["what"] = keywords
-                        else:
-                            params["category"] = keywords
-                    result = facade.ingest_aggregator(provider, **params)
+                    result = facade.ingest_aggregator(provider, keywords=keywords)
                 except ValueError as e:
                     result = None
                     st.error(str(e))
@@ -572,11 +575,9 @@ def page_discovery():
                 else:
                     st.warning("No jobs returned. Try different keywords.")
 
-        if provider == "remotive":
-            st.caption(
-                "Remotive requires attribution: link back to the original "
-                "posting when sharing results."
-            )
+        notice = facade.attribution_notice(provider)
+        if notice:
+            st.caption(notice)
 
     elif mode == "Web Search (fallback)":
         st.caption(
@@ -1324,10 +1325,10 @@ def page_pipeline():
     with col1:
         slug = st.text_input(
             "Board slug",
-            placeholder="e.g. the company's Greenhouse/Lever/Ashby board name",
+            placeholder="the company's board name on the ATS you pick",
         )
     with col2:
-        ats_type = st.selectbox("ATS", ["greenhouse", "lever", "ashby"])
+        ats_type = st.selectbox("ATS", facade.ats_providers())
     with col3:
         company = st.text_input("Company name", placeholder="Display name")
 

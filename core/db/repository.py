@@ -10,13 +10,12 @@ jobs, ``email_hash`` for suppression) so re-ingesting is idempotent.
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from typing import Optional
 
 from sqlmodel import Session, select
 
 from ..models import CVProfile, EmailDraft, JobPosting
-from ..normalize import compute_dedup_key, normalize_company_name
+from ..normalize import compute_dedup_key, normalize_company_name, utc_now
 from .crypto import deterministic_hash
 from .tables import (
     ApplicationRow,
@@ -144,7 +143,7 @@ class JobRepository:
         ):
             setattr(existing, field, getattr(row, field))
         existing.dedup_key = row.dedup_key
-        existing.fetched_at = datetime.utcnow()
+        existing.fetched_at = utc_now()
         self.session.add(existing)
         self.session.flush()
         return existing

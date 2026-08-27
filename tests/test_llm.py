@@ -20,7 +20,7 @@ class TestCloudLLMClient:
     def test_defaults_to_groq(self):
         client = CloudLLMClient(api_key="test-key")
         assert client.base_url == "https://api.groq.com/openai/v1"
-        assert client.model == "llama-3.3-70b-versatile"
+        assert client.model == "openai/gpt-oss-120b"
         assert client._headers == {"Authorization": "Bearer test-key"}
 
     def test_trailing_slash_stripped(self):

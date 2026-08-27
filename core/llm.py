@@ -190,7 +190,11 @@ class LocalLLMClient:
 # Default free-tier cloud endpoint. Groq is OpenAI-compatible and serves the
 # same Llama family the local prompts are tuned for, so behaviour carries over.
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile"
+# Verified live against GET /openai/v1/models on 2026-08-27. Groq retires
+# models without notice -- llama-3.3-70b-versatile was the previous default
+# and every Llama chat model has since been withdrawn, which broke the whole
+# cloud path. Re-check this list before assuming a failure is a bug.
+GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b"
 
 
 class CloudLLMClient(LocalLLMClient):

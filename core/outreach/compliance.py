@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+from ..normalize import utc_now
+
 _FOOTER_MARKER = "-- \nThis message was sent by"
 
 
@@ -86,7 +88,7 @@ class LIARecord:
     purpose: str
     necessity: str
     balancing: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
 
     def is_complete(self) -> bool:
         return all([self.campaign, self.purpose, self.necessity, self.balancing])
@@ -106,16 +108,16 @@ class SendPolicy:
         self._sends = [t for t in self._sends if t >= cutoff]
 
     def can_send(self, now: datetime | None = None) -> bool:
-        now = now or datetime.utcnow()
+        now = now or utc_now()
         self._prune(now)
         return len(self._sends) < self.max_per_window
 
     def record(self, now: datetime | None = None) -> None:
-        now = now or datetime.utcnow()
+        now = now or utc_now()
         self._prune(now)
         self._sends.append(now)
 
     def remaining(self, now: datetime | None = None) -> int:
-        now = now or datetime.utcnow()
+        now = now or utc_now()
         self._prune(now)
         return max(0, self.max_per_window - len(self._sends))

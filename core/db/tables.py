@@ -19,12 +19,8 @@ from typing import Optional
 from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
+from ..normalize import utc_now
 from .crypto import EncryptedString
-
-
-def _utcnow() -> datetime:
-    return datetime.utcnow()
-
 
 # Streamlit's hot-reload re-execs this module's class bodies on every `.py`
 # save (any file -- it re-runs the whole import chain), which would
@@ -67,7 +63,7 @@ class Company(SQLModel, table=True):
     had_layoffs: Optional[bool] = None
     sponsors_visa: Optional[bool] = None
     blacklisted: bool = False
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class JobPostingRow(SQLModel, table=True):
@@ -89,7 +85,7 @@ class JobPostingRow(SQLModel, table=True):
     salary_currency: Optional[str] = None
     employment_type: Optional[str] = None
     date_posted: Optional[datetime] = None
-    fetched_at: datetime = Field(default_factory=_utcnow)
+    fetched_at: datetime = Field(default_factory=utc_now)
 
     # Enrichment / matching
     dedup_key: str = Field(default="", index=True)
@@ -118,7 +114,7 @@ class CVProfileRow(SQLModel, table=True):
     # Full CVProfile serialized + encrypted (contains raw resume text = PII).
     payload: Optional[str] = Field(default=None, sa_column=Column(EncryptedString))
     embedding: Optional[list] = Field(default=None, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class ContactRow(SQLModel, table=True):
@@ -135,7 +131,7 @@ class ContactRow(SQLModel, table=True):
     company_id: Optional[int] = Field(default=None, foreign_key="company.id")
     source: str = ""
     confidence_score: float = 0.0
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class EmailDraftRow(SQLModel, table=True):
@@ -154,7 +150,7 @@ class EmailDraftRow(SQLModel, table=True):
     word_count: int = 0
     gmail_draft_id: Optional[str] = None
     sent_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class ApplicationRow(SQLModel, table=True):
@@ -171,8 +167,8 @@ class ApplicationRow(SQLModel, table=True):
     applied_at: Optional[datetime] = None
     next_follow_up_at: Optional[datetime] = None
     notes: Optional[str] = None
-    created_at: datetime = Field(default_factory=_utcnow)
-    updated_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class SuppressionRow(SQLModel, table=True):
@@ -183,4 +179,4 @@ class SuppressionRow(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email_hash: str = Field(index=True, unique=True)
     reason: str = "opt_out"
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=utc_now)

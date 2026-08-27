@@ -35,17 +35,26 @@ from .enrichment import (
 )
 from .fetching import PoliteFetcher, RobotsDisallowed, detect, extract_jsonld_jobs
 from .ingestion import (
+    ATTRIBUTION,
     AdzunaSource,
+    ArbeitnowSource,
     AshbySource,
     GreenhouseSource,
+    HimalayasSource,
     IngestionResult,
     IngestionService,
+    JobicySource,
     LeverSource,
+    RecruiteeSource,
+    RemoteOKSource,
     RemotiveSource,
+    SmartRecruitersSource,
     TheMuseSource,
+    WorkableSource,
 )
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, JobPosting
+from .normalize import to_naive_utc
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
@@ -60,6 +69,18 @@ _ATS_SOURCES = {
     "greenhouse": GreenhouseSource,
     "lever": LeverSource,
     "ashby": AshbySource,
+    "smartrecruiters": SmartRecruitersSource,
+    "recruitee": RecruiteeSource,
+    "workable": WorkableSource,
+}
+
+#: Aggregator/board providers that need no credentials at all.
+_KEYLESS_AGGREGATORS = {
+    "remotive": RemotiveSource,
+    "arbeitnow": ArbeitnowSource,
+    "jobicy": JobicySource,
+    "remoteok": RemoteOKSource,
+    "himalayas": HimalayasSource,
 }
 
 
@@ -88,6 +109,11 @@ def load_cv(cv_id: int) -> Optional[CVProfile]:
 # --------------------------------------------------------------------------- #
 # Ingestion + matching
 # --------------------------------------------------------------------------- #
+
+
+def ats_providers() -> list[str]:
+    """Every company-board ATS ``ingest_ats`` accepts."""
+    return list(_ATS_SOURCES)
 
 
 def ingest_ats(
@@ -126,23 +152,58 @@ def link_companies(session) -> int:
     return linked
 
 
+#: Provider -> the query parameter it calls its free-text keyword search.
+#: Providers absent from this map are plain reverse-chronological feeds with
+#: no server-side search (verified live 2026-08-27), so a keyword is dropped
+#: rather than silently sent as a parameter the API ignores.
+_KEYWORD_PARAM = {
+    "adzuna": "what",
+    "themuse": "category",
+    "remotive": "search",
+    "jobicy": "tag",
+    "himalayas": "q",
+}
+
+
+def aggregator_providers() -> list[str]:
+    """Every aggregator/board provider ``ingest_aggregator`` accepts."""
+    return sorted({*_KEYLESS_AGGREGATORS, "themuse", "adzuna"})
+
+
+def aggregator_supports_keywords(provider: str) -> bool:
+    """Whether this provider can filter server-side on a keyword."""
+    return provider.lower() in _KEYWORD_PARAM
+
+
+def attribution_notice(provider: str) -> Optional[str]:
+    """The attribution text the UI must display for this source, if any."""
+    return ATTRIBUTION.get(provider.lower())
+
+
 def ingest_aggregator(
     provider: str,
     client=None,
+    keywords: str = "",
     **params: Any,
 ) -> IngestionResult:
-    """Pull jobs from a keyword-searchable aggregator.
+    """Pull jobs from an aggregator or public job board.
 
-    ``remotive`` needs no credentials. ``adzuna`` requires ADZUNA_APP_ID /
-    ADZUNA_APP_KEY and ``themuse`` optionally uses THEMUSE_API_KEY (a key
-    raises the rate limit); both are read from the environment.
+    ``remotive``, ``arbeitnow``, ``jobicy``, ``remoteok`` and ``himalayas``
+    need no credentials. ``adzuna`` requires ADZUNA_APP_ID / ADZUNA_APP_KEY
+    and ``themuse`` optionally uses THEMUSE_API_KEY (a key raises the rate
+    limit); both are read from the environment.
+
+    ``keywords`` is the provider-neutral search term -- it is mapped onto
+    whatever each API names that parameter, so callers (the UI) never have to
+    know. Providers with no server-side search ignore it.
     """
     import os
 
     init_persistence()
     provider = provider.lower()
-    if provider == "remotive":
-        source = RemotiveSource()
+    keyless = _KEYLESS_AGGREGATORS.get(provider)
+    if keyless is not None:
+        source = keyless()
     elif provider == "themuse":
         source = TheMuseSource(api_key=os.environ.get("THEMUSE_API_KEY"))
     elif provider == "adzuna":
@@ -155,6 +216,10 @@ def ingest_aggregator(
         source = AdzunaSource(app_id, app_key, country=params.pop("country", "gb"))
     else:
         raise ValueError(f"Unsupported aggregator: {provider}")
+
+    keyword_param = _KEYWORD_PARAM.get(provider)
+    if keywords and keyword_param:
+        params.setdefault(keyword_param, keywords)
 
     with get_session() as session:
         return IngestionService(session).ingest(source, client=client, **params)
@@ -479,7 +544,9 @@ def discover_from_url(url: str, client=None, fetcher=None) -> dict[str, Any]:
             row.salary_max = fj.salary_max
             row.salary_currency = fj.salary_currency
             row.employment_type = fj.employment_type
-            row.date_posted = fj.date_posted
+            # Same naive-UTC coercion as IngestionService.ingest -- JSON-LD
+            # `datePosted` is aware whenever the page supplies an offset.
+            row.date_posted = to_naive_utc(fj.date_posted) if fj.date_posted else None
             session.add(row)
             stored += 1
     return {

@@ -116,6 +116,104 @@ Fetch the careers page HTML, regex for these, then hit the corresponding public 
 | We Work Remotely | RSS feed | none | free | RSS only |
 | Careerjet | partner API | key | affiliate model | — |
 
+---
+
+### A1. Board expansion — LIVE-VERIFIED 2026-08-27
+
+Everything in this subsection was probed with a real GET and the field names
+read off the live response, not from docs. All seven were implemented
+(`core/ingestion/boards.py`, `core/ingestion/ats.py`) and re-verified end to
+end through the adapters on the same day; job counts are from that run.
+
+**Keyless boards (`core/ingestion/boards.py`)**
+
+| Source | Endpoint | Keyword param | Live count | Real field names |
+|---|---|---|---|---|
+| Arbeitnow | `www.arbeitnow.com/api/job-board-api` | none (`?page=` only) | 175 | `data[]`: `title`, `company_name`, `location`, `url`, `description` (HTML), `remote` (bool), `job_types`, `slug`, `created_at` (**int unix**) |
+| Jobicy | `jobicy.com/api/v2/remote-jobs` | `tag` (free text; `industry`/`geo` also work) | 20 | `jobs[]`: `jobTitle`, `companyName`, `jobGeo`, `url`, `jobDescription` (HTML), `jobType[]`, `pubDate` (ISO), `salaryMin`/`salaryMax`/`salaryCurrency` |
+| RemoteOK | `remoteok.com/api` | none | 99 | `position` (not `title`), `company`, `location`, `url`, `description`, `salary_min`/`salary_max`, `date` (ISO), `epoch` |
+| Himalayas | `himalayas.app/jobs/api`; `…/api/search` for `q` | `q` (**search endpoint only**) | 20 | `jobs[]`: `title`, `companyName`, `locationRestrictions[]`, `applicationLink`, `guid`, `description` (HTML), `employmentType`, `minSalary`/`maxSalary`/`currency`, `pubDate` (**int unix**) |
+
+**Company-board ATSs (`core/ingestion/ats.py`)**
+
+| Source | Endpoint | Live probe | Real field names |
+|---|---|---|---|
+| SmartRecruiters | `api.smartrecruiters.com/v1/companies/{slug}/postings` | `Ubisoft2` → 298 found, 5 pulled | list: `name` (title), `company.name`, `location{city,region,country,remote}`, `releasedDate`, `typeOfEmployment.label`. **No description in the list** |
+| Recruitee | `{slug}.recruitee.com/api/offers/` | `vandebron` → 12 | `offers[]`: `title`, `company_name`, `location`, `careers_url`, `description` (HTML), `salary{min,max,currency}`, `employment_type_code`, `published_at`, `remote` |
+| Workable | `apply.workable.com/api/v1/widget/accounts/{slug}?details=true` | `enfos-inc` → 6 | `jobs[]`: `title`, `shortcode`, `url`, `telecommuting` (remote flag), `employment_type`, `city`/`state`/`country`, `published_on`, `description` (needs `details=true`) |
+
+**Corrections to the notes above this section:**
+
+- **Recruitee:** a wrong slug returns a **JSON 404**, not a DNS error —
+  `*.recruitee.com` is a wildcard host. (Probed `recruitee`, `usabilla`,
+  `trengo`, `catawiki`, `picnic`, `mollie`, `bynder`, `sendcloud`, `framer`,
+  `otrium` → all 404; only `vandebron` resolved.) Handle `HTTPStatusError`,
+  not `ConnectError`.
+- **SmartRecruiters:** the "HTTP 200 `totalFound:0` for a wrong slug" warning
+  is **confirmed** and is worse than it reads — the slug is not the brand name.
+  `Ubisoft` returns `totalFound: 0`; the real slug is `Ubisoft2`. Twelve
+  plausible brand-name slugs (`Visa`, `Bosch`, `IKEA`, `Danone`, `Wolt`, …)
+  all returned 200/0. Never infer the slug from the company name.
+- **SmartRecruiters costs 1 + N requests.** The list response has no
+  description; it lives at `…/postings/{id}` under
+  `jobAd.sections.{jobDescription,qualifications}.text`, and `postingUrl` is
+  there too. The adapter defaults to `limit=25` to bound the fan-out, and
+  tolerates an individual detail call failing.
+- **Workable:** a dormant account still resolves — HTTP 200 with the correct
+  `name` and `jobs: []`. `typeform`, `hotjar`, `bolt`, `loom`, `sixt`,
+  `hubspot`, `moonpay`, `deel`, `glovo` and others all returned 0 jobs; they
+  are stale accounts, not a locked-down endpoint. An empty result is **not**
+  evidence of a bad slug. (`apply.workable.com/api/v3/accounts/{slug}/jobs`
+  POST agreed: `total: 0`.)
+- **Arbeitnow ships inconsistent JSON.** `job_types` is a PHP array serialized
+  to JSON, so a sparse one arrives as an **object keyed by the surviving
+  index** — `{"1": "manager"}` instead of `["manager"]`. 3 of 175 live
+  postings were shaped that way and `job_types[0]` raised `KeyError: 0`,
+  killing the entire page. Handled by `boards._first()`.
+- **Attribution is per-source and some of it is contractual.** RemoteOK's
+  element 0 is a legal notice, not a job: it demands a direct followed link
+  back and names suspension as the penalty. Jobicy (`friendlyNotice`) and
+  Arbeitnow (`meta.terms`) both ask for credit in the response body itself.
+  `boards.ATTRIBUTION` holds the per-source notice and the UI renders it.
+- **USAJOBS: researched, not implemented.** It needs an API key plus an email
+  address as the `User-Agent`, and its terms restrict data to the registering
+  organization with no resale without OPM approval. That sits badly with a
+  local-first personal tool, and it adds a second key-gated path for
+  US-federal-only jobs. Revisit only if US public-sector roles are wanted.
+
+### A2. Wellfound (formerly AngelList Talent) — NOT VIABLE, verified 2026-08-27
+
+**Verdict: no compliant free API or feed exists. Do not implement.** Four
+independent blockers, each sufficient on its own:
+
+1. **No public API.** `api.angel.co/1/jobs` → **404** (the old AngelList API is
+   gone). `api.wellfound.com/1/jobs` → **401** `{"error":"access_denied",
+   "error_description":"You must pass in an access token…"}` — OAuth-gated,
+   with no public/self-serve registration.
+2. **No JSON-LD to extract while logged out.** `wellfound.com/jobs` and
+   `wellfound.com/role/r/software-engineer` return HTTP 200 but contain
+   **zero** `application/ld+json` blocks and no `JobPosting` markup, and both
+   serve a Cloudflare **Turnstile** challenge. `wellfound.com/company/{slug}/jobs`
+   returns **403** with `noindex, nofollow`. So the JSON-LD technique that
+   works elsewhere has nothing to bite on here.
+3. **robots.txt disallows exactly the browse surface** — `/search`, `/_jobs/`,
+   and any URL carrying `?role=`, `?jobId=`, `?jobSlug=`.
+4. **ToS forbids it.** Wellfound's terms bar using "any automated system
+   (including a spider, robot, or offline reader)" and separately bar
+   "automated or non-automated harvesting, collection or 'scraping'" of
+   Content.
+
+Points 3 and 4 alone make this a breach of **ethics guardrail #3** in
+`CLAUDE.md`; point 2 means the only remaining route would be defeating a bot
+challenge, which is off-limits regardless.
+
+**Compliant substitute:** most Wellfound-listed startups also run a public
+Greenhouse, Lever or Ashby board — all three already supported, all keyless,
+and they return the employer-direct posting with a full description. Add the
+company's board slug on the Pipeline screen instead.
+
+---
+
 **LinkedIn / Indeed / Glassdoor — legal reality (2022–2025):**
 - **hiQ v. LinkedIn:** 9th Circuit (April 2022, reaffirming 2019, post-*Van Buren* remand) held that scraping **publicly available** data likely does NOT violate the CFAA ("without authorization" doesn't apply to public sites). **BUT** in Nov 2022, the N.D. Cal. district court ruled hiQ **breached LinkedIn's User Agreement** (contract claim) via scraping + fake accounts, and the parties settled with a consent judgment/permanent injunction.
 - **Takeaway:** Scraping public data ≠ CFAA crime, but violates the site's **contract/ToS**, which is separately enforceable. LinkedIn/Indeed/Glassdoor ToS all prohibit automated access. Logged-in scraping (using your account) is contract breach AND risks the account.

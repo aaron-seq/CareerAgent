@@ -192,6 +192,122 @@ def test_ingest_aggregator_unsupported(temp_db):
         facade.ingest_aggregator("linkedin")
 
 
+# --- Boards added 2026-08-27 ------------------------------------------------ #
+
+
+def test_provider_lists_cover_the_new_sources(temp_db):
+    assert set(facade.aggregator_providers()) == {
+        "adzuna",
+        "arbeitnow",
+        "himalayas",
+        "jobicy",
+        "remoteok",
+        "remotive",
+        "themuse",
+    }
+    assert set(facade.ats_providers()) == {
+        "greenhouse",
+        "lever",
+        "ashby",
+        "smartrecruiters",
+        "recruitee",
+        "workable",
+    }
+
+
+@respx.mock
+def test_ingest_aggregator_keyless_board_needs_no_credentials(temp_db, monkeypatch):
+    """A keyless board must work with a completely bare environment."""
+    for var in ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "THEMUSE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    respx.get("https://remoteok.com/api").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"legal": "attribution notice", "last_updated": 1},
+                {
+                    "id": "42",
+                    "position": "Platform Engineer",
+                    "company": "Acme",
+                    "location": "Worldwide",
+                    "description": "<p>Run the platform.</p>",
+                    "url": "https://remoteOK.com/remote-jobs/42",
+                    "date": "2026-08-25T18:50:43+00:00",
+                },
+            ],
+        )
+    )
+    with httpx.Client() as client:
+        result = facade.ingest_aggregator("remoteok", client=client)
+    assert result.fetched == 1  # the legal element is not a job
+    assert result.upserted == 1
+    assert facade.top_jobs()[0]["title"] == "Platform Engineer"
+
+
+@respx.mock
+def test_ingest_aggregator_maps_keywords_per_provider(temp_db):
+    """The UI passes a provider-neutral ``keywords``; the facade owns the
+    per-API parameter name so app.py holds no provider logic."""
+    route = respx.get(url__regex=r"https://jobicy\.com/api/v2/remote-jobs.*").mock(
+        return_value=httpx.Response(200, json={"jobs": []})
+    )
+    with httpx.Client() as client:
+        facade.ingest_aggregator("jobicy", client=client, keywords="python")
+    assert "tag=python" in str(route.calls.last.request.url)
+
+
+@respx.mock
+def test_ingest_aggregator_drops_keywords_for_unsearchable_boards(temp_db):
+    """Arbeitnow has no server-side search, so a keyword must not be smuggled
+    into the query string as a parameter the API would silently ignore."""
+    assert facade.aggregator_supports_keywords("arbeitnow") is False
+    route = respx.get(
+        url__regex=r"https://www\.arbeitnow\.com/api/job-board-api.*"
+    ).mock(return_value=httpx.Response(200, json={"data": []}))
+    with httpx.Client() as client:
+        facade.ingest_aggregator("arbeitnow", client=client, keywords="python")
+    assert "python" not in str(route.calls.last.request.url)
+
+
+def test_attribution_notice_is_present_for_contractual_sources(temp_db):
+    assert "RemoteOK" in facade.attribution_notice("remoteok")
+    assert facade.attribution_notice("remotive")
+    assert facade.attribution_notice("adzuna") is None
+
+
+@respx.mock
+def test_ingest_ats_supports_a_new_company_board(temp_db):
+    respx.get(
+        url__regex=r"https://apply\.workable\.com/api/v1/widget/accounts/enfos-inc.*"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "name": "ENFOS, Inc.",
+                "jobs": [
+                    {
+                        "title": "Senior Software Engineer",
+                        "shortcode": "77DF64C44E",
+                        "telecommuting": True,
+                        "url": "https://apply.workable.com/j/77DF64C44E",
+                        "published_on": "2026-04-25",
+                        "country": "United States",
+                        "city": "Chicago",
+                        "state": "Illinois",
+                        "description": "<p>Scale the backend.</p>",
+                    }
+                ],
+            },
+        )
+    )
+    with httpx.Client() as client:
+        result = facade.ingest_ats("workable", "enfos-inc", client=client)
+    assert result.upserted == 1
+    top = facade.top_jobs()[0]
+    assert top["title"] == "Senior Software Engineer"
+    assert top["remote"] is True
+
+
 # --------------------------------------------------------------------------- #
 # Enrichment + filters via the facade
 # --------------------------------------------------------------------------- #
