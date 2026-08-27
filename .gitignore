@@ -56,9 +56,8 @@ careeragent.db
 core/enrichment/data/*.csv
 
 # Personal documents and parsed PII - never commit (see CLAUDE.md "Secrets & PII").
-# NOTE: careeragent_data/cv_profiles/ is ALREADY TRACKED from earlier commits;
-# ignoring it here only stops new files. Purging the existing ones needs
-# `git rm -r --cached careeragent_data/cv_profiles` plus a history rewrite.
+# These paths are ignored for new files. If any are already tracked, remove
+# them from the index with `git rm -r --cached <path>` before committing.
 *_C_V.pdf
 *_CV.pdf
 cv_*.pdf
