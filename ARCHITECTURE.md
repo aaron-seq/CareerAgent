@@ -124,7 +124,7 @@ graph TB
 |---|---|
 | `core/cv_parser.py` | PDF/text CV → structured `CVProfile` via LLM. Recovers PDF link-annotation URLs so it never has to guess a contact link. |
 | `core/resume/` | `tailor.py` (truthful resume tailoring, `assert_no_fabrication`), `cover_letter.py` (grounded cover letters, same fabrication contract), `ats_linter.py`, `json_resume.py`, `render.py` (Markdown/PDF). |
-| `core/ingestion/` | `ats.py` (Greenhouse/Lever/Ashby public feeds), `aggregators.py` (Adzuna/The Muse/Remotive) → canonical `JobPosting`. |
+| `core/ingestion/` | `ats.py` (company boards: Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable), `aggregators.py` + `boards.py` (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) → canonical `JobPosting`. |
 | `core/fetching/` | `ats_detection.py` (regex ATS signatures), `jsonld.py` (`schema.org/JobPosting` extraction), `polite.py` (robots.txt + rate-limited fetcher; scraping fallback only). |
 | `core/matching/` | `embeddings.py` (pluggable embedder, hashing fallback), `dedup.py` (fuzzy dedup), `scoring.py` (explainable resume↔job score with matched/missing keywords). |
 | `core/tracking.py` | Kanban application pipeline, follow-up reminders, duplicate-apply prevention, company blacklist. |
@@ -299,7 +299,7 @@ set `GROQ_API_KEY` for the cloud provider.
 | Persistence | SQLModel + Alembic, SQLite (dev) / Postgres (prod) | Structured storage, PII encrypted at rest |
 | PDF parsing | pdfplumber, PyPDF2 | CV text + hyperlink extraction |
 | PDF rendering | fpdf2 | ATS-friendly resume PDF output |
-| Job data | Greenhouse/Lever/Ashby, Adzuna, The Muse, Remotive | API-first ingestion |
+| Job data | Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable, Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas | API-first ingestion |
 | Web search | duckduckgo-search | Fallback job/contact discovery |
 | Email | Google Gmail API | Draft creation |
 | Testing | pytest | Unit and integration tests (204+) |

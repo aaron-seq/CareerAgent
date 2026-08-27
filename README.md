@@ -8,8 +8,10 @@ A local AI-powered career assistant for personalized job outreach. This applicat
   default for privacy-focused, zero-cost inference; Groq's free tier as an
   alternative when Ollama isn't installed (see ADR 0005 for the PII tradeoff
   this involves).
-- **Job Discovery**: API-first ingestion (Greenhouse/Lever/Ashby, Adzuna, The
-  Muse, Remotive) with DuckDuckGo search as a fallback mode.
+- **Job Discovery**: API-first ingestion from 13 sources — company ATS boards
+  (Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable) and aggregators/job boards
+  (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) — with DuckDuckGo search as a
+  fallback mode.
 - **Contact Finder**: Automated search for hiring managers and contact permutation generation.
 - **Resume tailoring & cover letters**: Truthfully reorders/emphasizes your
   real CV content per job, and drafts cover letters grounded in it — both
@@ -89,7 +91,7 @@ for decisions.
 | Package | What it does |
 |---|---|
 | `core/db` | SQLModel schema, Alembic migrations, repositories, **PII encrypted at rest** (Fernet). SQLite for dev, Postgres in prod (ADR 0003). |
-| `core/ingestion` | API-first job ingestion: Greenhouse/Lever/Ashby public feeds + Adzuna/The Muse/Remotive → canonical `JobPosting`. |
+| `core/ingestion` | API-first job ingestion: `ats.py` company boards (Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable) + `aggregators.py`/`boards.py` (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) → canonical `JobPosting`. |
 | `core/fetching` | ATS detection (regex), JSON-LD `JobPosting` extraction, robots-respecting rate-limited fetcher (scraping fallback only). |
 | `core/matching` | Pluggable embeddings, fuzzy dedup, and **explainable** resume↔job scoring (matched/missing keywords). |
 | `core/resume` | JSON Resume interchange, ATS-friendliness linter, single-column PDF, **truthful** tailoring and cover-letter generation (both raise rather than fabricate an employer or metric). |
@@ -117,7 +119,7 @@ for decisions.
 pip install -r requirements-test.txt   # includes runtime + test deps
 export CAREERAGENT_ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 alembic upgrade head                    # create the schema (SQLite by default)
-pytest                                  # 204+ Python tests (see PROGRESS.md for current count)
+pytest                                  # 330 Python tests (see PROGRESS.md for current count)
 (cd extension && node --test)           # 11 extension tests
 python -m scripts.send_digest --dry-run # build a job digest
 ```

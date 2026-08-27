@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import warnings
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from core.db.repository import JobRepository
 from core.db.tables import ApplicationStatus
 from core.models import JobPosting
+from core.normalize import to_naive_utc, utc_now
 from core.tracking import (
     BlacklistedCompanyError,
     DuplicateApplicationError,
@@ -100,9 +102,9 @@ def test_due_followups(session):
     svc.transition(app, ApplicationStatus.APPLIED)
     session.commit()
     # Not due yet.
-    assert svc.due_followups(as_of=datetime.utcnow()) == []
+    assert svc.due_followups(as_of=utc_now()) == []
     # Due after the window.
-    later = datetime.utcnow() + timedelta(days=8)
+    later = utc_now() + timedelta(days=8)
     due = svc.due_followups(as_of=later)
     assert len(due) == 1 and due[0].id == app.id
 
@@ -127,3 +129,62 @@ def test_board_groups_by_status(session):
     board = svc.board()
     assert len(board["saved"]) == 1 and board["saved"][0].id == a.id
     assert len(board["applied"]) == 1 and board["applied"][0].id == b.id
+
+
+# --------------------------------------------------------------------------- #
+# Naive-UTC timestamp convention
+# --------------------------------------------------------------------------- #
+
+
+def test_utc_now_is_naive_utc_and_emits_no_deprecation():
+    """``utc_now`` must stay naive, hold UTC, and not warn.
+
+    Guards both ways the obvious "fix" goes wrong: ``datetime.utcnow()``
+    (correct value, DeprecationWarning) and ``datetime.now()`` (no warning,
+    but local wall-clock rather than UTC).
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        now = utc_now()
+
+    assert now.tzinfo is None
+    drift = abs((now - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds())
+    assert drift < 60, "utc_now() returned local time, not UTC"
+
+
+def test_to_naive_utc_converts_offsets_and_passes_naive_through():
+    ist = timezone(timedelta(hours=5, minutes=30))
+    aware = datetime(2026, 1, 1, 0, 0, tzinfo=ist)
+    converted = to_naive_utc(aware)
+    assert converted == datetime(2025, 12, 31, 18, 30)
+    assert converted.tzinfo is None
+
+    naive = datetime(2026, 1, 1, 0, 0)
+    assert to_naive_utc(naive) is naive
+
+
+def test_due_followups_compares_against_rows_reloaded_from_sqlite(session):
+    """The persisted side is always naive, so ``as_of`` must be too.
+
+    SQLite's DATETIME storage carries no offset, so ``next_follow_up_at``
+    comes back naive after any commit. Should ``utc_now()`` ever start
+    returning an aware datetime, the comparison inside ``due_followups``
+    raises ``TypeError: can't compare offset-naive and offset-aware
+    datetimes`` instead of quietly misbehaving -- this test catches that.
+    """
+    job = _job(session)
+    svc = TrackingService(session, follow_up_days=7)
+    app = svc.create_application(job)
+    svc.transition(app, ApplicationStatus.APPLIED)
+    session.commit()
+    session.expire_all()  # drop the identity-map copies, force a real reload
+
+    reloaded = svc.apps.list()[0]
+    assert reloaded.next_follow_up_at is not None
+    assert reloaded.next_follow_up_at.tzinfo is None
+    assert reloaded.created_at.tzinfo is None
+
+    # Both the defaulted and the explicit `as_of` path must survive the mix.
+    assert svc.due_followups() == []
+    due = svc.due_followups(as_of=utc_now() + timedelta(days=8))
+    assert len(due) == 1 and due[0].id == app.id

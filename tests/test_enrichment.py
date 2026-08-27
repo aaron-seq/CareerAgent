@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import httpx
 import pytest
 import respx
+from dateutil import parser as date_parser
 
 from core.alerting import (
     Digest,
@@ -209,6 +210,34 @@ def test_ghost_score_fresh_detailed_posting():
     fresh = now - timedelta(days=3)
     assessment = ghost_score(fresh, now=now, description="x" * 500)
     assert assessment.score == 0.0
+
+
+def test_ghost_score_accepts_dateutil_aware_dates():
+    """An offset-carrying board date must agree with its UTC equivalent.
+
+    ``dateutil.parser.parse`` returns an AWARE datetime whenever the source
+    string has an offset and a NAIVE one when it doesn't -- both shapes reach
+    ``ghost_score`` from the aggregators. The aware one has to be *converted*
+    to UTC, not merely stripped of its tzinfo, or the age is wrong by the
+    offset. Here 00:00+05:30 is 18:30 UTC the previous day.
+    """
+    now = datetime(2026, 6, 1)
+    aware = date_parser.parse("2026-01-01T00:00:00+05:30")
+    assert aware.tzinfo is not None
+    equivalent_naive = datetime(2025, 12, 31, 18, 30)
+
+    from_aware = ghost_score(aware, now=now, description="x" * 500)
+    from_naive = ghost_score(equivalent_naive, now=now, description="x" * 500)
+    assert from_aware.score == from_naive.score
+    assert from_aware.reasons == from_naive.reasons
+
+
+def test_ghost_score_aware_date_against_default_naive_now():
+    """The defaulted ``now`` is naive UTC; an aware date must not raise."""
+    aware = date_parser.parse("2020-01-01T00:00:00+00:00")
+    # No explicit `now` -> exercises the real utc_now() default.
+    assessment = ghost_score(aware, description="x" * 500)
+    assert assessment.score >= 0.5
 
 
 def test_ghost_annotator(session):

@@ -2,7 +2,10 @@
 # Match the project's current supported floor (CI still tests 3.9-3.11).
 target-version = "py39"
 line-length = 88
-extend-exclude = ["careeragent_data"]
+# Markdown is prose: its fenced snippets are illustrative fragments, and
+# ruff >=0.16 reformats them (wrongly - it rewrote a kwarg as a tuple in
+# docs/SECURITY_AUDIT.md). Docs are not a formatting target.
+extend-exclude = ["careeragent_data", "*.md"]
 
 [tool.ruff.lint]
 # Phase 0 baseline gate: pyflakes (F), pycodestyle (E/W), isort (I).

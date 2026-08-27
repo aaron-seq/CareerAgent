@@ -5,14 +5,12 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 
 ## Current status
 - **Current phase:** Phases 0–10 **complete**. Post-Phase-10 hardening ongoing.
-- **Last updated:** 2026-07-27
-- **Next action:** Fix job-matching keyword extraction for aggregator-ingested
-  jobs (falls back to raw description tokenization when `tech_stack`/
-  `requirements` aren't populated, deflating scores and polluting "missing
-  skills" with stopwords — see 2026-07-27 log entry). Manual QA of remaining
-  not-live-verified paths (extension in a browser, real email send,
-  deployment).
-- **Blockers:** None. This session ran with live network access (real Remotive
+- **Last updated:** 2026-08-27
+- **Next action:** **Decide on SECURITY_AUDIT C-1** (real CV PII in public git
+  history — needs `git filter-repo` + force-push, owner decision). Then the
+  outreach-compliance findings F-1/F-2/F-3, which breach guardrail 5. Then the
+  older job-matching keyword-extraction fix (see 2026-07-27 entry).
+- **Blockers:** C-1 is live PII exposure on a public repo and is unresolved. This session ran with live network access (real Remotive
   API pulls, real Groq LLM calls) for the first time — see log below. Earlier
   entries' "build env can't reach external services" note no longer applies
   to LLM calls or job-board APIs; still true for pgvector.
@@ -30,6 +28,54 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 Totals: **204 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
+
+### 2026-08-27 — 13 job sources live-verified, timestamp convention, security audit
+
+Three parallel agents on disjoint files; all work verified, none committed.
+
+**Job ingestion: 6 sources -> 13.** New company ATS boards (SmartRecruiters,
+Recruitee, Workable) and keyless job boards (Arbeitnow, Jobicy, RemoteOK,
+Himalayas), plus an `ATTRIBUTION` map so sources that legally require credit
+(RemoteOK especially) get it in the UI. `app.py` now drives both pickers from
+`facade.aggregator_providers()` / `ats_providers()` instead of hardcoded lists.
+
+Live-verified 2026-08-27 against real vacancies: Arbeitnow 175, RemoteOK 99,
+Jobicy 50, Himalayas 20; SmartRecruiters BoschGroup + PublicStorage; Workable
+blueground/spotawheel/orfium/skroutz; Recruitee fixico/hygraph. 344 live
+postings from the four keyless boards alone.
+
+**Wellfound: NOT VIABLE, do not implement.** Four independent blockers verified
+(no public API, no logged-out JSON-LD + Turnstile, robots.txt disallows the
+browse surface, ToS bars automated collection). Breaches guardrail 3. Use the
+startup's own Greenhouse/Lever/Ashby board instead. Full evidence in
+`docs/RESEARCH.md` A2.
+
+**Timestamp convention: naive datetimes holding UTC**, repo-wide. `utc_now()`
+and `to_naive_utc()` in `core/normalize.py` are the only producers/coercers.
+Chosen over timezone-aware because SQLite `DATETIME` and Postgres `timestamp
+without time zone` (ADR 0003) cannot persist an offset, so aware values
+round-trip to naive and then raise `TypeError` on comparison. Killed all 194
+`datetime.utcnow()` deprecation warnings. Fixed a real bug this exposed:
+`date_posted` from `dateutil` arrives aware, and was being written into a naive
+column with the offset silently dropped (`+05:30` stored as UTC, off by 5.5h) —
+now coerced at both ingestion boundaries.
+
+**CI has never passed.** `requirements-test.txt` pinned `responses==0.25.9`, a
+version never published to PyPI (0.25.8 -> 0.26.0), so `pip install` died before
+`pytest` ran on every job — every merge to `main` went in ungated. The package
+was imported nowhere (`respx` does all HTTP mocking), so the pin was deleted
+rather than corrected. Dependency set now resolves clean.
+
+**Security audit** -> `docs/SECURITY_AUDIT.md` (21 findings: 1 Critical, 8 High).
+Independently verified: repo is PUBLIC, commit `d92bfb5` added 11
+`cv_profile_*.json` files with real name/phones/email, still in history after
+being untracked. Also: the CAN-SPAM footer is displayed but not sent
+(`app.py` sends the raw textarea body, not `decision.body`), opt-out HMAC keys
+regenerate per process when `CAREERAGENT_ENCRYPTION_KEY` is unset, the send cap
+is inert, and `assert_no_fabrication` has a demonstrated bypass (the guard
+trusts the whole JD while the model only sees `[:3000]`).
+
+**Tests: 297 -> 330 passing, warnings 194 -> 9.** `ruff` clean.
 
 ### 2026-07-27 — CV parsing fabrication fix, cover letters, Groq provider, dark-native redesign
 First session with live network access: real Groq LLM calls and a real

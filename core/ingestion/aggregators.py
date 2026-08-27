@@ -8,24 +8,14 @@ the live docs at build time (see docs/RESEARCH.md).
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional
-
 import httpx
-from dateutil import parser as date_parser
 
 from ..models import JobPosting
 from .ats import html_to_text
 from .base import FetchedJob, JobSource
+from .base import parse_date as _parse_date
 
-
-def _parse_date(value: Optional[str]) -> Optional[datetime]:
-    if not value:
-        return None
-    try:
-        return date_parser.parse(value)
-    except (ValueError, OverflowError, TypeError):
-        return None
+__all__ = ["AdzunaSource", "TheMuseSource", "RemotiveSource", "_parse_date"]
 
 
 class AdzunaSource(JobSource):

@@ -4,11 +4,22 @@ Normalization helpers shared across ingestion, dedup, and tracking.
 A *dedup key* is a stable, lowercased fingerprint of (title, company,
 location) used to collapse the same role seen on multiple boards and to
 prevent duplicate applications.
+
+Timestamps follow one convention repo-wide: **naive datetimes holding UTC**.
+That is what the storage layer can actually represent -- SQLAlchemy maps our
+``datetime`` columns to SQLite ``DATETIME`` (and to Postgres ``timestamp
+without time zone`` in prod, ADR 0003), neither of which persists an offset, so
+an aware value written there silently comes back naive and then raises
+``TypeError`` against the aware value it was compared with. :func:`utc_now` is
+the single producer of "now" and :func:`to_naive_utc` is the boundary coercion
+for datetimes arriving from outside (e.g. ``dateutil``-parsed board dates,
+which are aware whenever the source string carries an offset).
 """
 
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 _WS = re.compile(r"\s+")
 _NON_ALNUM = re.compile(r"[^a-z0-9 ]+")
@@ -29,6 +40,26 @@ _COMPANY_SUFFIXES = {
     "bv",
     "the",
 }
+
+
+def utc_now() -> datetime:
+    """Current UTC time as a naive datetime.
+
+    The replacement for ``datetime.utcnow()``, which is deprecated and slated
+    for removal. Same value, same naive-UTC semantics, no warning.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def to_naive_utc(value: datetime) -> datetime:
+    """Coerce a datetime to the naive-UTC convention.
+
+    Aware values are converted to UTC and stripped of their offset; naive
+    values are assumed to be UTC already and pass through untouched.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _clean(text: str) -> str:
