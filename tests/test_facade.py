@@ -637,3 +637,64 @@ def test_tailor_for_job_is_truthful():
     assert set(tailored.skills) == set(cv.skills)
     assert "rust" in result["gaps"]
     assert "PyTorch" in result["emphasized"]
+
+
+@respx.mock
+def test_blacklisted_company_disappears_from_discovery(temp_db):
+    """Blacklisting must remove an employer from top_jobs, not just block saves.
+
+    Regression guard for #11: the blacklist used to be consulted only by
+    add_to_pipeline, so a rejected employer kept filling the discovery list.
+    """
+    respx.get("https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "Python Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "u1",
+                        "content": "Python " * 60,
+                    }
+                ]
+            },
+        )
+    )
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/globex/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 2,
+                        "title": "Python Developer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "u2",
+                        "content": "Python " * 60,
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        facade.ingest_ats("greenhouse", "acme", "Acme Inc", client=client)
+        facade.ingest_ats("greenhouse", "globex", "Globex", client=client)
+    facade.refresh_matches(_cv())
+    assert {j["company"] for j in facade.top_jobs()} == {"Acme Inc", "Globex"}
+
+    # Blacklist by a differently-punctuated name: matching is on the
+    # normalized name, so "Acme" must still hide the "Acme Inc" rows.
+    facade.blacklist_company("Acme")
+    assert [j["company"] for j in facade.top_jobs()] == ["Globex"]
+    # Reported under the canonical stored name, not the string passed in:
+    # link_companies() already created the row as "Acme Inc", and matching on
+    # normalized_name reuses it rather than adding a near-duplicate.
+    assert facade.blacklisted_companies() == ["Acme Inc"]
+
+    facade.unblacklist_company("Acme")
+    assert {j["company"] for j in facade.top_jobs()} == {"Acme Inc", "Globex"}
+    assert facade.blacklisted_companies() == []

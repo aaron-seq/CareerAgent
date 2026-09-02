@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from sqlmodel import select
+
 from .alerting import build_digest
 from .analytics import compute_funnel, generate_interview_questions
 from .db import get_session, init_db
@@ -54,7 +56,7 @@ from .ingestion import (
 )
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, JobPosting
-from .normalize import to_naive_utc
+from .normalize import normalize_company_name, to_naive_utc
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
@@ -225,6 +227,32 @@ def ingest_aggregator(
         return IngestionService(session).ingest(source, client=client, **params)
 
 
+def blacklist_company(name: str) -> None:
+    """Blacklist an employer: hide its jobs and refuse new applications.
+
+    ``top_jobs`` filters on this, so the effect is immediate in discovery --
+    blacklisting is not merely a save-time guard.
+    """
+    init_persistence()
+    with get_session() as session:
+        TrackingService(session).blacklist_company(name)
+
+
+def unblacklist_company(name: str) -> None:
+    """Undo :func:`blacklist_company`; the employer reappears in discovery."""
+    init_persistence()
+    with get_session() as session:
+        CompanyRepository(session).get_or_create(name, blacklisted=False)
+
+
+def blacklisted_companies() -> list[str]:
+    """Every blacklisted employer, by display name."""
+    init_persistence()
+    with get_session() as session:
+        rows = session.exec(select(Company).where(Company.blacklisted)).all()
+        return sorted(c.name for c in rows)
+
+
 def refresh_matches(cv: CVProfile) -> int:
     """Full refresh: dedup, link companies, enrich, then score against the CV.
 
@@ -259,6 +287,22 @@ def top_jobs(
     """Non-duplicate jobs, best match first, with optional filters applied."""
     with get_session() as session:
         rows = JobRepository(session).list(include_duplicates=False)
+
+        # Blacklisting a company must remove it from discovery, not just block
+        # the application at save time -- otherwise the same rejected employer
+        # keeps filling the results. Matched on normalized_name so "Acme Inc"
+        # and "Acme" collapse, and on the job's own company_name so this holds
+        # even for rows link_companies() has not linked yet.
+        blacklisted = {
+            c.normalized_name
+            for c in session.exec(select(Company).where(Company.blacklisted)).all()
+        }
+        if blacklisted:
+            rows = [
+                r
+                for r in rows
+                if normalize_company_name(r.company_name or "") not in blacklisted
+            ]
 
         if min_score:
             rows = filter_by_min_score(rows, min_score)
