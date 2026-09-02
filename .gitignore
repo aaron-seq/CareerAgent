@@ -56,13 +56,13 @@ careeragent.db
 core/enrichment/data/*.csv
 
 # Personal documents and parsed PII - never commit (see CLAUDE.md "Secrets & PII").
-# NOTE: careeragent_data/cv_profiles/ is ALREADY TRACKED from earlier commits;
-# ignoring it here only stops new files. Purging the existing ones needs
-# `git rm -r --cached careeragent_data/cv_profiles` plus a history rewrite.
+# The whole data root is ignored rather than each subdirectory: LocalStorage
+# creates five of them (email_drafts, whatsapp_drafts, cv_profiles,
+# job_postings, exports) and every new writer added to core/storage.py would
+# otherwise be a silent gap until someone noticed. Allow-list explicitly if
+# something under here ever needs tracking.
 *_C_V.pdf
 *_CV.pdf
 cv_*.pdf
 resume_*.pdf
-careeragent_data/cv_profiles/
-careeragent_data/contacts/
-careeragent_data/job_postings/
+careeragent_data/
