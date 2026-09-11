@@ -183,3 +183,105 @@ def test_full_pipeline(session):
     outreach.opt_out("hiring@stripe.example")
     session.commit()
     assert outreach.prepare_send(draft, lia).allowed is False
+
+
+# --------------------------------------------------------------------------- #
+# End-to-end through the *facade* -- the path app.py actually takes.
+#
+# The test above wires services together directly, which is why a whole
+# feature (follow-up reminders) could be green there while being unreachable
+# from the UI. This one walks the candidate's real loop across the facade
+# boundary only: discover -> save -> apply -> get reminded -> chase -> offer.
+# --------------------------------------------------------------------------- #
+
+
+def _greenhouse_mock(url: str) -> None:
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "Machine Learning Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": url,
+                        "content": "Python PyTorch SQL " * 20,
+                    }
+                ]
+            },
+        )
+    )
+
+
+@respx.mock
+def test_candidate_journey_through_the_facade(temp_db):
+    from datetime import timedelta
+
+    from core import facade
+    from core.db import get_session
+    from core.db.tables import ApplicationRow
+
+    posting_url = "https://boards.greenhouse.io/stripe/jobs/1"
+    _greenhouse_mock(posting_url)
+
+    cv = _cv()
+    cv_id = facade.persist_cv(cv)
+
+    # 1. Discover: pull a real board and score it against the CV.
+    with httpx.Client() as client:
+        result = facade.ingest_ats("greenhouse", "stripe", "Stripe", client=client)
+    assert result.upserted == 1
+    facade.refresh_matches(cv)
+    job = facade.top_jobs()[0]
+    assert job["score"] is not None
+
+    # 2. Save it, with the CV it was matched against.
+    added = facade.add_to_pipeline(job["id"], cv_id)
+    assert added["ok"] is True
+    app_id = added["application_id"]
+
+    # 3. The board hands back the posting URL, so the candidate can open the
+    #    form the autofill extension fills.
+    saved_card = facade.pipeline_board()["saved"][0]
+    assert saved_card["url"] == posting_url
+    assert saved_card["overdue"] is False
+
+    # 4. The extension profile comes from the parsed CV, not retyping.
+    assert facade.extension_profile(cv)["email"] == cv.email
+
+    # 5. Apply. A follow-up is scheduled but not yet due.
+    assert facade.advance_application(app_id, "applied")["ok"] is True
+    assert facade.due_followups() == []
+
+    # 6. A week passes with no reply -> the reminder fires.
+    with get_session() as session:
+        row = session.get(ApplicationRow, app_id)
+        row.next_follow_up_at = row.next_follow_up_at - timedelta(days=8)
+        session.add(row)
+
+    due = facade.due_followups()
+    assert [c["application_id"] for c in due] == [app_id]
+    assert due[0]["overdue"] is True
+    assert due[0]["url"] == posting_url
+
+    # 7. Candidate chases, snoozes a week; the reminder clears.
+    facade.set_application_notes(app_id, "Chased recruiter 2026-09-11")
+    assert facade.snooze_followup(app_id, days=7)["ok"] is True
+    assert facade.due_followups() == []
+
+    # 8. It converts. Notes survive, the funnel reflects every stage reached,
+    #    and a closed-out application stops nagging.
+    for status in ("screening", "interview", "offer"):
+        assert facade.advance_application(app_id, status)["ok"] is True
+
+    offer_card = facade.pipeline_board()["offer"][0]
+    assert offer_card["notes"] == "Chased recruiter 2026-09-11"
+    assert offer_card["days_since_applied"] == 0
+
+    funnel = facade.funnel()
+    assert funnel["total"] == 1
+    assert funnel["reached"]["offer"] == 1
+    assert facade.due_followups() == []
