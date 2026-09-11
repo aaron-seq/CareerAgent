@@ -7,7 +7,11 @@
       h1 { font-size: 15px; margin: 0 0 8px; }
       label { display: block; font-size: 12px; margin-top: 6px; }
       input { width: 100%; box-sizing: border-box; padding: 4px; }
+      textarea { width: 100%; box-sizing: border-box; padding: 4px;
+                 font-family: monospace; font-size: 11px; }
       button { margin-top: 10px; width: 100%; padding: 8px; cursor: pointer; }
+      details { margin-top: 10px; }
+      summary { font-size: 12px; cursor: pointer; }
       .fill { background: #4caf50; color: #fff; border: none; }
       .note { font-size: 11px; color: #666; margin-top: 8px; }
       #status { font-size: 12px; margin-top: 8px; }
@@ -22,6 +26,14 @@
     <label>GitHub <input id="github" /></label>
     <label>Portfolio <input id="portfolio" /></label>
     <label>Location <input id="location" /></label>
+    <details>
+      <summary>Import from CareerAgent</summary>
+      <label>Paste the profile JSON from the app's Export screen
+        <textarea id="importJson" rows="4"
+                  placeholder='{"fullName": "...", "email": "..."}'></textarea>
+      </label>
+      <button id="import">Import</button>
+    </details>
     <button id="save">Save profile</button>
     <button id="fill" class="fill">Autofill this page</button>
     <div class="note">

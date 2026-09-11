@@ -16,7 +16,25 @@ form for you, and it only activates on the supported ATS domains
   value.
 - **`src/service_worker.js`** — owns the profile in `chrome.storage.local`
   (PII stays in the browser) and relays fill requests.
-- **`src/popup.html` / `popup.js`** — edit the profile and trigger a fill.
+- **`src/popup.html` / `popup.js`** — edit the profile, import it from the
+  CareerAgent app, and trigger a fill.
+
+## Getting the profile in
+
+Either type it into the popup, or import it from the app: CareerAgent's
+**Export & Logs** screen renders a **Browser autofill profile** JSON block
+built from your parsed CV (`facade.extension_profile`); paste it into the
+popup's **Import from CareerAgent** box.
+
+The handoff is deliberately a clipboard copy rather than an HTTP call to the
+running app. That keeps the extension free of any host permission on the app's
+origin, needs no CORS or localhost server, and means the profile never travels
+over a socket — it goes clipboard → `chrome.storage.local` and stops there.
+`parseImport` takes only the seven known fields, so pasting a larger blob
+cannot push anything else into storage.
+
+`location` is not in `CVProfile`, so it imports empty; fill it once in the
+popup and `chrome.storage.local` keeps it.
 
 ## Guardrails
 
@@ -29,7 +47,7 @@ form for you, and it only activates on the supported ATS domains
 
 ```bash
 cd extension
-npm test        # runs node --test on the field-mapping logic
+npm test        # runs node --test on the field-mapping + import logic
 ```
 
 Load unpacked in Chrome: `chrome://extensions` → Developer mode → Load
@@ -37,7 +55,8 @@ unpacked → select this `extension/` directory.
 
 ## Verification status
 
-The field-mapping logic is unit-tested under Node (13 tests). It has also
+The field-mapping logic is unit-tested under Node (18 tests, including the
+profile-import parser). It has also
 been **live-verified**: loaded unpacked into real Chromium via Playwright's
 `launchPersistentContext` + `--load-extension`, with a profile seeded through
 the real popup, against actual live job postings —

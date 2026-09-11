@@ -7,20 +7,8 @@ import pytest
 import respx
 
 from core import facade
-from core.db import reset_engine
 from core.models import CVProfile, EmailDraft, Experience
 from core.outreach import ComplianceConfig, LIARecord
-
-
-@pytest.fixture
-def temp_db(tmp_path, monkeypatch):
-    """Point the global engine at a throwaway SQLite file for the facade."""
-    db = tmp_path / "facade.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db}")
-    reset_engine()
-    facade.init_persistence()
-    yield
-    reset_engine()
 
 
 def _cv() -> CVProfile:
@@ -698,3 +686,158 @@ def test_blacklisted_company_disappears_from_discovery(temp_db):
     facade.unblacklist_company("Acme")
     assert {j["company"] for j in facade.top_jobs()} == {"Acme Inc", "Globex"}
     assert facade.blacklisted_companies() == []
+
+
+# --------------------------------------------------------------------------- #
+# Follow-up reminders + the autofill handoff
+#
+# TrackingService has had due_followups()/snooze_followup() since Phase 6, but
+# nothing exposed them through the facade -- so the reminder feature was
+# unreachable from the UI. These pin the wiring shut.
+# --------------------------------------------------------------------------- #
+
+
+def _seed_application(url: str = "https://boards.greenhouse.io/stripe/jobs/1"):
+    """Ingest one job and track it. Returns the application id."""
+    respx.get(
+        "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 1,
+                        "title": "ML Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": url,
+                        "content": "ML",
+                    }
+                ]
+            },
+        )
+    )
+    with httpx.Client() as client:
+        facade.ingest_ats("greenhouse", "stripe", "Stripe", client=client)
+    job = facade.top_jobs()[0]
+    return facade.add_to_pipeline(job["id"])["application_id"]
+
+
+def _shift_follow_up(application_id: int, days: int) -> None:
+    """Move an application's follow-up date by ``days`` (negative = overdue)."""
+    from datetime import timedelta
+
+    from core.db import get_session
+    from core.db.tables import ApplicationRow
+
+    with get_session() as session:
+        row = session.get(ApplicationRow, application_id)
+        row.next_follow_up_at = row.next_follow_up_at + timedelta(days=days)
+        session.add(row)
+
+
+@respx.mock
+def test_due_followups_is_empty_until_applied_and_due(temp_db):
+    app_id = _seed_application()
+
+    # Saved but not applied: no follow-up date exists yet.
+    assert facade.due_followups() == []
+
+    facade.advance_application(app_id, "applied")
+    # Applied sets the date a week out, so nothing is due yet.
+    assert facade.due_followups() == []
+
+    _shift_follow_up(app_id, -8)
+    due = facade.due_followups()
+    assert len(due) == 1
+    card = due[0]
+    assert card["application_id"] == app_id
+    assert card["overdue"] is True
+    assert card["days_until_follow_up"] < 0
+    assert card["days_since_applied"] == 0
+    # The posting URL is what makes the card actionable -- it is where the
+    # autofill extension runs.
+    assert card["url"] == "https://boards.greenhouse.io/stripe/jobs/1"
+
+
+@respx.mock
+def test_snooze_followup_clears_it_from_the_due_list(temp_db):
+    app_id = _seed_application()
+    facade.advance_application(app_id, "applied")
+    _shift_follow_up(app_id, -8)
+    assert len(facade.due_followups()) == 1
+
+    res = facade.snooze_followup(app_id, days=7)
+    assert res["ok"] is True
+    assert facade.due_followups() == []
+
+    assert facade.snooze_followup(9999, days=1)["ok"] is False
+
+
+@respx.mock
+def test_rejecting_an_overdue_application_stops_the_reminder(temp_db):
+    app_id = _seed_application()
+    facade.advance_application(app_id, "applied")
+    _shift_follow_up(app_id, -8)
+    assert len(facade.due_followups()) == 1
+
+    facade.advance_application(app_id, "rejected")
+    assert facade.due_followups() == []
+
+
+@respx.mock
+def test_application_notes_round_trip(temp_db):
+    app_id = _seed_application()
+    assert facade.set_application_notes(app_id, "Referred by Grace")["ok"] is True
+
+    card = facade.pipeline_board()["saved"][0]
+    assert card["notes"] == "Referred by Grace"
+    assert card["status"] == "saved"
+    assert card["applied_at"] is None
+    assert card["overdue"] is False
+
+    assert facade.set_application_notes(9999, "x")["ok"] is False
+
+
+def test_extension_profile_maps_cv_to_the_autofill_field_names():
+    profile = facade.extension_profile(
+        CVProfile(
+            name="Ada Lovelace",
+            email="ada@example.com",
+            phone="+44 20 7946 0958",
+            linkedin="https://linkedin.com/in/ada",
+            github="https://github.com/ada",
+        )
+    )
+    # Keys must match extension/src/field_mapping.js exactly.
+    assert set(profile) == {
+        "fullName",
+        "email",
+        "phone",
+        "linkedin",
+        "github",
+        "portfolio",
+        "location",
+    }
+    assert profile["fullName"] == "Ada Lovelace"
+    assert profile["github"] == "https://github.com/ada"
+    # Absent CV fields become empty strings, never None -- the popup writes
+    # them straight into text inputs.
+    assert profile["portfolio"] == ""
+    assert profile["location"] == ""
+    assert all(isinstance(v, str) for v in profile.values())
+
+
+@respx.mock
+def test_funnel_reports_stage_conversion_rates(temp_db):
+    """Funnel.conversion() existed since Phase 10 but nothing called it."""
+    app_id = _seed_application()
+    facade.advance_application(app_id, "applied")
+    facade.advance_application(app_id, "screening")
+
+    f = facade.funnel()
+    assert f["conversion"]["applied_to_screening"] == 1.0
+    # Reached screening but not interview.
+    assert f["conversion"]["screening_to_interview"] == 0.0
+    # No division by zero when a stage was never reached.
+    assert f["conversion"]["interview_to_offer"] == 0.0

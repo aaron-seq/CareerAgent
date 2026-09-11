@@ -9,6 +9,7 @@ session or the schema directly.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Optional
 
 from sqlmodel import select
@@ -56,7 +57,7 @@ from .ingestion import (
 )
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, JobPosting
-from .normalize import normalize_company_name, to_naive_utc
+from .normalize import normalize_company_name, to_naive_utc, utc_now
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
@@ -392,41 +393,121 @@ def advance_application(application_id: int, new_status: str) -> dict[str, Any]:
             return {"ok": False, "error": str(exc)}
 
 
+def _application_card(app, job, as_of: datetime) -> dict[str, Any]:
+    """One application rendered for the UI.
+
+    Carries the posting ``url`` so the dashboard can hand the candidate
+    straight to the form the autofill extension acts on -- without it the
+    board is a read-only list and the apply loop dead-ends here.
+    """
+    due = app.next_follow_up_at
+    applied = app.applied_at
+    return {
+        "application_id": app.id,
+        "title": job.title if job else "(job removed)",
+        "company": job.company_name if job else "",
+        "url": job.url if job else None,
+        "status": app.status.value,
+        "notes": app.notes or "",
+        "applied_at": applied.isoformat() if applied else None,
+        "days_since_applied": (as_of - applied).days if applied else None,
+        "next_follow_up": due.isoformat() if due else None,
+        "days_until_follow_up": (due - as_of).days if due else None,
+        "overdue": bool(due and due <= as_of),
+    }
+
+
 def pipeline_board() -> dict[str, list[dict[str, Any]]]:
     """Kanban board: status -> list of application cards."""
     with get_session() as session:
         board = TrackingService(session).board()
         jobs = JobRepository(session)
+        as_of = utc_now()
         out: dict[str, list[dict[str, Any]]] = {}
         for status, apps in board.items():
-            cards = []
-            for app in apps:
-                job = jobs.get(app.job_id) if app.job_id else None
-                cards.append(
-                    {
-                        "application_id": app.id,
-                        "title": job.title if job else "(job removed)",
-                        "company": job.company_name if job else "",
-                        "next_follow_up": (
-                            app.next_follow_up_at.isoformat()
-                            if app.next_follow_up_at
-                            else None
-                        ),
-                    }
+            out[status] = [
+                _application_card(
+                    app, jobs.get(app.job_id) if app.job_id else None, as_of
                 )
-            out[status] = cards
+                for app in apps
+            ]
         return out
 
 
+def due_followups() -> list[dict[str, Any]]:
+    """Applications whose follow-up date has arrived, most overdue first.
+
+    The reminder surface the candidate acts on: every still-active
+    application they said they would chase and haven't.
+    """
+    init_persistence()
+    with get_session() as session:
+        as_of = utc_now()
+        jobs = JobRepository(session)
+        cards = [
+            _application_card(app, jobs.get(app.job_id) if app.job_id else None, as_of)
+            for app in TrackingService(session).due_followups(as_of=as_of)
+        ]
+        cards.sort(key=lambda c: c["next_follow_up"] or "")
+        return cards
+
+
+def snooze_followup(application_id: int, days: int) -> dict[str, Any]:
+    """Push an application's follow-up date out by ``days``."""
+    from .db.tables import ApplicationRow
+
+    with get_session() as session:
+        app = session.get(ApplicationRow, application_id)
+        if app is None:
+            return {"ok": False, "error": "application not found"}
+        TrackingService(session).snooze_followup(app, days)
+        return {
+            "ok": True,
+            "next_follow_up": app.next_follow_up_at.isoformat()
+            if app.next_follow_up_at
+            else None,
+        }
+
+
+def set_application_notes(application_id: int, notes: str) -> dict[str, Any]:
+    """Save the candidate's own notes against an application."""
+    from .db.tables import ApplicationRow
+
+    with get_session() as session:
+        app = session.get(ApplicationRow, application_id)
+        if app is None:
+            return {"ok": False, "error": "application not found"}
+        app.notes = notes
+        app.updated_at = utc_now()
+        session.add(app)
+        return {"ok": True}
+
+
 def funnel() -> dict[str, Any]:
+    """Stage counts plus the stage-to-stage conversion rates.
+
+    Raw counts alone don't tell a candidate whether the problem is the resume
+    (few applications convert to screens) or the interview (screens don't
+    convert to offers), which is the whole point of looking at a funnel.
+    """
     with get_session() as session:
         f = compute_funnel(ApplicationRepository(session).list())
+        ladder = [
+            ApplicationStatus.APPLIED,
+            ApplicationStatus.SCREENING,
+            ApplicationStatus.INTERVIEW,
+            ApplicationStatus.OFFER,
+        ]
         return {
             "total": f.total,
             "counts": f.counts,
             "reached": f.reached,
             "rejected": f.rejected,
             "withdrawn": f.withdrawn,
+            "conversion": {
+                f"{a.value}_to_{b.value}": f.conversion(a, b)
+                for a, b in zip(ladder, ladder[1:])
+            },
         }
 
 
@@ -614,6 +695,30 @@ def lint_resume(cv: CVProfile, raw_text: str | None = None) -> dict[str, Any]:
         "errors": [i.message for i in issues if i.severity == "error"],
         "warnings": [i.message for i in issues if i.severity == "warning"],
         "info": [i.message for i in issues if i.severity == "info"],
+    }
+
+
+def extension_profile(cv: CVProfile) -> dict[str, str]:
+    """The parsed CV reduced to the fields the autofill extension fills.
+
+    Keys match ``extension/src/field_mapping.js`` exactly. This is the whole
+    bridge between the app and the extension: the candidate copies this JSON
+    into the popup instead of retyping details the CV parser already read.
+    Deliberately not an HTTP endpoint -- the extension needs no origin
+    permission on the app, and the PII never leaves the browser.
+
+    ``location`` is absent from :class:`CVProfile`, so it is emitted empty for
+    the candidate to complete in the popup rather than guessed from an address
+    line.
+    """
+    return {
+        "fullName": cv.name or "",
+        "email": cv.email or "",
+        "phone": cv.phone or "",
+        "linkedin": cv.linkedin or "",
+        "github": cv.github or "",
+        "portfolio": cv.portfolio or "",
+        "location": "",
     }
 
 

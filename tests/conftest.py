@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
 
-from core.db import init_db
+from core.db import init_db, reset_engine
 
 
 @pytest.fixture
@@ -38,3 +38,20 @@ def engine():
 def session(engine):
     with Session(engine) as sess:
         yield sess
+
+
+@pytest.fixture
+def temp_db(tmp_path, monkeypatch):
+    """Point the *global* engine at a throwaway SQLite file.
+
+    For code that opens its own sessions (``core.facade``) rather than taking
+    one, so it cannot use the in-memory ``session`` fixture above.
+    """
+    db = tmp_path / "careeragent.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db}")
+    reset_engine()
+    from core import facade
+
+    facade.init_persistence()
+    yield
+    reset_engine()
