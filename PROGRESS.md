@@ -5,7 +5,7 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 
 ## Current status
 - **Current phase:** Phases 0–10 **complete**. Post-Phase-10 hardening ongoing.
-- **Last updated:** 2026-08-27
+- **Last updated:** 2026-09-11
 - **Next action:** **Decide on SECURITY_AUDIT C-1** (real CV PII in public git
   history — needs `git filter-repo` + force-push, owner decision). Then the
   outreach-compliance findings F-1/F-2/F-3, which breach guardrail 5. Then the
@@ -28,6 +28,54 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 Totals: **204 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
+
+### 2026-09-11 — Follow-up reminders reach the UI; app→extension profile handoff
+
+**Root cause, not symptom.** Phase 6 shipped `TrackingService.due_followups()`
+and `snooze_followup()` with passing unit tests, but neither was ever exposed
+on `core/facade.py` — the only door `app.py` uses for DB-backed logic. The
+reminder feature has been complete and unreachable since it was written.
+`ApplicationRow.notes` was likewise a column nothing wrote. The lesson
+generalises: `tests/test_tracking.py` tested the service directly, so a whole
+dead feature stayed green. The new facade-level E2E test exists to catch that
+class of gap.
+
+- **`core/facade.py`** — added `due_followups()`, `snooze_followup()`,
+  `set_application_notes()`, and `extension_profile()`. Board cards now come
+  from one `_application_card()` helper carrying `url`, `status`, `notes`,
+  `applied_at`, `days_since_applied`, `days_until_follow_up` and `overdue`.
+  The `url` is what makes a card actionable — it is where the autofill
+  extension runs, and without it the dashboard dead-ended.
+- **`app.py` Pipeline** — a **Follow-ups** panel above everything else
+  (overdue count, days-overdue, posting link, snooze 3d/7d, mark rejected),
+  an empty state that explains when reminders appear, and an
+  **Application detail** panel under the board for notes and status changes.
+- **Board layout fix, found by running it.** The first cut put the notes box
+  and buttons inside the six kanban columns. Live in the browser those columns
+  are ~129px, so the notes field rendered 94px wide and "→ screening" wrapped
+  to three lines. The columns are now a compact overview and everything
+  editable moved to the full-width detail panel (notes 503px, buttons single-line).
+- **Rejected/withdrawn from any active state.** The board previously only
+  modelled the happy path, so dead applications sat in "applied" forever,
+  skewing the funnel and nagging with stale reminders.
+- **App → extension handoff** — `facade.extension_profile(cv)` maps the parsed
+  CV onto the seven field names in `extension/src/field_mapping.js`; the
+  Export screen renders it as copyable JSON, and the popup gained an
+  **Import from CareerAgent** box. Clipboard, not HTTP: no host permission on
+  the app's origin, no CORS, no localhost server, and `parseImport` whitelists
+  the seven known keys so a larger pasted blob can't push anything else into
+  `chrome.storage.local`.
+- **Tests: 331 → 337 Python, 11 → 18 JS.** Five facade tests covering the
+  reminder lifecycle, the notes round-trip and the profile mapping; five JS
+  tests on the import parser; and
+  `test_candidate_journey_through_the_facade` — a real E2E that crosses the
+  facade boundary only (discover → save → apply → reminded → chase → offer),
+  the layer where the bug actually lived. `temp_db` moved from
+  `test_facade.py` to `conftest.py` now two modules need it.
+- **Live-verified in the browser**, not just under pytest: seeded an overdue
+  application, confirmed the panel and ⚠️ flags render, clicked **Snooze 7d**
+  and watched the reminder clear and the flag disappear.
+
 
 ### 2026-08-27 — 13 job sources live-verified, timestamp convention, security audit
 
