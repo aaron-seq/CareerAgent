@@ -4,6 +4,7 @@ CareerAgent - Main Streamlit Application
 Export & Logs. Calls only core/facade.py -- no business logic here.
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -1276,6 +1277,35 @@ def page_export():
 
     st.divider()
 
+    # --- Autofill extension handoff (Phase 8) --- #
+    st.subheader("Browser autofill profile")
+    st.caption(
+        "The CareerAgent Autofill extension fills application forms from these "
+        "fields. Copy the JSON into the extension popup (**Import from "
+        "CareerAgent**) instead of retyping what your CV already says. It "
+        "travels by clipboard on purpose - the extension needs no access to "
+        "this app, and your details never leave the browser."
+    )
+    if not st.session_state.cv_profile:
+        st.info("Upload your CV on the Onboarding screen to fill this in.")
+    else:
+        ext_json = json.dumps(
+            facade.extension_profile(st.session_state.cv_profile), indent=2
+        )
+        st.code(ext_json, language="json")
+        st.download_button(
+            "Download profile (JSON)",
+            data=ext_json,
+            file_name="careeragent_autofill_profile.json",
+            mime="application/json",
+        )
+        st.caption(
+            "Location is left blank - your CV does not record one. Fill it in "
+            "the popup once and the extension remembers it."
+        )
+
+    st.divider()
+
     # --- Job digest (Phase 9) --- #
     st.subheader("Job digest")
     st.caption(
@@ -1311,6 +1341,64 @@ def page_export():
             )
 
 
+def _due_label(card: dict) -> str:
+    """How overdue a follow-up is, in words the candidate can act on."""
+    days = card.get("days_until_follow_up")
+    if days is None:
+        return ""
+    if days < 0:
+        return f"{abs(days)}d overdue"
+    if days == 0:
+        return "due today"
+    return f"due in {days}d"
+
+
+def _render_followups():
+    """Reminder panel: the applications the candidate owes a nudge.
+
+    Sits above everything else on the screen because it is the only part of
+    the pipeline with a deadline attached.
+    """
+    try:
+        due = facade.due_followups()
+    except Exception as e:
+        st.error(f"Could not load follow-ups: {e}")
+        return
+
+    if not due:
+        st.success(
+            "No follow-ups due. Applications you mark **Applied** get a "
+            "reminder here after a week."
+        )
+        return
+
+    st.warning(f"**{len(due)} follow-up{'s' if len(due) > 1 else ''} due**")
+    for card in due:
+        app_id = card["application_id"]
+        with st.container(border=True):
+            st.markdown(f"**{card['title']}** — {card['company']}")
+            bits = [_due_label(card)]
+            if card.get("days_since_applied") is not None:
+                bits.append(f"applied {card['days_since_applied']}d ago")
+            st.caption(" · ".join(b for b in bits if b))
+            if card.get("url"):
+                st.markdown(f"[Open posting]({card['url']})")
+
+            c1, c2, c3 = st.columns(3)
+            if c1.button("Snooze 3d", key=f"snooze3_{app_id}"):
+                facade.snooze_followup(app_id, 3)
+                st.rerun()
+            if c2.button("Snooze 7d", key=f"snooze7_{app_id}"):
+                facade.snooze_followup(app_id, 7)
+                st.rerun()
+            if c3.button("No reply — reject", key=f"rej_{app_id}"):
+                res = facade.advance_application(app_id, "rejected")
+                if res["ok"]:
+                    st.rerun()
+                else:
+                    st.warning(res["error"])
+
+
 def page_pipeline():
     """Pipeline screen - API-first ingestion, scored matches, and tracking."""
     st.title("Pipeline")
@@ -1318,6 +1406,10 @@ def page_pipeline():
         "Pull jobs directly from company ATS APIs, see explainable match "
         "scores against your CV, and track applications through the funnel."
     )
+
+    st.subheader("Follow-ups")
+    _render_followups()
+    st.divider()
 
     # --- Ingest from an ATS public API --- #
     st.subheader("Ingest jobs from a company ATS")
@@ -1481,22 +1573,36 @@ def page_pipeline():
         "screening": "interview",
         "interview": "offer",
     }
+    if not any(board.get(s) for s in statuses):
+        st.info(
+            "No applications yet. Add a job from **Top matches** above to "
+            "start tracking it."
+        )
+
+    # Six columns leave ~130px each, so the columns stay a compact overview.
+    # Anything the candidate edits lives in the full-width detail panel below --
+    # a notes box rendered inside a column here comes out 94px wide.
     cols = st.columns(len(statuses))
     for col, status in zip(cols, statuses):
         with col:
             cards = board.get(status, [])
             st.markdown(f"**{status.title()}** ({len(cards)})")
             for card in cards:
-                st.caption(f"{card['title']} — {card['company']}")
+                flag = " ⚠️" if card.get("overdue") else ""
+                st.caption(f"{card['title']}{flag}")
+                st.caption(f"_{card['company']}_")
                 if status in next_status:
                     if st.button(
-                        f"→ {next_status[status]}",
+                        next_status[status][:9],
                         key=f"adv_{card['application_id']}",
+                        use_container_width=True,
                     ):
                         facade.advance_application(
                             card["application_id"], next_status[status]
                         )
                         st.rerun()
+
+    _render_application_detail(board, statuses)
 
     if f:
         st.divider()
@@ -1507,6 +1613,94 @@ def page_pipeline():
         m[2].metric("Screening", f["reached"].get("screening", 0))
         m[3].metric("Interview", f["reached"].get("interview", 0))
         m[4].metric("Offer", f["reached"].get("offer", 0))
+
+        conv = f.get("conversion", {})
+        if f["reached"].get("applied", 0):
+            c = st.columns(3)
+            c[0].metric(
+                "Applied → Screening",
+                f"{conv.get('applied_to_screening', 0):.0%}",
+            )
+            c[1].metric(
+                "Screening → Interview",
+                f"{conv.get('screening_to_interview', 0):.0%}",
+            )
+            c[2].metric("Interview → Offer", f"{conv.get('interview_to_offer', 0):.0%}")
+
+
+def _render_application_detail(board: dict, statuses: list):
+    """Full-width editor for one application.
+
+    The kanban columns are too narrow to hold a notes field or a readable
+    button, so the per-application controls live here instead of inside them.
+    """
+    everything = [(s, c) for s in statuses for c in board.get(s, [])]
+    if not everything:
+        return
+
+    st.markdown("**Application detail**")
+    labels = {f"{c['title']} — {c['company']} ({s})": (s, c) for s, c in everything}
+    choice = st.selectbox("Application", list(labels), label_visibility="collapsed")
+    status, card = labels[choice]
+    app_id = card["application_id"]
+
+    left, right = st.columns([3, 2])
+    with left:
+        if card.get("url"):
+            st.markdown(f"[Open posting]({card['url']})")
+        if card.get("applied_at"):
+            st.caption(
+                f"Applied {card['days_since_applied']}d ago · "
+                f"{_due_label(card) or 'no follow-up set'}"
+            )
+        else:
+            st.caption("Not applied yet.")
+        notes = st.text_area(
+            "Notes",
+            value=card.get("notes", ""),
+            key=f"notes_{app_id}",
+            placeholder="Recruiter name, referral, interview date...",
+        )
+        if notes != card.get("notes", ""):
+            facade.set_application_notes(app_id, notes)
+            st.caption("Notes saved.")
+
+    with right:
+        next_status = {
+            "saved": "applied",
+            "applied": "screening",
+            "screening": "interview",
+            "interview": "offer",
+        }
+        if status in next_status:
+            if st.button(
+                f"Move to {next_status[status]}",
+                key=f"detail_adv_{app_id}",
+                type="primary",
+                use_container_width=True,
+            ):
+                facade.advance_application(app_id, next_status[status])
+                st.rerun()
+        # Every active state can also end badly. Without this the board only
+        # models the happy path and dead applications sit in "applied"
+        # forever, skewing the funnel and nagging with stale reminders.
+        if status not in ("rejected", "withdrawn"):
+            if st.button(
+                "Mark rejected", key=f"detail_rej_{app_id}", use_container_width=True
+            ):
+                res = facade.advance_application(app_id, "rejected")
+                if res["ok"]:
+                    st.rerun()
+                else:
+                    st.warning(res["error"])
+            if st.button(
+                "Withdraw", key=f"detail_wd_{app_id}", use_container_width=True
+            ):
+                res = facade.advance_application(app_id, "withdrawn")
+                if res["ok"]:
+                    st.rerun()
+                else:
+                    st.warning(res["error"])
 
 
 # Router
