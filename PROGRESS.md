@@ -29,6 +29,23 @@ Totals: **204 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
 
 ## Log
 
+### 2026-10-14 — Fresh installs broke 56 tests: sqlmodel 0.0.45 tz change
+
+**Found by:** a clean `pip install -r requirements-test.txt` on `main`
+(792b9f5). 56 of 338 tests failed with `Datetime values must have timezone
+information`. CI was still green only because its last run (2026-09-11)
+predates the sqlmodel release.
+
+**Root cause:** sqlmodel 0.0.45 maps every `datetime` field to a new
+`UTCDateTime` TypeDecorator that raises on naive values. The codebase stores
+naive UTC by design (`core/normalize.utc_now()`), and `sqlmodel<1.0.0` let the
+new release in. Bisected: 0.0.44 has no `UTCDateTime`; 0.0.45–0.0.48 all do.
+
+**Fix:** cap `sqlmodel<0.0.45` in `requirements.txt` (comment explains why).
+338/338 pass on 0.0.44 with SQLAlchemy 2.1.4. The proper fix — moving the
+models to aware datetimes with a migration — is tracked as a GitHub issue.
+**Rollback:** revert the one-line pin.
+
 ### 2026-09-11 — Follow-up reminders reach the UI; app→extension profile handoff
 
 **Root cause, not symptom.** Phase 6 shipped `TrackingService.due_followups()`
