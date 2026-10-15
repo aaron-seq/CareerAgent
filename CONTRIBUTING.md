@@ -53,7 +53,7 @@ Thank you for your interest in contributing to CareerAgent! This document provid
 - `refactor/` - Code refactoring
 - `test/` - Test additions or modifications
 
-Example: `feature/add-linkedin-integration`
+Example: `feature/add-job-source`
 
 ### Making Changes
 
@@ -69,9 +69,12 @@ Example: `feature/add-linkedin-integration`
    streamlit run app.py
    ```
 
-4. Run tests (if available):
+4. Run the Python and extension tests and lint/format gates:
    ```bash
    pytest tests/
+   (cd extension && node --test)
+   ruff check .
+   ruff format --check .
    ```
 
 5. Commit your changes:
@@ -107,7 +110,7 @@ feat: add WhatsApp integration for message drafts
 
 - Follow PEP 8 style guide
 - Use type hints where appropriate
-- Maximum line length: 88 characters (Black formatter default)
+- Maximum line length: 88 characters (Ruff formatter)
 - Use docstrings for all public functions and classes
 
 ### Docstring Format
@@ -135,7 +138,7 @@ def function_name(param1: str, param2: int) -> bool:
 - Keep functions focused and under 50 lines
 - Use Pydantic models for data structures
 - Handle errors gracefully with try-except blocks
-- Add logging for debugging (use print statements for now)
+- Log actionable failures without model responses, CV content, or credentials.
 
 ## Testing Guidelines
 
@@ -181,7 +184,7 @@ If adding unit tests:
 ```
 
 Examples:
-- `[Feature] Add LinkedIn job scraper`
+- `[Feature] Add public ATS job source`
 - `[Fix] Correct email validation logic`
 - `[Docs] Update installation instructions`
 

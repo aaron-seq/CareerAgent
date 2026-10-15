@@ -14,8 +14,8 @@ A local AI-powered career assistant for personalized job outreach. This applicat
   fallback mode.
 - **Contact Finder**: Automated search for hiring managers and contact permutation generation.
 - **Resume tailoring & cover letters**: Truthfully reorders/emphasizes your
-  real CV content per job, and drafts cover letters grounded in it — both
-  raise rather than invent an employer, credential, or metric you don't have.
+  real CV content per job, and checks cover-letter metrics against it.
+  Free-prose checks are heuristic; review generated claims before exporting.
 - **Personalized Outreach**: Generates technical, product, or impact-focused email drafts based on your CV and the job description.
 - **Quality Assurance**: Built-in validation to ensure emails meet professional standards (no fluff, concrete metrics, clear CTA).
 - **Multi-Channel Support**: Creates Gmail drafts directly or generates WhatsApp click-to-chat links.
@@ -28,7 +28,8 @@ The application is built with a modern Python stack:
 - **LLM Orchestration**: Custom Python client interacting with Ollama API.
 - **Data Parsing**: PyPDF2 and PDFPlumber for robust CV extraction.
 - **Search**: DuckDuckGo Search API for real-time contact and job data.
-- **Storage**: Local filesystem storage with JSON serialization for privacy.
+- **Storage**: Encrypted local JSON artifacts and selected SQLite fields;
+  explicit Markdown/ZIP exports contain readable personal data.
 
 ## Getting Started
 
@@ -65,17 +66,51 @@ The application is built with a modern Python stack:
     streamlit run app.py
     ```
 
+The app creates an ignored, mode-0600 `.careeragent_key` on its first encrypted
+write unless `CAREERAGENT_ENCRYPTION_KEY` is supplied. Keep this key stable and
+back it up with `careeragent.db` and `careeragent_data/`; losing it makes
+encrypted data unreadable and changes suppression-list hashes. Deployment
+operators can supply a managed key instead. See `.env.example` for supported
+settings and [the current audit](docs/SECURITY_AUDIT.md) for remaining risks.
+
+Changing the model or provider disconnects the previous client. Initialize
+the selected provider again before parsing a CV. Initialization requires the
+selected model to exist; parsing failures are reported rather than saved as
+empty profiles.
+
 ## Deployment
 
 The application is container-ready and supports deployment on platforms like Railway, Render, or Vercel (using docker).
 
 ### Docker
 
+Compose starts the app and its Ollama service on a private network:
+
+```bash
+docker compose up -d --build
+docker compose exec ollama ollama pull llama3.1:8b
+```
+
+The app port is published on the host's loopback interface. The container runs
+as UID 1000; the mounted `careeragent_data/` directory must be writable by that
+user. SQLite and the generated key both live in that persistent directory.
+Compose uses `http://ollama:11434` internally, independently of a host-local
+`OLLAMA_BASE_URL` in `.env`. Gmail credentials are optional and are not mounted
+by default; configure private mounts and `GMAIL_CREDENTIALS_PATH` /
+`GMAIL_TOKEN_PATH` explicitly when enabling Gmail.
+
 Build the container:
 
 ```bash
 docker build -t careeragent .
-docker run -p 8501:8501 careeragent
+docker run -p 127.0.0.1:8501:8501 careeragent
+```
+
+For a build behind a TLS-inspecting proxy, provide its trusted CA bundle as a
+BuildKit secret, without disabling TLS verification or copying it into the image:
+
+```bash
+docker build --secret id=pip_ca_bundle,src=/path/to/trusted-ca-bundle.pem -t careeragent .
 ```
 
 Note: For cloud deployment, ensure the Ollama instance is accessible or bundled within the container (requires significant resources).
@@ -90,7 +125,7 @@ for decisions.
 
 | Package | What it does |
 |---|---|
-| `core/db` | SQLModel schema, Alembic migrations, repositories, **PII encrypted at rest** (Fernet). SQLite for dev, Postgres in prod (ADR 0003). |
+| `core/db` | SQLModel schema, Alembic migrations, repositories, Fernet-encrypted CV payloads/contact fields/draft bodies. Some metadata remains plaintext; see the audit. SQLite for dev, Postgres target (ADR 0003). |
 | `core/ingestion` | API-first job ingestion: `ats.py` company boards (Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable) + `aggregators.py`/`boards.py` (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) → canonical `JobPosting`. |
 | `core/fetching` | ATS detection (regex), JSON-LD `JobPosting` extraction, robots-respecting rate-limited fetcher (scraping fallback only). |
 | `core/matching` | Pluggable embeddings, fuzzy dedup, and **explainable** resume↔job scoring (matched/missing keywords). |
@@ -111,21 +146,49 @@ for decisions.
 - **Never fabricate** — resume tailoring is guarded by `assert_no_fabrication`.
 - **Regulated outreach** — no send passes the gate without verification, a
   suppression check, a complete LIA, and a compliant footer.
-- **PII encrypted at rest** and kept local by default.
+- **Protected CV/contact/draft payloads encrypted at rest**, local by default;
+  remaining metadata and historical exposures are listed in the audit.
 
 ### Running the platform pieces
 
 ```bash
 pip install -r requirements-test.txt   # includes runtime + test deps
-export CAREERAGENT_ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 alembic upgrade head                    # create the schema (SQLite by default)
-pytest                                  # 330 Python tests (see PROGRESS.md for current count)
-(cd extension && node --test)           # 11 extension tests
+pytest                                  # 377 Python tests
+(cd extension && node --test)           # 18 extension tests
 python -m scripts.send_digest --dry-run # build a job digest
 ```
 
 Set `DATABASE_URL` to a Postgres URL for production. Delivery/LLM/API keys are
 read from the environment (see `.env.example`).
+
+### Existing local artifacts
+
+Legacy plaintext JSON remains readable. After backing up your data and keeping
+the original encryption key available, explicitly encrypt those artifacts:
+
+```bash
+python - <<'PY'
+from dotenv import load_dotenv
+from core.storage import LocalStorage
+load_dotenv()
+print("Encrypted artifacts:", LocalStorage().encrypt_legacy_artifacts())
+PY
+```
+
+The migration is atomic per file and repeatable. Readable exports are excluded.
+Do not delete an existing key or generate a replacement when a decryption fails.
+
+### Outreach limits
+
+Gmail draft creation rechecks the current content and recipient, includes the
+approved sender/opt-out footer, and records successful exports. The local
+workflow permits 25 Gmail draft exports per day with a minimum 30-second gap;
+previews do not consume that quota. SQLite serializes concurrent export checks.
+The Postgres advisory-lock path requires integration validation before deployment.
+The app creates drafts for human review and does not send email. It cannot limit
+messages sent manually in Gmail. Unknown MX status blocks draft export until
+verification can be completed.
 
 ## Project Structure
 

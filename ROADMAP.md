@@ -86,6 +86,10 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 
 ## Implementation status (2026-07-23)
 
+These historical checkmarks describe feature implementation, not production
+readiness. The current status, demonstrated guarantees, and remaining security /
+integration work are in `PROGRESS.md` and `docs/SECURITY_AUDIT.md`.
+
 **All phases 0–10 implemented and tested** (204+ Python tests + 11 JS tests
 green as of 2026-07-27, `ruff` clean — see `PROGRESS.md` for the current
 count). A full internal end-to-end test
