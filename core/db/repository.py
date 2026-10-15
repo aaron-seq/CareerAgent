@@ -16,7 +16,7 @@ from sqlmodel import Session, select
 
 from ..models import CVProfile, EmailDraft, JobPosting
 from ..normalize import compute_dedup_key, normalize_company_name, utc_now
-from .crypto import deterministic_hash
+from .crypto import decrypt_payload, deterministic_hash
 from .tables import (
     ApplicationRow,
     ApplicationStatus,
@@ -334,7 +334,7 @@ def import_legacy_json(session: Session, data_dir: str) -> dict[str, int]:
             if not fname.endswith(".json"):
                 continue
             with open(os.path.join(path, fname), encoding="utf-8") as fh:
-                yield json.load(fh)
+                yield decrypt_payload(json.load(fh))
 
     for data in _load_dir("job_postings"):
         jobs.upsert(JobPosting.model_validate(data), source="legacy_import")

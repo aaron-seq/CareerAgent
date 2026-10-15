@@ -3,6 +3,8 @@ CV parser with PDF extraction and LLM-based structuring
 Supports both PDF and plain text input
 """
 
+import tempfile
+from pathlib import Path
 from typing import List, Optional
 
 import pdfplumber
@@ -23,6 +25,18 @@ class CVParser:
         """Parse CV from PDF file"""
         text = self._extract_text_from_pdf(pdf_path)
         return self.parse_text(text, links=self._extract_hyperlinks_from_pdf(pdf_path))
+
+    def parse_pdf_bytes(self, content: bytes) -> CVProfile:
+        """Parse an upload using a private temporary file, always cleaning it."""
+        with tempfile.NamedTemporaryFile(
+            prefix="careeragent-cv-", suffix=".pdf", delete=False
+        ) as file:
+            temporary = Path(file.name)
+            file.write(content)
+        try:
+            return self.parse_pdf(str(temporary))
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def parse_text(self, cv_text: str, links: Optional[List[str]] = None) -> CVProfile:
         """Parse CV from plain text using LLM.
@@ -56,15 +70,23 @@ class CVParser:
 
             # Validate with Pydantic
             profile = CVProfile(**cv_data)
+            if not any(
+                [
+                    profile.name,
+                    profile.summary,
+                    profile.skills,
+                    profile.experiences,
+                    profile.projects,
+                    profile.education,
+                ]
+            ):
+                raise ValueError("The model returned no candidate profile fields.")
             return profile
 
         except Exception as e:
-            print(f"ERROR: CV Parsing failed: {e}")
-            # Fallback: create minimal profile with raw text
-            return CVProfile(
-                raw_text=cv_text,
-                summary=f"CV parsing failed: {str(e)}. Using raw text.",
-            )
+            raise ValueError(
+                "CV parsing failed. Check the selected model and connection, then retry."
+            ) from e
 
     def _extract_text_from_pdf(self, pdf_path: str) -> str:
         """Extract text from PDF using multiple methods"""

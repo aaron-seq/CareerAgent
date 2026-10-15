@@ -61,9 +61,12 @@ def test_verify_email_requires_mx():
     assert no_mx.has_mx is False and no_mx.deliverable is False
 
 
-def test_verify_email_unknown_mx_not_blocked():
+def test_verify_email_unknown_mx_requires_explicit_syntax_only_mode():
     r = verify_email("a@example.com", resolver=lambda d: None)
-    assert r.has_mx is None and r.deliverable is True
+    assert r.has_mx is None and r.deliverable is False
+    assert verify_email(
+        "a@example.com", resolver=lambda d: None, require_mx=False
+    ).deliverable
 
 
 # --------------------------------------------------------------------------- #

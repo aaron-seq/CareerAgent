@@ -36,6 +36,8 @@ class VerificationResult:
             return "invalid syntax"
         if self.has_mx is False:
             return "no MX record for domain"
+        if self.has_mx is None and not self.deliverable:
+            return "MX lookup unavailable; retry when DNS verification is available"
         return "ok"
 
 
@@ -47,14 +49,16 @@ def _default_resolver(domain: str) -> Optional[list[str]]:
     try:
         answers = dns.resolver.resolve(domain, "MX")
         return [str(r.exchange).rstrip(".") for r in answers]
-    except Exception:
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
         return []
+    except dns.exception.DNSException:
+        return None
 
 
 def verify_email(
     email: str, resolver: MxResolver | None = None, require_mx: bool = True
 ) -> VerificationResult:
-    """Verify an address. ``deliverable`` requires syntax and (if checkable) MX."""
+    """Verify syntax and, when required, a confirmed non-null MX record."""
     syntax_ok = bool(_EMAIL_RE.match(email or ""))
     if not syntax_ok:
         return VerificationResult(email, False, None, False)
@@ -63,9 +67,7 @@ def verify_email(
     domain = email.rsplit("@", 1)[1]
     mx = resolver(domain)
     if mx is None:
-        # Unknown (no resolver / offline). We can't confirm MX, so we don't
-        # block on it -- syntax passed and that's all we can verify here.
-        return VerificationResult(email, True, None, True)
-    has_mx = len(mx) > 0
+        return VerificationResult(email, True, None, not require_mx)
+    has_mx = any(host.strip().strip(".") for host in mx)
     deliverable = has_mx if require_mx else True
     return VerificationResult(email, True, has_mx, deliverable)

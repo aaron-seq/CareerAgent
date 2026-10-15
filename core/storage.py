@@ -2,20 +2,27 @@
 Local storage for drafts and export to JSON/ZIP
 """
 
+from __future__ import annotations
+
 import json
 import os
-from datetime import datetime
+import re
+import tempfile
+from pathlib import Path
 from typing import List
 from zipfile import ZipFile
 
+from .db.crypto import decrypt_payload, encrypt_payload
 from .models import CVProfile, EmailDraft, JobPosting, WhatsAppDraft
 
 
 class LocalStorage:
     """Manage local storage of drafts and artifacts"""
 
-    def __init__(self, storage_dir: str = "careeragent_data"):
-        self.storage_dir = storage_dir
+    def __init__(self, storage_dir: str | None = None):
+        self.storage_dir = (
+            storage_dir or os.getenv("STORAGE_PATH") or "careeragent_data"
+        )
         self._ensure_directories()
 
     def _ensure_directories(self):
@@ -32,55 +39,85 @@ class LocalStorage:
         for dir_path in dirs:
             os.makedirs(dir_path, exist_ok=True)
 
-    def save_email_draft(self, draft: EmailDraft) -> str:
-        """Save email draft as JSON"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"email_{draft.company}_{timestamp}.json"
-        filepath = os.path.join(self.storage_dir, "email_drafts", filename)
+    def _new_path(self, subdir: str, name: str, suffix: str) -> str:
+        # Source/LLM-provided company names are labels, never path components.
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", name).strip("._")[:80] or "artifact"
+        descriptor, path = tempfile.mkstemp(
+            dir=os.path.join(self.storage_dir, subdir),
+            prefix=f"{safe_name}_",
+            suffix=suffix,
+        )
+        os.close(descriptor)  # mkstemp gives each artifact a unique, mode-0600 file
+        return path
 
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(draft.model_dump(), f, indent=2, default=str)
-
+    def _save_json(self, subdir: str, name: str, data: dict) -> str:
+        payload = encrypt_payload(data)
+        filepath = self._new_path(subdir, name, ".json")
+        with open(filepath, "w", encoding="utf-8") as file:
+            json.dump(payload, file, indent=2)
         return filepath
+
+    def encrypt_legacy_artifacts(self) -> int:
+        """Explicitly migrate plaintext JSON after the user backs up data/key.
+
+        Each replacement is atomic and private. New-format files are verified
+        and left intact, so an interrupted migration can be rerun safely.
+        Readable exports are deliberately outside this migration.
+        """
+        changed = 0
+        for subdir in (
+            "email_drafts",
+            "whatsapp_drafts",
+            "cv_profiles",
+            "job_postings",
+        ):
+            for path in Path(self.storage_dir, subdir).glob("*.json"):
+                if path.is_symlink() or not path.is_file():
+                    continue
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if data.get("format") == "careeragent.fernet.v1":
+                    decrypt_payload(data)  # verify the key, without rewriting
+                    continue
+                payload = encrypt_payload(data)
+                with tempfile.NamedTemporaryFile(
+                    dir=path.parent,
+                    mode="w",
+                    encoding="utf-8",
+                    suffix=".part",
+                    delete=False,
+                ) as file:
+                    temporary = Path(file.name)
+                    json.dump(payload, file)
+                try:
+                    temporary.replace(path)
+                finally:
+                    temporary.unlink(missing_ok=True)
+                changed += 1
+        return changed
+
+    def save_email_draft(self, draft: EmailDraft) -> str:
+        """Save an authenticated, encrypted JSON payload."""
+        return self._save_json(
+            "email_drafts", f"email_{draft.company}", draft.model_dump()
+        )
 
     def save_whatsapp_draft(self, draft: WhatsAppDraft) -> str:
         """Save WhatsApp draft as JSON"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"whatsapp_{draft.company}_{timestamp}.json"
-        filepath = os.path.join(self.storage_dir, "whatsapp_drafts", filename)
-
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(draft.model_dump(), f, indent=2, default=str)
-
-        return filepath
+        return self._save_json(
+            "whatsapp_drafts", f"whatsapp_{draft.company}", draft.model_dump()
+        )
 
     def save_cv_profile(self, profile: CVProfile) -> str:
         """Save CV profile as JSON"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"cv_profile_{timestamp}.json"
-        filepath = os.path.join(self.storage_dir, "cv_profiles", filename)
-
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(profile.model_dump(), f, indent=2, default=str)
-
-        return filepath
+        return self._save_json("cv_profiles", "cv_profile", profile.model_dump())
 
     def save_job_posting(self, job: JobPosting) -> str:
         """Save job posting as JSON"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"job_{job.company}_{timestamp}.json"
-        filepath = os.path.join(self.storage_dir, "job_postings", filename)
-
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(job.model_dump(), f, indent=2, default=str)
-
-        return filepath
+        return self._save_json("job_postings", f"job_{job.company}", job.model_dump())
 
     def export_to_markdown(self, draft: EmailDraft) -> str:
         """Export email draft as markdown"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"email_{draft.company}_{timestamp}.md"
-        filepath = os.path.join(self.storage_dir, "exports", filename)
+        filepath = self._new_path("exports", f"email_{draft.company}", ".md")
 
         markdown = f"""# Email Draft for {draft.job_title} at {draft.company}
 
@@ -132,10 +169,8 @@ class LocalStorage:
         return filepath
 
     def create_export_zip(self, name: str = "careeragent_export") -> str:
-        """Create ZIP archive of all artifacts"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        zip_filename = f"{name}_{timestamp}.zip"
-        zip_filepath = os.path.join(self.storage_dir, "exports", zip_filename)
+        """Explicitly export readable content, including personal data."""
+        zip_filepath = self._new_path("exports", name, ".zip")
 
         with ZipFile(zip_filepath, "w") as zipf:
             # Add all JSON files
@@ -143,8 +178,15 @@ class LocalStorage:
                 for file in files:
                     if file.endswith((".json", ".md")):
                         file_path = os.path.join(root, file)
+                        if Path(file_path).is_symlink():
+                            continue
                         arcname = os.path.relpath(file_path, self.storage_dir)
-                        zipf.write(file_path, arcname)
+                        if file.endswith(".json"):
+                            with open(file_path, encoding="utf-8") as source:
+                                data = decrypt_payload(json.load(source))
+                            zipf.writestr(arcname, json.dumps(data, indent=2))
+                        else:
+                            zipf.write(file_path, arcname)
 
         return zip_filepath
 
@@ -155,7 +197,14 @@ class LocalStorage:
 
     def load_email_draft(self, filename: str) -> EmailDraft:
         """Load email draft from JSON"""
-        filepath = os.path.join(self.storage_dir, "email_drafts", filename)
+        directory = Path(self.storage_dir, "email_drafts").resolve()
+        filepath = (directory / filename).resolve()
+        if (
+            Path(filename).name != filename
+            or "\\" in filename
+            or filepath.parent != directory
+        ):
+            raise ValueError("Expected a draft filename inside email_drafts.")
         with open(filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            data = decrypt_payload(json.load(f))
         return EmailDraft(**data)

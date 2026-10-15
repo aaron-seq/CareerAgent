@@ -27,6 +27,8 @@ wheels/
 # Virtual Environment
 venv/
 .env
+credentials.json
+token.json
 
 # IDE
 .vscode/
@@ -52,6 +54,8 @@ careeragent.db
 
 # Local encryption key material
 .careeragent_key
+.careeragent-key-*
+.careeragent-oauth-*
 # Downloaded enrichment datasets (large; licences restrict redistribution)
 core/enrichment/data/*.csv
 

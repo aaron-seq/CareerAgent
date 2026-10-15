@@ -138,6 +138,53 @@ def test_unsupported_ats_raises(temp_db):
         facade.ingest_ats("workday", "acme")
 
 
+def test_outreach_quota_survives_service_recreation(temp_db):
+    from core.db import get_session
+    from core.db.repository import DraftRepository
+
+    config = ComplianceConfig(
+        "Ada", "ada@example.test", "1 Example Street", "mailto:ada@example.test"
+    )
+    lia = LIARecord(campaign="c", purpose="p", necessity="n", balancing="b")
+    draft = EmailDraft(subject="Hi", body="Hello", recipient_email="hm@example.test")
+    with get_session() as session:
+        for index in range(25):
+            DraftRepository(session).save(
+                draft.model_copy(update={"gmail_draft_id": f"saved-{index}"})
+            )
+    decision = facade.compliance_gate(draft, config, lia, resolver=lambda _: ["mx"])
+    assert not decision.allowed
+    assert "cap" in decision.reason
+
+
+def test_concurrent_gmail_creations_share_the_same_quota(temp_db):
+    from concurrent.futures import ThreadPoolExecutor
+    from unittest.mock import Mock
+
+    config = ComplianceConfig(
+        "Ada", "ada@example.test", "1 Example Street", "mailto:ada@example.test"
+    )
+    lia = LIARecord(campaign="c", purpose="p", necessity="n", balancing="b")
+    draft = EmailDraft(subject="Hi", body="Hello", recipient_email="hm@example.test")
+    gmail = Mock()
+    gmail.create_draft.return_value = "synthetic-id"
+
+    def create():
+        try:
+            facade.create_gmail_draft(
+                draft, config, lia, gmail, resolver=lambda _: ["mx"]
+            )
+            return True
+        except ValueError as error:
+            assert "cap" in str(error) or "interval" in str(error)
+            return False
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: create(), range(2)))
+    assert results.count(True) == 1
+    gmail.create_draft.assert_called_once()
+
+
 # --------------------------------------------------------------------------- #
 # Aggregator ingestion
 # --------------------------------------------------------------------------- #

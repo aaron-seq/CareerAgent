@@ -25,7 +25,7 @@ _engine: Engine | None = None
 
 
 def get_database_url() -> str:
-    return os.environ.get("DATABASE_URL", DEFAULT_URL)
+    return os.environ.get("DATABASE_URL") or DEFAULT_URL
 
 
 def get_engine() -> Engine:

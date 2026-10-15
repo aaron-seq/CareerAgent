@@ -5,21 +5,25 @@ Handles JSON parsing, retries, and streaming
 """
 
 import json
+import logging
+import os
 import time
 from typing import Any, Dict, Optional
 
 import requests
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
 
 class LocalLLMClient:
     """Client for interacting with Ollama local LLM"""
 
-    def __init__(
-        self, base_url: str = "http://localhost:11434", model: str = "llama3.1:8b"
-    ):
-        self.base_url = base_url
-        self.model = model
+    def __init__(self, base_url: Optional[str] = None, model: Optional[str] = None):
+        self.base_url = (
+            base_url or os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
+        ).rstrip("/")
+        self.model = model or os.getenv("OLLAMA_MODEL") or "llama3.1:8b"
         self.timeout = 120  # 2 minutes for large responses
 
     def check_connection(self) -> bool:
@@ -110,11 +114,13 @@ class LocalLLMClient:
                 parsed = json.loads(cleaned)
                 return parsed
 
-            except json.JSONDecodeError as e:
-                print(f"DEBUG: JSON Parse Error (Attempt {attempt + 1}): {e}")
-                print(
-                    f"DEBUG: Failed JSON content: {cleaned[:200]}..."
-                )  # Print start of failed content
+            except json.JSONDecodeError:
+                # Model output may contain a resume, contact data, or credentials.
+                logger.warning(
+                    "Model returned invalid JSON (attempt %s/%s)",
+                    attempt + 1,
+                    max_retries,
+                )
                 if attempt < max_retries - 1:
                     # Retry with stricter prompt
                     time.sleep(1)

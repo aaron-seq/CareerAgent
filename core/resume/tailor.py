@@ -54,9 +54,12 @@ def assert_no_fabrication(original: CVProfile, tailored: CVProfile) -> None:
     orig_skills = set(original.skills)
     if not set(tailored.skills).issubset(orig_skills):
         raise FabricationError("Tailored resume introduced new skills.")
-    orig_pairs = {(e.company, e.title) for e in original.experiences}
+    other_fields = set(type(original).model_fields) - {"skills", "experiences"}
+    if any(getattr(original, name) != getattr(tailored, name) for name in other_fields):
+        raise FabricationError("Tailored resume changed candidate facts.")
+    original_experiences = [entry.model_dump() for entry in original.experiences]
     for exp in tailored.experiences:
-        if (exp.company, exp.title) not in orig_pairs:
+        if exp.model_dump() not in original_experiences:
             raise FabricationError("Tailored resume introduced new experience.")
 
 
@@ -92,23 +95,10 @@ def tailor_resume(
         e.title for e in cv.experiences
     ]
 
-    # 3. Tailored summary drawn only from real, matched skills.
-    top_skills = relevant[:4]
-    if top_skills:
-        summary = (
-            f"{job.title} candidate with hands-on experience in "
-            f"{', '.join(top_skills)}."
-        )
-        if cv.summary:
-            summary = f"{summary} {cv.summary}"
-    else:
-        summary = cv.summary
-
     tailored = cv.model_copy(
         update={
             "skills": tailored_skills,
             "experiences": reordered,
-            "summary": summary,
         }
     )
     assert_no_fabrication(cv, tailored)
