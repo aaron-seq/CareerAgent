@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import pdfplumber
-import PyPDF2
+from pypdf import PdfReader
 
 from .llm import LocalLLMClient
 from .models import CVProfile
@@ -105,19 +105,19 @@ class CVParser:
         except Exception as e:
             print(f"pdfplumber extraction failed: {e}")
 
-        # Fallback to PyPDF2
+        # Fallback to pypdf (the maintained successor to PyPDF2)
         try:
             with open(pdf_path, "rb") as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
-                    page_text = page.extract_text()
+                pdf_reader = PdfReader(file)
+                for pdf_page in pdf_reader.pages:
+                    page_text = pdf_page.extract_text()
                     if page_text:
                         text += page_text + "\n\n"
 
             if text.strip():
                 return text.strip()
         except Exception as e:
-            print(f"PyPDF2 extraction failed: {e}")
+            print(f"pypdf extraction failed: {e}")
 
         raise ValueError(
             "Could not extract text from PDF. File may be scanned image or corrupted."
