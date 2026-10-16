@@ -60,6 +60,9 @@ Core coverage is **92.78%**. Passing tests do not establish production readiness
 - Matrix validation exposed older Streamlit 1.50 retaining stale controls after
   immediate navigation. Prepare application now uses supported callbacks before
   rendering; the original failing Python 3.9 journey passes unchanged.
+- Independently ran all 452 tests on Python 3.9.25 / Streamlit 1.50: pass,
+  coverage 92.72%, with three additional SDK runtime-support warnings. Python
+  3.11 remains recommended; the runtime transition is tracked in #46.
 
 ### 2026-10-15 — Boundary audit and targeted privacy/reliability fixes
 

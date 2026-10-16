@@ -44,11 +44,17 @@ Session draft workspaces persist through navigation, not browser-session loss.
 
 ## Verification
 
-Final local checks: **452 Python tests and 18 extension tests passed**; Ruff
+Final Python 3.11 local checks: **452 Python tests and 18 extension tests passed**; Ruff
 lint/format passed. Core line coverage is **92.78% (3,044/3,281)**, above the
 previous 92.48%. The functional Docker build/smoke passed on the final source.
 Mypy remains advisory: 29 existing errors with Python 3.11 target, down from 32;
 it is not a passing type gate. Eight known deprecation/reload warnings remain.
+
+The complete Python 3.9.25 / Streamlit 1.50 run also passes 452 tests, at 92.72%
+core coverage. Its 11 warnings include three Google SDK notices that Python 3.9
+is past end of life. Python 3.11 is recommended; a supported-runtime transition
+is tracked in [#46](https://github.com/aaron-seq/CareerAgent/issues/46). No warnings
+were suppressed and existing version compatibility was retained.
 
 The regression suite exercises job switches, editor regeneration, saved-CV
 restore, profile changes, disconnected browsing/tailoring, pipeline handoffs,
