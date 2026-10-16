@@ -19,10 +19,47 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **459 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
-Core coverage is **92.78%**. Passing tests do not establish production readiness.
+Totals: **472 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
+Core coverage is **92.78%** (not re-measured for the 2026-10-16 core fixes).
+Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-16 — Real-user acceptance fixes: tailoring gaps, offer reminders, export
+
+Found by an offline, no-LLM real-user acceptance run; each has a regression test.
+
+1. **Tailoring gaps were junk** ("110k, 140k, 3+, build, data, engineer,
+   friendly, hiring" alongside the real "aws, dbt"). Root cause in
+   `core/matching/scoring.py` keyword extraction: bare quantities passed the
+   filter, filler verbs/culture words weren't stopwords, and job keywords were
+   compared only to the CV's skills list. Now quantity tokens are dropped
+   (`s3`/`ec2`/`k8s`/`3d` kept), the stopword list covers action/hiring
+   filler, and a keyword the CV states anywhere (title, summary,
+   achievements) counts as matched. Improves match scores too. Partially
+   mitigates [#10](https://github.com/aaron-seq/CareerAgent/issues/10) (the
+   description-fallback noise); ingestion still never fills
+   `tech_stack`/`requirements`, so domain words like "pipelines" can still
+   surface — #10 stays open.
+2. **Follow-up reminders persisted at OFFER.** `transition()` cleared the
+   date only on REJECTED/WITHDRAWN, and `due_followups()` used `_ACTIVE`
+   (which includes OFFER for dedup). New `follow_up_applies()` — False for
+   OFFER/REJECTED/WITHDRAWN — drives clearing on transition, the due list,
+   snooze (no-op), and the board card (hides stale legacy dates).
+   SCREENING/INTERVIEW keep reminders: the candidate is still waiting on the
+   employer.
+3. **"Export All Data (ZIP)" held only job postings, one twice.**
+   `save_job_posting()` minted a new file per call; it now writes one stable,
+   encrypted file per posting fingerprint, and the export collapses legacy
+   duplicates. New `facade.export_all_data(storage)` adds
+   `pipeline/applications.json` (status, notes, dates) and
+   `cv_profiles/saved_cv_<id>.json` from the DB, plus a `README.txt`
+   manifest. **UI follow-up (app.py not touched here):** the export button
+   should call `facade.export_all_data(st.session_state.storage)` instead of
+   `storage.create_export_zip()`; the label "Export All Data (ZIP)" is then
+   accurate.
+
+**Verified:** 472 passed (459 + 13 new); ruff + format clean.
 
 ### 2026-10-16 — Timezone-aware UTC datetimes; sqlmodel cap lifted (#37)
 
