@@ -168,8 +168,9 @@ class SmartRecruitersSource(JobSource):
     * A wrong slug returns **HTTP 200 with totalFound: 0**, not a 404, so a
       caller can't tell "no such company" from "no open roles" by status code.
     * The list response carries no description -- that lives on the per-posting
-      detail endpoint. So this costs 1 + N requests, and ``limit`` is kept
-      small by default to bound the fan-out against a public, unkeyed API.
+      detail endpoint. A fetch therefore costs one list request per page plus
+      one detail request per unique posting. Pagination and detail fan-out are
+      bounded; use ``offset`` to fetch another portion of a large board.
     """
 
     source = "smartrecruiters"
@@ -177,56 +178,140 @@ class SmartRecruitersSource(JobSource):
     def __init__(self, company_slug: str, company_name: str | None = None):
         self.company_slug = company_slug
         self.company_name = company_name or company_slug
+        self.warnings: list[str] = []
 
     def fetch(
-        self, client: httpx.Client, limit: int = 25, **params
+        self,
+        client: httpx.Client,
+        limit: int = 25,
+        offset: int = 0,
+        max_jobs: int = 250,
+        max_pages: int = 20,
+        **params,
     ) -> list[FetchedJob]:
+        """Fetch successive pages, with at most 1,000 jobs and 100 list calls.
+
+        ``limit`` controls the page size (the API accepts at most 100), rather
+        than silently limiting the entire board to its first page. The lower
+        defaults keep a normal refresh bounded even for very large boards.
+        Empty pages and pages with no new posting IDs stop pagination even if
+        the provider reports a stale or incorrect ``totalFound``.
+        """
+        self.warnings = []
+        for name, value, minimum, maximum in (
+            ("limit", limit, 1, 100),
+            ("offset", offset, 0, None),
+            ("max_jobs", max_jobs, 1, 1000),
+            ("max_pages", max_pages, 1, 100),
+        ):
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < minimum
+                or (maximum is not None and value > maximum)
+            ):
+                raise ValueError(f"Invalid SmartRecruiters {name}: {value!r}")
         base = (
             f"https://api.smartrecruiters.com/v1/companies/{self.company_slug}/postings"
         )
-        data = self._get_json(client, base, params={"limit": limit})
         jobs: list[FetchedJob] = []
-        for item in data.get("content") or []:
-            loc = item.get("location") or {}
-            city = ", ".join(
-                p for p in (loc.get("city"), loc.get("region"), loc.get("country")) if p
+        seen: set[str] = set()
+        for page_number in range(max_pages):
+            page_limit = min(limit, max_jobs - len(jobs))
+            data = self._get_json(
+                client, base, params={"limit": page_limit, "offset": offset}
             )
-            posting_id = str(item.get("id"))
-            description, url = (
-                "",
-                f"https://jobs.smartrecruiters.com/{self.company_slug}/{posting_id}",
-            )
-            try:
-                detail = self._get_json(client, f"{base}/{posting_id}")
-            except httpx.HTTPError:
-                detail = {}  # one dead posting must not sink the whole board
-            if detail:
-                url = detail.get("postingUrl") or url
-                sections = ((detail.get("jobAd") or {}).get("sections")) or {}
-                description = html_to_text(
-                    "".join(
-                        (sections.get(name) or {}).get("text") or ""
-                        for name in ("jobDescription", "qualifications")
-                    )
+            if not isinstance(data, dict):
+                raise ValueError(
+                    "Invalid SmartRecruiters list response: expected an object."
                 )
-            job = JobPosting(
-                title=item.get("name", ""),
-                company=(item.get("company") or {}).get("name") or self.company_name,
-                location=city or None,
-                url=url,
-                description=description,
-            )
-            jobs.append(
-                FetchedJob(
-                    job=job,
-                    source=self.source,
-                    source_id=posting_id,
-                    remote=bool(loc.get("remote")),
-                    employment_type=(item.get("typeOfEmployment") or {}).get("label"),
-                    date_posted=_parse_iso(item.get("releasedDate")),
+            items = data.get("content") or []
+            if not isinstance(items, list):
+                raise ValueError("Invalid SmartRecruiters content: expected a list.")
+            if not items:
+                break
+            previous_count = len(jobs)
+            consumed = 0
+            for item in items:
+                consumed += 1
+                if not isinstance(item, dict) or not item.get("id"):
+                    continue
+                posting_id = str(item["id"])
+                if posting_id in seen:
+                    continue
+                seen.add(posting_id)
+                jobs.append(self._posting(client, base, item, posting_id))
+                if len(jobs) >= max_jobs:
+                    break
+            offset += consumed
+            total = data.get("totalFound")
+            known_total = isinstance(total, int) and not isinstance(total, bool)
+            if len(jobs) == previous_count:
+                self.warnings.append(
+                    "SmartRecruiters returned a page without new posting IDs. "
+                    "Import stopped to avoid repeated requests; results may be incomplete."
                 )
-            )
+                break
+            if (
+                isinstance(total, int)
+                and not isinstance(total, bool)
+                and offset >= total
+            ):
+                break
+            if not known_total and len(items) < page_limit:
+                break
+            if len(jobs) >= max_jobs or page_number + 1 >= max_pages:
+                self.warnings.append(
+                    f"SmartRecruiters import reached its budget after {len(jobs)} jobs "
+                    f"and {page_number + 1} pages. More jobs may be available; "
+                    f"continue with offset={offset}."
+                )
+                break
         return jobs
+
+    def _posting(
+        self, client: httpx.Client, base: str, item: dict, posting_id: str
+    ) -> FetchedJob:
+        loc = item.get("location") or {}
+        city = ", ".join(
+            p for p in (loc.get("city"), loc.get("region"), loc.get("country")) if p
+        )
+        description, url = (
+            "",
+            f"https://jobs.smartrecruiters.com/{self.company_slug}/{posting_id}",
+        )
+        try:
+            detail = self._get_json(client, f"{base}/{posting_id}")
+        except httpx.HTTPError:
+            detail = {}  # one dead posting must not sink the whole board
+        if not isinstance(detail, dict):
+            raise ValueError(
+                "Invalid SmartRecruiters detail response: expected an object."
+            )
+        if detail:
+            url = detail.get("postingUrl") or url
+            sections = ((detail.get("jobAd") or {}).get("sections")) or {}
+            description = html_to_text(
+                "".join(
+                    (sections.get(name) or {}).get("text") or ""
+                    for name in ("jobDescription", "qualifications")
+                )
+            )
+        job = JobPosting(
+            title=item.get("name", ""),
+            company=(item.get("company") or {}).get("name") or self.company_name,
+            location=city or None,
+            url=url,
+            description=description,
+        )
+        return FetchedJob(
+            job=job,
+            source=self.source,
+            source_id=posting_id,
+            remote=bool(loc.get("remote")),
+            employment_type=(item.get("typeOfEmployment") or {}).get("label"),
+            date_posted=_parse_iso(item.get("releasedDate")),
+        )
 
 
 class RecruiteeSource(JobSource):
