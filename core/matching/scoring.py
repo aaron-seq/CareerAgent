@@ -12,6 +12,7 @@ a job scored the way it did -- never a bare number.
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 
 from rapidfuzz import fuzz
@@ -324,7 +325,64 @@ _STOPWORDS = {
     "location",
     "world",
     "etc",
+    # Generic action verbs / culture & hiring filler (real-user repro: a JD's
+    # "build ... friendly team ... hiring" surfaced as resume "gaps").
+    "build",
+    "builds",
+    "building",
+    "built",
+    "develop",
+    "develops",
+    "developing",
+    "deliver",
+    "delivers",
+    "delivering",
+    "ensure",
+    "ensuring",
+    "support",
+    "supporting",
+    "drive",
+    "driving",
+    "driven",
+    "owning",
+    "ownership",
+    "hire",
+    "hires",
+    "hired",
+    "hiring",
+    "friendly",
+    "collaborative",
+    "dynamic",
+    "exciting",
+    "fun",
+    "growing",
+    "growth",
+    "competitive",
+    "pay",
+    "bonus",
+    "equity",
+    "start",
+    "starting",
+    "now",
+    "today",
+    "please",
 }
+
+# Bare quantities, never skills: salaries ("110k", "1.5m"), years/levels
+# ("3+", "5yrs", "2024"), multipliers ("10x"), percentages and benefits
+# shorthand ("401k"). Letter-led tokens with digits (s3, ec2, k8s, python3)
+# and digit-led tech like "3d" don't match, so they stay.
+_QUANTITY = re.compile(r"^\d[\d.,]*(k|m|bn|x|%|yrs?|years?)?\+?$")
+
+
+def _is_keyword(token: str) -> bool:
+    """A token worth reporting as a skill keyword (matched or missing)."""
+    return (
+        len(token) > 1
+        and token not in _STOPWORDS
+        and any(ch.isalpha() for ch in token)
+        and not _QUANTITY.match(token)
+    )
 
 
 def _cv_text(cv: CVProfile) -> str:
@@ -358,7 +416,25 @@ def _cv_skill_set(cv: CVProfile) -> set[str]:
     for proj in cv.projects:
         for t in proj.technologies:
             skills.update(tokenize(t))
-    return {s for s in skills if s not in _STOPWORDS and len(s) > 1}
+    return {s for s in skills if _is_keyword(s)}
+
+
+def _cv_text_tokens(cv: CVProfile) -> set[str]:
+    """Every token anywhere on the CV -- titles, achievements, summary too.
+
+    A job keyword the candidate already states (e.g. "data" in the title
+    "Data engineer") is evidenced by the CV and must not be reported as a gap.
+    """
+    return set(tokenize(_cv_text(cv)))
+
+
+def _in_cv_text(cv_tokens: set[str], keyword: str) -> bool:
+    """Exact token match, tolerating a simple trailing-'s' plural."""
+    return (
+        keyword in cv_tokens
+        or f"{keyword}s" in cv_tokens
+        or (keyword.endswith("s") and keyword[:-1] in cv_tokens)
+    )
 
 
 def _job_keywords(job: JobPosting) -> set[str]:
@@ -368,9 +444,10 @@ def _job_keywords(job: JobPosting) -> set[str]:
         keywords.update(tokenize(t))
     for r in job.requirements + job.nice_to_have:
         keywords.update(tokenize(r))
+    keywords = {k for k in keywords if _is_keyword(k)}
     if not keywords:
-        keywords.update(tokenize(job.description))
-    return {k for k in keywords if k not in _STOPWORDS and len(k) > 1}
+        keywords = {k for k in tokenize(job.description) if _is_keyword(k)}
+    return keywords
 
 
 def _fuzzy_contains(skill_set: set[str], keyword: str, threshold: int = 88) -> bool:
@@ -403,8 +480,11 @@ def score_job(
     semantic = max(0.0, cosine_similarity(cv_vec, job_vec))  # clamp negatives
 
     skills = _cv_skill_set(cv)
+    cv_tokens = _cv_text_tokens(cv)
     keywords = sorted(_job_keywords(job))
-    matched = [k for k in keywords if _fuzzy_contains(skills, k)]
+    matched = [
+        k for k in keywords if _fuzzy_contains(skills, k) or _in_cv_text(cv_tokens, k)
+    ]
     missing = [k for k in keywords if k not in matched]
     keyword_overlap = (len(matched) / len(keywords)) if keywords else 0.0
 
