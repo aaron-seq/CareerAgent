@@ -19,7 +19,7 @@ def test_saved_profiles_are_recent_metadata_and_explicitly_loadable(temp_db):
             session.get(CVProfileRow, cv_id).created_at = datetime(2026, 10, 16)
     summaries = facade.saved_cv_profiles(limit=1)
     assert summaries == [
-        {"id": second, "name": "Second", "created_at": "2026-10-16T00:00:00"}
+        {"id": second, "name": "Second", "created_at": "2026-10-16T00:00:00+00:00"}
     ]
     assert facade.load_cv(summaries[0]["id"]).raw_text == "Private newer CV"
     assert facade.load_cv(9999) is None

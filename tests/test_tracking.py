@@ -10,7 +10,7 @@ import pytest
 from core.db.repository import JobRepository
 from core.db.tables import ApplicationStatus
 from core.models import JobPosting
-from core.normalize import to_naive_utc, utc_now
+from core.normalize import ensure_utc, utc_now
 from core.tracking import (
     BlacklistedCompanyError,
     DuplicateApplicationError,
@@ -132,45 +132,53 @@ def test_board_groups_by_status(session):
 
 
 # --------------------------------------------------------------------------- #
-# Naive-UTC timestamp convention
+# Aware-UTC timestamp convention (ADR 0008)
 # --------------------------------------------------------------------------- #
 
 
-def test_utc_now_is_naive_utc_and_emits_no_deprecation():
-    """``utc_now`` must stay naive, hold UTC, and not warn.
+def test_utc_now_is_aware_utc_and_emits_no_deprecation():
+    """``utc_now`` must be aware, hold UTC, and not warn.
 
     Guards both ways the obvious "fix" goes wrong: ``datetime.utcnow()``
-    (correct value, DeprecationWarning) and ``datetime.now()`` (no warning,
-    but local wall-clock rather than UTC).
+    (DeprecationWarning, and naive) and ``datetime.now()`` (no warning, but
+    naive local wall-clock rather than UTC).
     """
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         now = utc_now()
 
-    assert now.tzinfo is None
-    drift = abs((now - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds())
+    assert now.tzinfo is not None
+    assert now.utcoffset() == timedelta(0)
+    drift = abs((now - datetime.now(timezone.utc)).total_seconds())
     assert drift < 60, "utc_now() returned local time, not UTC"
 
 
-def test_to_naive_utc_converts_offsets_and_passes_naive_through():
+def test_ensure_utc_converts_offsets_and_labels_naive_as_utc():
     ist = timezone(timedelta(hours=5, minutes=30))
     aware = datetime(2026, 1, 1, 0, 0, tzinfo=ist)
-    converted = to_naive_utc(aware)
-    assert converted == datetime(2025, 12, 31, 18, 30)
-    assert converted.tzinfo is None
+    converted = ensure_utc(aware)
+    assert converted == datetime(2025, 12, 31, 18, 30, tzinfo=timezone.utc)
+    assert converted.utcoffset() == timedelta(0)
+    # Converted, not relabelled: the wall-clock moved.
+    assert converted.hour == 18
 
     naive = datetime(2026, 1, 1, 0, 0)
-    assert to_naive_utc(naive) is naive
+    labelled = ensure_utc(naive)
+    assert labelled == datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+
+    # Idempotent.
+    assert ensure_utc(labelled) == labelled
+    assert ensure_utc(labelled).tzinfo is timezone.utc
 
 
 def test_due_followups_compares_against_rows_reloaded_from_sqlite(session):
-    """The persisted side is always naive, so ``as_of`` must be too.
+    """Rows reloaded from SQLite must come back aware UTC.
 
-    SQLite's DATETIME storage carries no offset, so ``next_follow_up_at``
-    comes back naive after any commit. Should ``utc_now()`` ever start
-    returning an aware datetime, the comparison inside ``due_followups``
-    raises ``TypeError: can't compare offset-naive and offset-aware
-    datetimes`` instead of quietly misbehaving -- this test catches that.
+    SQLite's DATETIME storage carries no offset. The ``UTCDateTime`` column
+    type re-attaches UTC on read -- on every sqlmodel release, old (which
+    would otherwise return naive) and new -- so comparing against the aware
+    ``utc_now()`` never raises ``TypeError: can't compare offset-naive and
+    offset-aware datetimes``.
     """
     job = _job(session)
     svc = TrackingService(session, follow_up_days=7)
@@ -181,10 +189,62 @@ def test_due_followups_compares_against_rows_reloaded_from_sqlite(session):
 
     reloaded = svc.apps.list()[0]
     assert reloaded.next_follow_up_at is not None
-    assert reloaded.next_follow_up_at.tzinfo is None
-    assert reloaded.created_at.tzinfo is None
+    assert reloaded.next_follow_up_at.utcoffset() == timedelta(0)
+    assert reloaded.created_at.utcoffset() == timedelta(0)
 
-    # Both the defaulted and the explicit `as_of` path must survive the mix.
+    # Both the defaulted and the explicit `as_of` path must survive.
     assert svc.due_followups() == []
     due = svc.due_followups(as_of=utc_now() + timedelta(days=8))
     assert len(due) == 1 and due[0].id == app.id
+
+
+def test_due_followups_accepts_a_naive_as_of(session):
+    """Legacy callers passing naive UTC must not hit a naive/aware TypeError."""
+    job = _job(session)
+    svc = TrackingService(session, follow_up_days=7)
+    app = svc.create_application(job)
+    svc.transition(app, ApplicationStatus.APPLIED)
+    session.commit()
+    session.expire_all()
+
+    naive_later = (utc_now() + timedelta(days=8)).replace(tzinfo=None)
+    due = svc.due_followups(as_of=naive_later)
+    assert [a.id for a in due] == [app.id]
+
+
+def test_naive_value_assigned_in_memory_is_stored_and_read_as_utc(session):
+    """A naive datetime written to a column is taken as UTC, not rejected.
+
+    sqlmodel >= 0.0.45's own type raises on naive input; ours coerces, so a
+    legacy caller (or a pre-migration row) keeps working on every version.
+    """
+    job = _job(session)
+    svc = TrackingService(session)
+    app = svc.create_application(job)
+    app.next_follow_up_at = datetime(2026, 3, 1, 9, 0)  # naive
+    session.add(app)
+    session.commit()
+    session.expire_all()
+
+    reloaded = svc.apps.list()[0]
+    assert reloaded.next_follow_up_at == datetime(2026, 3, 1, 9, 0, tzinfo=timezone.utc)
+
+    # In-memory naive values on unflushed rows are also tolerated.
+    reloaded.next_follow_up_at = datetime(2020, 1, 1)
+    assert [a.id for a in svc.due_followups()] == [reloaded.id]
+
+
+def test_offset_datetime_is_converted_to_utc_on_write(session):
+    """An aware non-UTC value is stored as the same instant in UTC."""
+    ist = timezone(timedelta(hours=5, minutes=30))
+    job = _job(session)
+    svc = TrackingService(session)
+    app = svc.create_application(job)
+    app.next_follow_up_at = datetime(2026, 3, 1, 0, 0, tzinfo=ist)
+    session.add(app)
+    session.commit()
+    session.expire_all()
+
+    stored = svc.apps.list()[0].next_follow_up_at
+    assert stored == datetime(2026, 2, 28, 18, 30, tzinfo=timezone.utc)
+    assert stored.utcoffset() == timedelta(0)

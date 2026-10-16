@@ -374,3 +374,19 @@ def test_ingestion_service_isolates_source_errors(session):
     assert result.fetched == 0
     assert result.errors  # captured, not raised
     assert JobRepository(session).count() == 0
+
+
+def test_parse_date_always_returns_aware_utc():
+    """Board date strings come with and without offsets; both normalise to
+    aware UTC so downstream comparisons can never mix naive and aware."""
+    from datetime import datetime, timedelta, timezone
+
+    from core.ingestion.base import parse_date
+
+    naive = parse_date("2026-08-01T09:00:00")
+    assert naive == datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+    offset = parse_date("2026-08-01T00:00:00+05:30")
+    assert offset == datetime(2026, 7, 31, 18, 30, tzinfo=timezone.utc)
+    assert offset is not None and offset.utcoffset() == timedelta(0)
+    assert parse_date("not a date") is None
+    assert parse_date(None) is None

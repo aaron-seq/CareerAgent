@@ -232,8 +232,14 @@ def test_ghost_score_accepts_dateutil_aware_dates():
     assert from_aware.reasons == from_naive.reasons
 
 
-def test_ghost_score_aware_date_against_default_naive_now():
-    """The defaulted ``now`` is naive UTC; an aware date must not raise."""
+def test_ghost_score_naive_date_against_default_aware_now():
+    """The defaulted ``now`` is aware UTC; a naive (UTC) date must not raise."""
+    naive = datetime(2020, 1, 1)
+    assert ghost_score(naive, description="x" * 500).score >= 0.5
+
+
+def test_ghost_score_aware_date_against_default_aware_now():
+    """The defaulted ``now`` is aware UTC; an aware date must not raise."""
     aware = date_parser.parse("2020-01-01T00:00:00+00:00")
     # No explicit `now` -> exercises the real utc_now() default.
     assessment = ghost_score(aware, description="x" * 500)
