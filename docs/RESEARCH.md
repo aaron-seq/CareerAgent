@@ -24,7 +24,7 @@
 - **Frontend/UI:** Streamlit 1.29+ (single `app.py`, 5 screens: Onboarding, Discovery, Contacts, Draft Studio, Export). Custom CSS in `assets/style.css`.
 - **LLM:** Ollama local inference; models offered in UI selectbox: `llama3.1:8b`, `llama3.2:3b`, `qwen2.5:7b`, `mistral:7b`. Custom `LocalLLMClient` in `core/llm.py` with JSON parsing + retry.
 - **Data validation:** Pydantic 2.5+ (`core/models.py`: `SearchQuery`, `CVProfile`, `JobPosting`, `ContactCandidate`, `EmailDraft`).
-- **PDF parsing:** PyPDF2 + pdfplumber (`core/cv_parser.py`).
+- **PDF parsing:** PyPDF2 + pdfplumber (`core/cv_parser.py`). *(Since migrated to pypdf, the maintained successor — issue #21.)*
 - **Search:** `duckduckgo-search` library (`core/job_finder.py`, `core/contact_finder.py`).
 - **Email:** Google Gmail API for draft creation (`core/gmail_drafts.py`); WhatsApp click-to-chat URL generation (`core/whatsapp.py`).
 - **Storage:** local filesystem JSON (`core/storage.py`, `careeragent_data/` directory) + ZIP export.

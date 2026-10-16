@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Type
 
 import requests
 from pydantic import BaseModel
@@ -179,7 +179,7 @@ class LocalLLMClient:
         return response[start:end]
 
     def generate_with_schema(
-        self, prompt: str, schema_model: BaseModel, temperature: float = 0.3
+        self, prompt: str, schema_model: Type[BaseModel], temperature: float = 0.3
     ) -> BaseModel:
         """Generate response and validate against Pydantic schema"""
         json_response = self.generate_json(prompt, temperature)
