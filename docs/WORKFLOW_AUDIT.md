@@ -15,6 +15,7 @@ runtime dependency.
 | Medium | Version text such as Node.js 20.11.1+ crashed cover-letter metric validation. | PR #44 uses strict numeric tokens and tests semantic versions plus grouped decimals. |
 | Medium | Saved CVs could not be reopened; a disconnected model hid existing profile review and exports. | Explicit local restore, bounded metadata listing, and model gates only on AI actions. |
 | Medium | API and manually selected jobs did not reach a coherent pipeline-to-drafting path. | Facade conversion/persistence and Prepare application actions connect the screens. |
+| Medium | Streamlit 1.50 retained stale Pipeline controls during immediate navigation, breaking the next interaction in the Python 3.9 journey. | Supported button callbacks select the screen before page rendering; the unchanged regression test passes. |
 | Medium | Duplicate-titled and withdrawn applications disappeared from detail selection. | Stable application IDs and withdrawn archive/detail visibility. |
 | Medium | Source attribution was dropped in facade serialization (#19). | Per-posting source, attribution, and original link. |
 | Medium | SmartRecruiters imported only its first page (#20). | Bounded pagination, duplicate/no-progress guards, partial-result notices, and continuation controls. |

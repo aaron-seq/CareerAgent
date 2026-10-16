@@ -57,6 +57,9 @@ Core coverage is **92.78%**. Passing tests do not establish production readiness
 - **Review:** Four subagents split PR, UI, ingestion and CI work, with independent
   review and regression tests for findings. `docs/WORKFLOW_AUDIT.md` records the
   findings, evidence, limits and rollback; ADR 0007 records the decisions.
+- Matrix validation exposed older Streamlit 1.50 retaining stale controls after
+  immediate navigation. Prepare application now uses supported callbacks before
+  rendering; the original failing Python 3.9 journey passes unchanged.
 
 ### 2026-10-15 — Boundary audit and targeted privacy/reliability fixes
 

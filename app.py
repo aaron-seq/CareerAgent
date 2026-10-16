@@ -170,19 +170,21 @@ def _set_current_draft(draft: EmailDraft, workspace_key: str) -> None:
 
 
 def _prepare_application(job_id: int) -> None:
-    """Open a persisted posting in the existing human-reviewed draft flow."""
+    """Choose the next screen before Streamlit renders the page body."""
     try:
         job = facade.job_for_drafting(job_id)
         if job is None:
-            st.warning("This posting is no longer available. Refresh the jobs list.")
+            st.session_state.prepare_job_error = (
+                "This posting is no longer available. Refresh the jobs list."
+            )
             return
         if job not in st.session_state.selected_jobs:
             st.session_state.selected_jobs.append(job)
         st.session_state.draft_job_selection = st.session_state.selected_jobs.index(job)
         st.session_state.page = "draft" if st.session_state.cv_profile else "onboarding"
-        st.rerun()
+        st.session_state.prepare_job_error = None
     except Exception as exc:
-        st.error(f"Could not open this job: {exc}")
+        st.session_state.prepare_job_error = f"Could not open this job: {exc}"
 
 
 init_session_state()
@@ -1829,8 +1831,12 @@ def page_pipeline():
                     st.rerun()
                 else:
                     st.warning(res["error"])
-            if st.button("Prepare application", key=f"prepare_{job['id']}"):
-                _prepare_application(job["id"])
+            st.button(
+                "Prepare application",
+                key=f"prepare_{job['id']}",
+                on_click=_prepare_application,
+                args=(job["id"],),
+            )
 
     st.divider()
 
@@ -1968,12 +1974,14 @@ def _render_application_detail(board: dict, statuses: list):
             st.caption("Notes saved.")
 
     with right:
-        if card.get("job_id") and st.button(
-            "Prepare application",
-            key=f"detail_prepare_{app_id}",
-            use_container_width=True,
-        ):
-            _prepare_application(card["job_id"])
+        if card.get("job_id"):
+            st.button(
+                "Prepare application",
+                key=f"detail_prepare_{app_id}",
+                use_container_width=True,
+                on_click=_prepare_application,
+                args=(card["job_id"],),
+            )
         next_status = {
             "saved": "applied",
             "applied": "screening",
@@ -2017,6 +2025,8 @@ render_stage_rail(st.session_state.get("page", "onboarding"))
 for notice_key in ("match_refresh_warning", "job_save_notice"):
     if st.session_state.get(notice_key):
         st.warning(st.session_state[notice_key])
+if st.session_state.get("prepare_job_error"):
+    st.error(st.session_state.prepare_job_error)
 
 if st.session_state.get("page") == "onboarding":
     page_onboarding()
