@@ -127,8 +127,8 @@ session workspaces, invalidating them when the active profile changes (ADR 0007)
 
 #### Candidate answers and apply flow (ADR 0009)
 
-These return plain dicts or Pydantic models and are not wired into `app.py`
-yet.
+These return plain dicts or Pydantic models. `app.py` uses them on the
+Your profile, Pipeline and Export screens.
 
 | Function | Returns |
 |---|---|
@@ -138,6 +138,9 @@ yet.
 | `extension_profile(cv, candidate=None, include_resume=False)` | The popup's import JSON: seven string identity keys; with a candidate, `location`, website fallback for `portfolio`, and `answers`; optionally a `resume` block (`filename`, `mime`, `data_b64`). |
 | `apply_target(job_id)` | `{"ok", "job_id", "title", "company", "url", "ats", "autofill_supported", "note"}`; `url` is only an http(s) link. |
 | `mark_applied(job_id, cv_profile_id=None)` | `{"ok", "application_id", "status", "changed"}`; tracks the job if needed and moves SAVED to APPLIED once. |
+| `save_manual_profile(form, cv_id=None)` | `{"ok", "cv_id", "profile", "errors"}`. Hand-entered CV, no model needed: every validation problem at once, nothing stored until all are fixed, blank optional fields kept unknown; with `cv_id` it updates in place so saved answers stay attached. |
+| `manual_contact(name, email, role="")` | `{"ok", "contact"}` or `{"ok": False, "error"}`. A typed address is syntax-checked and never marked verified. |
+| `provider_label(provider)` | Human name for a job-board id. `aggregator_providers()` lists keyless boards first, so the UI default needs no setup. |
 
 `top_jobs` cards also carry `salary_currency` and ISO `date_posted` for the
 pure card helpers in `core/presentation.py`.

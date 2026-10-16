@@ -24,6 +24,35 @@ Core coverage is **92.78%**. Passing tests do not establish production readiness
 
 ## Log
 
+### 2026-10-16 — First-use UX: profile without a model, real-user fixes
+
+**Found by:** a real-user acceptance test (Playwright driving Streamlit as a
+first-time job seeker; no Ollama/Groq; job APIs blocked). 20 findings; the
+blocker: with no model there was no way to create a profile, so nothing
+downstream (drafts, tailoring, autofill export) was reachable.
+
+**Changes (UI calls facade only):**
+- "Your profile" screen: *Type it in* (default without a model) or *Upload a
+  CV (uses AI)*. `facade.save_manual_profile` validates every field at once
+  and updates in place; application answers (work rights, pay, start date,
+  preferences, opt-in diversity answers) save via `save_candidate_profile`
+  with a completeness bar. Tri-state questions keep "not sure" as unknown.
+- Deleted the Preferences panel (nothing read it; it reset on refresh) and the
+  sidebar session stats (the stage rail already shows progress).
+- Feedback survives `st.rerun()` (flash queue); redirects explain themselves;
+  discovery inputs survive navigation (widget keys).
+- Contacts: typed emails validated (`facade.manual_contact`), labelled "Added
+  by you" instead of a fabricated "Verified 100%".
+- Draft Studio: *Write it myself* makes the editor and compliance check usable
+  offline. Job boards default to a keyless source with human names.
+- Pipeline cards: match quality in words, chips, risk notes, Apply / I applied
+  / Save for later; board buttons say where they move a card.
+- Plain-language help for ATS, slug, ghost jobs, LIA, opt-out; disabled
+  buttons look disabled; sidebar collapses on phones.
+
+**Not addressed here:** state lost on page refresh (#48).
+
+
 ### 2026-10-16 — Timezone-aware UTC datetimes; sqlmodel cap lifted (#37)
 
 **Problem:** sqlmodel 0.0.45+ infers a `UTCDateTime` column type that raises on
