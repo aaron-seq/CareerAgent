@@ -14,6 +14,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from ..candidate import CandidateProfile
 from ..models import CVProfile, EmailDraft, JobPosting
 from ..normalize import compute_dedup_key, normalize_company_name, utc_now
 from .crypto import decrypt_payload, deterministic_hash
@@ -189,6 +190,30 @@ class CVRepository:
         if row is None or not row.payload:
             return None
         return CVProfile.model_validate_json(row.payload)
+
+    # -- Application answers stored beside the CV ------------------------- #
+
+    def get_candidate(self, cv_id: int) -> Optional[CandidateProfile]:
+        """The answers saved for a CV; empty (all unknown) if none yet.
+
+        ``None`` only when the CV row itself doesn't exist.
+        """
+        row = self.session.get(CVProfileRow, cv_id)
+        if row is None:
+            return None
+        if not row.candidate_payload:
+            return CandidateProfile()
+        return CandidateProfile.model_validate_json(row.candidate_payload)
+
+    def save_candidate(self, cv_id: int, candidate: CandidateProfile) -> bool:
+        """Replace the answers saved for a CV. False if the CV doesn't exist."""
+        row = self.session.get(CVProfileRow, cv_id)
+        if row is None:
+            return False
+        row.candidate_payload = candidate.model_dump_json()
+        self.session.add(row)
+        self.session.flush()
+        return True
 
 
 # --------------------------------------------------------------------------- #
