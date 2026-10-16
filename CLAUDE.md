@@ -115,12 +115,14 @@ ruff check .                 # lint
   `package.json`; tests via `node --test`, run from inside `extension/`).
   It's outside the Python package and untouched by root `pytest`/`ruff`/
   `mypy`.
-- `mypy .` cannot complete on this machine's global environment as of
-  2026-08: `requirements-test.txt` pins `mypy==1.7.1` (Nov 2023), but
-  `numpy`'s installed stub file uses PEP 695 `type` statement syntax that
-  version can't parse, so the run aborts before checking any project code.
-  Low severity in practice — `pyproject.toml` already marks mypy advisory,
-  and CI installs an unpinned newer `mypy` with `continue-on-error: true` —
-  but the exact `pip install -r requirements-test.txt` + `mypy .` path this
-  doc describes for local dev doesn't work as written. Fix is bumping the
-  `mypy` pin; not done here since it's a version-pin decision, not a bug.
+- `mypy .` runs to completion (verified 2026-10-16, issue #22).
+  `requirements-test.txt` pins `mypy==2.4.0` behind a
+  `python_version >= "3.10"` marker (mypy 2.x won't install on 3.9; the 3.9
+  CI test leg never runs mypy). The old 1.7.1 pin aborted on numpy's PEP 695
+  stubs. `pyproject.toml` targets mypy at 3.10, not the 3.9 runtime floor:
+  mypy 2.x rejects a 3.9 target, and installed pydantic uses `match`, which a
+  3.9 target can't parse — so mypy won't flag 3.10-only syntax; ruff's
+  `py39` target is the guard there. Result: 29 errors across 10 files
+  (`mypy .`; 25 across 7 for the configured `files`), mostly
+  `dict | list` JSON unions in `core/ingestion/` and loose typing in
+  `contact_finder.py`. Still advisory (CI `continue-on-error: true`).

@@ -9,7 +9,10 @@ respx==0.23.1
 
 # Code quality (ruff handles lint + format, replacing black/flake8/isort)
 ruff==0.15.8
-mypy==1.7.1
+# mypy 2.x and these stubs need Python >=3.10 to install; the 3.9 CI leg never
+# runs mypy, so both are skipped there.
+mypy==2.4.0; python_version >= "3.10"
+types-python-dateutil==2.9.0.20260807; python_version >= "3.10"
 
 # Include base requirements
 -r requirements.txt

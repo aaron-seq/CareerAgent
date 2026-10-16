@@ -84,3 +84,50 @@ class TestPromptGuardrails:
         assert "NEVER invent a URL" in CV_PARSE_PROMPT
         # The old placeholder taught the model to fill in a fake username.
         assert "github.com/username" not in CV_PARSE_PROMPT
+
+
+def _write_pdf(path, lines):
+    """Build a small text-layer PDF with fpdf2 - no binary fixture checked in."""
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    for line in lines:
+        pdf.cell(0, 10, line, new_x="LMARGIN", new_y="NEXT")
+    pdf.output(str(path))
+
+
+class TestPdfTextExtraction:
+    """Real extraction from a generated PDF, covering both engines."""
+
+    LINES = ["Aaron Sequeira", "Software Engineer", "Python SQLModel Streamlit"]
+
+    def test_pdfplumber_extracts_text(self, tmp_path):
+        pdf_path = tmp_path / "cv.pdf"
+        _write_pdf(pdf_path, self.LINES)
+
+        text = CVParser(Mock())._extract_text_from_pdf(str(pdf_path))
+
+        for line in self.LINES:
+            assert line in text
+
+    @patch("core.cv_parser.pdfplumber.open", side_effect=OSError("plumber broke"))
+    def test_pypdf_fallback_extracts_text(self, mock_open, tmp_path):
+        """When pdfplumber fails, the pypdf fallback must still read the text"""
+        pdf_path = tmp_path / "cv.pdf"
+        _write_pdf(pdf_path, self.LINES)
+
+        text = CVParser(Mock())._extract_text_from_pdf(str(pdf_path))
+
+        for line in self.LINES:
+            assert line in text
+
+    def test_fallback_uses_maintained_pypdf(self):
+        """PyPDF2 is deprecated; the fallback must be pypdf (issue #21)"""
+        import pypdf
+
+        import core.cv_parser as cv_parser
+
+        assert cv_parser.PdfReader is pypdf.PdfReader
+        assert not hasattr(cv_parser, "PyPDF2")
