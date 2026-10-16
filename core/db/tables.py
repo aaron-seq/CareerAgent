@@ -16,11 +16,38 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import JSON, Column, UniqueConstraint
+from sqlalchemy import JSON, Column, DateTime, TypeDecorator, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
-from ..normalize import utc_now
+from ..normalize import ensure_utc, utc_now
 from .crypto import EncryptedString
+
+
+class UTCDateTime(TypeDecorator):
+    """``TIMESTAMP WITH TIME ZONE`` that always hands back aware UTC.
+
+    Every ``datetime`` column uses this explicitly (via ``sa_type``) instead
+    of whatever sqlmodel would infer, so behaviour is identical across
+    sqlmodel releases (ADR 0008): <=0.0.44 infers a plain naive ``DateTime``,
+    >=0.0.45 infers its own ``UTCDateTime`` that *raises* on naive input.
+
+    - **Bind:** naive values are taken to hold UTC (the pre-ADR-0008
+      convention, so legacy callers keep working); aware values are converted
+      to UTC. SQLite stores the result without an offset; Postgres
+      ``timestamptz`` stores the instant.
+    - **Result:** always aware UTC. SQLite rows -- including those written
+      before the migration -- come back naive and get ``tzinfo=UTC``.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):  # type: ignore[override]
+        return None if value is None else ensure_utc(value)
+
+    def process_result_value(self, value, dialect):  # type: ignore[override]
+        return None if value is None else ensure_utc(value)
+
 
 # Streamlit's hot-reload re-execs this module's class bodies on every `.py`
 # save (any file -- it re-runs the whole import chain), which would
@@ -63,7 +90,7 @@ class Company(SQLModel, table=True):
     had_layoffs: Optional[bool] = None
     sponsors_visa: Optional[bool] = None
     blacklisted: bool = False
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
 
 class JobPostingRow(SQLModel, table=True):
@@ -84,8 +111,8 @@ class JobPostingRow(SQLModel, table=True):
     salary_max: Optional[float] = None
     salary_currency: Optional[str] = None
     employment_type: Optional[str] = None
-    date_posted: Optional[datetime] = None
-    fetched_at: datetime = Field(default_factory=utc_now)
+    date_posted: Optional[datetime] = Field(default=None, sa_type=UTCDateTime)
+    fetched_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
     # Enrichment / matching
     dedup_key: str = Field(default="", index=True)
@@ -120,7 +147,7 @@ class CVProfileRow(SQLModel, table=True):
         default=None, sa_column=Column(EncryptedString)
     )
     embedding: Optional[list] = Field(default=None, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
 
 class ContactRow(SQLModel, table=True):
@@ -137,7 +164,7 @@ class ContactRow(SQLModel, table=True):
     company_id: Optional[int] = Field(default=None, foreign_key="company.id")
     source: str = ""
     confidence_score: float = 0.0
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
 
 class EmailDraftRow(SQLModel, table=True):
@@ -155,8 +182,8 @@ class EmailDraftRow(SQLModel, table=True):
     job_title: str = ""
     word_count: int = 0
     gmail_draft_id: Optional[str] = None
-    sent_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=utc_now)
+    sent_at: Optional[datetime] = Field(default=None, sa_type=UTCDateTime)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
 
 class ApplicationRow(SQLModel, table=True):
@@ -170,11 +197,11 @@ class ApplicationRow(SQLModel, table=True):
     job_dedup_key: str = Field(default="", index=True)
     cv_profile_id: Optional[int] = Field(default=None, foreign_key="cv_profile.id")
     status: ApplicationStatus = Field(default=ApplicationStatus.SAVED)
-    applied_at: Optional[datetime] = None
-    next_follow_up_at: Optional[datetime] = None
+    applied_at: Optional[datetime] = Field(default=None, sa_type=UTCDateTime)
+    next_follow_up_at: Optional[datetime] = Field(default=None, sa_type=UTCDateTime)
     notes: Optional[str] = None
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
+    updated_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
 
 class SuppressionRow(SQLModel, table=True):
@@ -185,4 +212,4 @@ class SuppressionRow(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email_hash: str = Field(index=True, unique=True)
     reason: str = "opt_out"
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)

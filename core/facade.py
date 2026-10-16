@@ -62,7 +62,12 @@ from .ingestion import (
 )
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, EmailDraft, JobPosting
-from .normalize import compute_dedup_key, normalize_company_name, to_naive_utc, utc_now
+from .normalize import (
+    compute_dedup_key,
+    ensure_utc,
+    normalize_company_name,
+    utc_now,
+)
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
@@ -126,8 +131,14 @@ def saved_cv_profiles(limit: int = 20) -> list[dict[str, Any]]:
             .order_by(col(CVProfileRow.created_at).desc(), col(CVProfileRow.id).desc())
             .limit(limit)
         ).all()
+        # ``saved_label`` is for people; ``created_at`` stays ISO for machines.
         return [
-            {"id": cv_id, "name": name, "created_at": created_at.isoformat()}
+            {
+                "id": cv_id,
+                "name": name,
+                "created_at": created_at.isoformat(),
+                "saved_label": created_at.strftime("%d %b %Y, %H:%M UTC"),
+            }
             for cv_id, name, created_at in rows
         ]
 
@@ -490,8 +501,11 @@ def _application_card(app, job, as_of: datetime) -> dict[str, Any]:
     straight to the form the autofill extension acts on -- without it the
     board is a read-only list and the apply loop dead-ends here.
     """
-    due = app.next_follow_up_at
-    applied = app.applied_at
+    # Rows reloaded from the DB are aware already; an in-memory row or a
+    # caller's naive ``as_of`` is coerced so the arithmetic can't mix the two.
+    as_of = ensure_utc(as_of)
+    due = ensure_utc(app.next_follow_up_at) if app.next_follow_up_at else None
+    applied = ensure_utc(app.applied_at) if app.applied_at else None
     return {
         "application_id": app.id,
         "job_id": job.id if job else None,
@@ -811,9 +825,9 @@ def discover_from_url(url: str, client=None, fetcher=None) -> dict[str, Any]:
             row.salary_max = fj.salary_max
             row.salary_currency = fj.salary_currency
             row.employment_type = fj.employment_type
-            # Same naive-UTC coercion as IngestionService.ingest -- JSON-LD
-            # `datePosted` is aware whenever the page supplies an offset.
-            row.date_posted = to_naive_utc(fj.date_posted) if fj.date_posted else None
+            # Same aware-UTC coercion as IngestionService.ingest -- JSON-LD
+            # `datePosted` may be naive or carry any offset.
+            row.date_posted = ensure_utc(fj.date_posted) if fj.date_posted else None
             session.add(row)
             stored += 1
     return {

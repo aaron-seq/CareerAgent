@@ -125,7 +125,7 @@ postings can open Draft Studio directly. Source/attribution fields survive card
 serialization. The UI keeps generated material and editor state in per-job
 session workspaces, invalidating them when the active profile changes (ADR 0007).
 
-#### Candidate answers and apply flow (ADR 0008)
+#### Candidate answers and apply flow (ADR 0009)
 
 These return plain dicts or Pydantic models and are not wired into `app.py`
 yet.

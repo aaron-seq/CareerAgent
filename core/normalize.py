@@ -5,15 +5,13 @@ A *dedup key* is a stable, lowercased fingerprint of (title, company,
 location) used to collapse the same role seen on multiple boards and to
 prevent duplicate applications.
 
-Timestamps follow one convention repo-wide: **naive datetimes holding UTC**.
-That is what the storage layer can actually represent -- SQLAlchemy maps our
-``datetime`` columns to SQLite ``DATETIME`` (and to Postgres ``timestamp
-without time zone`` in prod, ADR 0003), neither of which persists an offset, so
-an aware value written there silently comes back naive and then raises
-``TypeError`` against the aware value it was compared with. :func:`utc_now` is
-the single producer of "now" and :func:`to_naive_utc` is the boundary coercion
-for datetimes arriving from outside (e.g. ``dateutil``-parsed board dates,
-which are aware whenever the source string carries an offset).
+Timestamps follow one convention repo-wide: **timezone-aware datetimes in
+UTC** (ADR 0008). :func:`utc_now` is the single producer of "now" and
+:func:`ensure_utc` is the boundary coercion for datetimes arriving from
+anywhere else -- ``dateutil``-parsed board dates (aware only when the source
+string carries an offset), caller-supplied ``now``/``as_of`` arguments, and
+rows reloaded from a store that kept no offset. A naive value is taken to
+already hold UTC; an aware one is converted, never merely relabelled.
 """
 
 from __future__ import annotations
@@ -43,23 +41,28 @@ _COMPANY_SUFFIXES = {
 
 
 def utc_now() -> datetime:
-    """Current UTC time as a naive datetime.
+    """Current time as an aware UTC datetime.
 
-    The replacement for ``datetime.utcnow()``, which is deprecated and slated
-    for removal. Same value, same naive-UTC semantics, no warning.
+    The replacement for ``datetime.utcnow()``, which is deprecated and returns
+    a naive value. The storage layer (``core.db.tables.UTCDateTime``) persists
+    and returns aware UTC, so values from here compare cleanly with rows read
+    back from the database.
     """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(timezone.utc)
 
 
-def to_naive_utc(value: datetime) -> datetime:
-    """Coerce a datetime to the naive-UTC convention.
+def ensure_utc(value: datetime) -> datetime:
+    """Coerce a datetime to the aware-UTC convention.
 
-    Aware values are converted to UTC and stripped of their offset; naive
-    values are assumed to be UTC already and pass through untouched.
+    Naive values are assumed to hold UTC already and get ``tzinfo=UTC``
+    attached (no shift). Aware values are *converted* to UTC, so midnight
+    +05:30 becomes 18:30 UTC the previous day rather than midnight UTC.
+    Idempotent, and safe to call on either side of every comparison or
+    subtraction -- mixing naive and aware values raises ``TypeError``.
     """
-    if value.tzinfo is None:
-        return value
-    return value.astimezone(timezone.utc).replace(tzinfo=None)
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _clean(text: str) -> str:

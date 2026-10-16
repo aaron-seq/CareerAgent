@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional, Tuple, Union
 
-from .normalize import to_naive_utc, utc_now
+from .normalize import ensure_utc, utc_now
 
 #: Ghost-risk score above which a posting is flagged (matches the Pipeline
 #: "Hide likely ghost jobs" filter).
@@ -62,7 +62,7 @@ def format_relative_date(
             value = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return None
-    days = (to_naive_utc(now or utc_now()) - to_naive_utc(value)).days
+    days = (ensure_utc(now or utc_now()) - ensure_utc(value)).days
     if days < 0:
         return "just posted"
     if days == 0:
