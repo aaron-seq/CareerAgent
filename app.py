@@ -4,6 +4,9 @@ CareerAgent - Main Streamlit Application
 Export & Logs. Calls only core/facade.py -- no business logic here.
 """
 
+from __future__ import annotations
+
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,7 +21,7 @@ from core.job_finder import JobFinder
 
 # Core imports
 from core.llm import GROQ_DEFAULT_MODEL, CloudLLMClient, LocalLLMClient
-from core.models import ContactCandidate, EmailDraft, JobPosting, SearchQuery
+from core.models import ContactCandidate, CVProfile, EmailDraft, JobPosting, SearchQuery
 from core.outreach import ComplianceConfig, LIARecord
 from core.personalization import PersonalizationEngine
 from core.storage import LocalStorage
@@ -84,6 +87,102 @@ def init_session_state():
 
     if "cv_id" not in st.session_state:
         st.session_state.cv_id = None
+
+    if "draft_workspaces" not in st.session_state:
+        st.session_state.draft_workspaces = {}
+
+
+def _use_profile(profile: CVProfile, cv_id: int | None = None) -> None:
+    """Replace the active profile and invalidate its generated UI material."""
+    st.session_state.cv_profile = profile
+    st.session_state.cv_id = cv_id
+    st.session_state.draft_workspaces = {}
+    st.session_state.active_draft_job = None
+    for name in ("current_draft", "tailored", "cover", "current_wa_draft"):
+        st.session_state[name] = None
+    for key in list(st.session_state):
+        if isinstance(key, str) and key.startswith(
+            ("draft_subject_", "draft_body_", "cover_text_")
+        ):
+            del st.session_state[key]
+    try:
+        with st.spinner("Updating job matches for this CV..."):
+            facade.refresh_matches(profile)
+        st.session_state.match_refresh_warning = None
+    except Exception:
+        st.session_state.match_refresh_warning = (
+            "Your CV is ready, but job matches could not be updated. Choose "
+            "Re-score matches in Pipeline before relying on the displayed scores."
+        )
+
+
+def _select_job(job: JobPosting) -> None:
+    """Keep explicit job additions available to both drafting and tracking."""
+    notices = []
+    if job not in st.session_state.selected_jobs:
+        st.session_state.selected_jobs.append(job)
+        try:
+            st.session_state.storage.save_job_posting(job)
+        except Exception:
+            notices.append(
+                "This job is selected, but its local backup could not be saved."
+            )
+    try:
+        facade.persist_manual_job(job)
+        if st.session_state.cv_profile:
+            facade.refresh_matches(st.session_state.cv_profile)
+    except Exception:
+        notices.append(
+            "This job is selected, but could not be saved or scored in Pipeline. "
+            "Check database access and add it again to retry."
+        )
+    st.session_state.job_save_notice = " ".join(notices)
+
+
+def _activate_draft_job(job: JobPosting) -> str:
+    """Keep generated material and editor widgets with their selected job."""
+    key = hashlib.sha256(job.model_dump_json().encode()).hexdigest()[:20]
+    previous = st.session_state.get("active_draft_job")
+    if previous == key:
+        return key
+    names = ("current_draft", "tailored", "cover", "current_wa_draft")
+    if previous is not None:
+        st.session_state.draft_workspaces.setdefault(previous, {}).update(
+            {name: st.session_state.get(name) for name in names}
+        )
+    workspace = st.session_state.draft_workspaces.setdefault(key, {})
+    # Accept an existing session's email only when it belongs to this job.
+    existing = st.session_state.get("current_draft")
+    if previous is None and existing and existing.company == job.company:
+        if not existing.job_title or existing.job_title == job.title:
+            workspace = {**workspace, "current_draft": existing}
+    for name in names:
+        st.session_state[name] = workspace.get(name)
+    st.session_state.active_draft_job = key
+    return key
+
+
+def _set_current_draft(draft: EmailDraft, workspace_key: str) -> None:
+    """Fresh generations replace the editor's prior widget values on rerun."""
+    st.session_state.current_draft = draft
+    st.session_state[f"draft_subject_{workspace_key}"] = draft.subject
+    st.session_state[f"draft_body_{workspace_key}"] = draft.body
+
+
+def _prepare_application(job_id: int) -> None:
+    """Open a persisted posting in the existing human-reviewed draft flow."""
+    try:
+        job = facade.job_for_drafting(job_id)
+        if job is None:
+            st.warning("This posting is no longer available. Refresh the jobs list.")
+            return
+        if job not in st.session_state.selected_jobs:
+            st.session_state.selected_jobs.append(job)
+        st.session_state.draft_job_selection = st.session_state.selected_jobs.index(job)
+        st.session_state.page = "draft" if st.session_state.cv_profile else "onboarding"
+        st.rerun()
+    except Exception as exc:
+        st.error(f"Could not open this job: {exc}")
 
 
 init_session_state()
@@ -227,9 +326,8 @@ def render_sidebar():
         st.metric("Drafts Created", len(st.session_state.draft_history))
 
 
-# Stage rail: the six screens are gated, not merely ordered - Discovery
-# refuses to run until Onboarding completes. The rail reports that real
-# dependency chain so a locked screen explains itself before it's clicked.
+# The rail reports which outputs exist. Discovery and tracking can be used
+# before a CV or a model is ready; only personalized generation needs both.
 STAGES = [
     ("onboarding", "Onboarding"),
     ("discovery", "Job Discovery"),
@@ -258,7 +356,11 @@ def _completed_stages() -> set:
 def render_stage_rail(current: str) -> None:
     """Draw the pipeline rail above the active screen."""
     done = _completed_stages()
-    unlocked = bool(st.session_state.cv_profile)
+    ready = {"onboarding", "discovery", "pipeline", "export"}
+    if st.session_state.selected_jobs:
+        ready.add("contacts")
+        if st.session_state.cv_profile:
+            ready.add("draft")
 
     cells = []
     for index, (key, label) in enumerate(STAGES, start=1):
@@ -266,7 +368,7 @@ def render_stage_rail(current: str) -> None:
             state = "is-active"
         elif key in done:
             state = "is-done"
-        elif key == "onboarding" or unlocked:
+        elif key in ready:
             state = "is-ready"
         else:
             state = "is-locked"
@@ -289,12 +391,49 @@ def page_onboarding():
     st.title("Onboarding")
     st.markdown("Upload your CV and define your target roles")
 
-    # Check LLM connection
-    if not st.session_state.llm_client:
+    st.caption(
+        "1. Add or restore your CV. 2. Discover jobs. 3. Prepare materials and "
+        "review them before you apply. You can browse jobs and track applications "
+        "without connecting a model."
+    )
+    try:
+        saved_profiles = facade.saved_cv_profiles()
+    except Exception:
+        saved_profiles = []
+        st.warning("Saved profiles could not be listed. Check database access.")
+    if saved_profiles:
+        with st.expander("Use a saved CV", expanded=not st.session_state.cv_profile):
+            profiles_by_id = {item["id"]: item for item in saved_profiles}
+            saved_id = st.selectbox(
+                "Saved profile",
+                list(profiles_by_id),
+                format_func=lambda value: (
+                    f"{profiles_by_id[value]['name'] or 'Unnamed profile'} "
+                    f"(saved {profiles_by_id[value]['created_at']})"
+                ),
+            )
+            if st.button("Use this CV", use_container_width=True):
+                try:
+                    profile = facade.load_cv(saved_id)
+                    if profile is None:
+                        st.error(
+                            "That profile is unavailable. Choose another or upload a CV."
+                        )
+                    else:
+                        _use_profile(profile, saved_id)
+                        st.rerun()
+                except Exception:
+                    st.error(
+                        "This CV could not be opened. Check database access and restore "
+                        "its original encryption key; keep the current key unchanged."
+                    )
+
+    llm_ready = bool(st.session_state.llm_client)
+    if not llm_ready:
         st.info(
-            "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+            "Connect a model in the sidebar to parse a new CV. Saved profiles, "
+            "job browsing, tracking, and resume exports work without it."
         )
-        return
 
     col1, col2 = st.columns([2, 1])
 
@@ -312,9 +451,11 @@ def page_onboarding():
                 "Paste CV text", height=200, help="Use this if PDF upload fails"
             )
 
-        if st.button("Parse CV", type="primary", use_container_width=True):
+        if st.button(
+            "Parse CV", type="primary", use_container_width=True, disabled=not llm_ready
+        ):
             if cv_file or cv_text:
-                with st.spinner("Parsing CV with local LLM..."):
+                with st.spinner("Parsing CV with your selected model..."):
                     try:
                         # Progress indicator
                         progress_bar = st.progress(0, text="Initializing...")
@@ -341,7 +482,7 @@ def page_onboarding():
                         elapsed = time.time() - start_time
                         progress_bar.progress(100, text=f"Complete in {elapsed:.1f}s!")
 
-                        st.session_state.cv_profile = profile
+                        _use_profile(profile)
                         st.session_state.storage.save_cv_profile(profile)
                         # Persist to the encrypted DB (Phase 1) for matching/tracking.
                         try:
@@ -366,29 +507,39 @@ def page_onboarding():
 
     with col2:
         st.subheader("Preferences")
+        preferences = st.session_state.get("preferences", {})
 
         target_roles = st.text_area(
             "Target Roles (one per line)",
-            value="Senior Software Engineer\nML Engineer\nFull Stack Developer",
+            value="\n".join(
+                preferences.get(
+                    "target_roles",
+                    ["Senior Software Engineer", "ML Engineer", "Full Stack Developer"],
+                )
+            ),
             height=100,
         )
 
         target_locations = st.text_area(
             "Target Locations (one per line)",
-            value="Remote\nSan Francisco\nBerlin",
+            value="\n".join(
+                preferences.get(
+                    "target_locations", ["Remote", "San Francisco", "Berlin"]
+                )
+            ),
             height=100,
         )
 
         industries = st.multiselect(
             "Preferred Industries",
             ["Tech/Software", "AI/ML", "Finance", "Healthcare", "E-commerce", "Other"],
-            default=["Tech/Software", "AI/ML"],
+            default=preferences.get("industries", ["Tech/Software", "AI/ML"]),
         )
 
         seniority = st.select_slider(
             "Seniority Level",
             options=["Junior", "Mid-level", "Senior", "Staff", "Principal"],
-            value="Senior",
+            value=preferences.get("seniority", "Senior"),
         )
 
         # Persist collected preferences so they survive Streamlit reruns and can
@@ -467,8 +618,10 @@ def page_onboarding():
                 use_container_width=True,
             )
 
-        if st.button("Next: Job Discovery", type="primary", use_container_width=True):
-            st.session_state.page = "discovery"
+        next_page = "draft" if st.session_state.selected_jobs else "discovery"
+        next_label = "Draft Studio" if next_page == "draft" else "Job Discovery"
+        if st.button(f"Next: {next_label}", type="primary", use_container_width=True):
+            st.session_state.page = next_page
             st.rerun()
 
 
@@ -483,8 +636,10 @@ def page_discovery():
     )
 
     if not st.session_state.cv_profile:
-        st.info("Upload your CV in Onboarding first - matching reads from it.")
-        return
+        st.info(
+            "Browse and save jobs now. Add or restore your CV in Onboarding "
+            "when you want personalized matching and application materials."
+        )
 
     # Search mode. Ordered best-data-first; the DuckDuckGo path is retained as
     # an explicitly-labeled fallback for companies without a supported ATS.
@@ -539,6 +694,16 @@ def page_discovery():
                 else:
                     for err in result.get("errors", ["Nothing found."]):
                         st.warning(err)
+                for warning in result.get("warnings", []):
+                    st.warning(warning)
+                if (
+                    result.get("warnings")
+                    and result.get("ats_type") == "smartrecruiters"
+                ):
+                    st.caption(
+                        "Continue this board in Pipeline: choose SmartRecruiters and "
+                        "enter the next offset under Import a large job board."
+                    )
 
         st.info(
             "Discovered jobs are deduplicated, enriched, and scored on the "
@@ -650,11 +815,9 @@ def page_discovery():
                     st.write(f"**Description:** {job.description[:300]}...")
 
                     if st.button("Select This Job", key=f"select_{i}"):
-                        if job not in st.session_state.selected_jobs:
-                            st.session_state.selected_jobs.append(job)
-                            st.session_state.storage.save_job_posting(job)
-                            st.success(f"Added {job.title}")
-                            st.rerun()
+                        _select_job(job)
+                        st.success(f"Added {job.title}")
+                        st.rerun()
 
     elif mode == "Paste Job URL":
         job_url = st.text_input(
@@ -679,8 +842,7 @@ def page_discovery():
                     job = finder.fetch_job_details(job_url)
 
                     if job:
-                        st.session_state.selected_jobs.append(job)
-                        st.session_state.storage.save_job_posting(job)
+                        _select_job(job)
                         st.success("Job added!")
                         st.rerun()
                     else:
@@ -708,12 +870,15 @@ def page_discovery():
                 job = JobPosting(
                     title=job_title, company=company_name, description=job_desc
                 )
-                st.session_state.selected_jobs.append(job)
-                st.session_state.storage.save_job_posting(job)
+                _select_job(job)
                 st.success("Job added!")
                 st.rerun()
             else:
                 st.warning("Please fill all fields")
+
+    if st.button("View saved jobs in Pipeline", use_container_width=True):
+        st.session_state.page = "pipeline"
+        st.rerun()
 
     # Show selected jobs
     if st.session_state.selected_jobs:
@@ -741,14 +906,21 @@ def page_contacts():
     st.markdown("Find hiring managers and generate email permutations")
 
     if not st.session_state.selected_jobs:
-        st.warning("Please select jobs first")
+        st.info(
+            "Choose a job in Job Discovery or select Prepare application in Pipeline."
+        )
+        if st.button("Find a job", use_container_width=True):
+            st.session_state.page = "discovery"
+            st.rerun()
         return
 
-    if not st.session_state.llm_client:
+    llm_ready = bool(st.session_state.llm_client)
+    if not llm_ready:
         st.info(
-            "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+            "Connect a model in the sidebar to search for contacts. You can "
+            "add a known contact or generate email patterns without it. "
+            "Generated patterns still need verification."
         )
-        return
 
     # For each selected job
     for idx, job in enumerate(st.session_state.selected_jobs):
@@ -759,7 +931,11 @@ def page_contacts():
             col1, col2 = st.columns(2)
 
             with col1:
-                if st.button("Search Contacts", key=f"search_contacts_{idx}"):
+                if st.button(
+                    "Search Contacts",
+                    key=f"search_contacts_{idx}",
+                    disabled=not llm_ready,
+                ):
                     with st.spinner("Searching for contacts..."):
                         try:
                             finder = ContactFinder(st.session_state.llm_client)
@@ -883,14 +1059,27 @@ def page_draft_studio():
     st.markdown("Generate and refine personalized outreach messages")
 
     if not st.session_state.selected_jobs:
-        st.warning("Please select jobs first")
+        st.info(
+            "Choose a job in Job Discovery or select Prepare application in Pipeline."
+        )
+        if st.button("Find a job", use_container_width=True):
+            st.session_state.page = "discovery"
+            st.rerun()
         return
 
-    if not st.session_state.llm_client:
-        st.info(
-            "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
-        )
+    if not st.session_state.cv_profile:
+        st.info("Add or restore your CV to prepare personalized application materials.")
+        if st.button("Add or restore my CV", use_container_width=True):
+            st.session_state.page = "onboarding"
+            st.rerun()
         return
+
+    llm_ready = bool(st.session_state.llm_client)
+    if not llm_ready:
+        st.info(
+            "Connect a model in the sidebar to generate new messages. You can "
+            "tailor your resume and review existing materials without it."
+        )
 
     # Job selector
     job_titles = [
@@ -899,11 +1088,18 @@ def page_draft_studio():
     if not job_titles:
         st.error("No jobs selected")
         return
+    if st.session_state.get("draft_job_selection", 0) not in range(len(job_titles)):
+        st.session_state.draft_job_selection = 0
 
     selected_idx = st.selectbox(
-        "Select Job", range(len(job_titles)), format_func=lambda x: job_titles[x]
+        "Select Job",
+        range(len(job_titles)),
+        format_func=lambda x: job_titles[x],
+        key="draft_job_selection",
     )
     current_job = st.session_state.selected_jobs[selected_idx]
+    workspace_key = _activate_draft_job(current_job)
+    workspace = st.session_state.draft_workspaces[workspace_key]
 
     st.divider()
 
@@ -972,15 +1168,17 @@ def page_draft_studio():
         if st.session_state.cv_profile:
             st.subheader("Cover letter")
             st.caption(
-                "Drafted only from what your CV actually says. Generation fails "
-                "rather than ship an invented employer or metric."
+                "Uses your CV and checks for unsupported numbers. Review every "
+                "employer, qualification, and claim before exporting."
             )
             tone = st.selectbox(
                 "Tone",
                 ["professional", "conversational", "direct"],
-                key="cover_tone",
+                key=f"cover_tone_{workspace_key}",
             )
-            if st.button("Draft cover letter", use_container_width=True):
+            if st.button(
+                "Draft cover letter", use_container_width=True, disabled=not llm_ready
+            ):
                 with st.spinner("Drafting from your CV..."):
                     try:
                         st.session_state.cover = facade.cover_letter_for_job(
@@ -989,20 +1187,25 @@ def page_draft_studio():
                             current_job,
                             tone=tone,
                         )
+                        st.session_state[f"cover_text_{workspace_key}"] = (
+                            st.session_state.cover["letter"]
+                        )
                     except Exception as e:
                         st.session_state.cover = None
                         st.error(f"Cover letter rejected: {e}")
 
             cover = st.session_state.get("cover")
             if cover:
-                st.text_area(
-                    "Letter", value=cover["letter"], height=300, key="cover_text"
-                )
-                st.caption(f"{cover['word_count']} words")
+                cover_key = f"cover_text_{workspace_key}"
+                if cover_key not in st.session_state:
+                    st.session_state[cover_key] = cover["letter"]
+                cover["letter"] = st.text_area("Letter", height=300, key=cover_key)
+                st.caption(f"{len(cover['letter'].split())} words")
                 if cover["cited_metrics"]:
-                    st.success(
-                        "Metrics cited (all verified against your CV): "
+                    st.caption(
+                        "Numbers checked during generation: "
                         + ", ".join(cover["cited_metrics"][:6])
+                        + ". Review edited claims against your CV."
                     )
                 if cover["gaps"]:
                     st.warning(
@@ -1011,7 +1214,9 @@ def page_draft_studio():
                     )
                 st.download_button(
                     "Download cover letter",
-                    data=st.session_state.get("cover_text", cover["letter"]),
+                    data=st.session_state.get(
+                        f"cover_text_{workspace_key}", cover["letter"]
+                    ),
                     file_name=f"cover_{current_job.company}.md".replace(" ", "_"),
                     mime="text/markdown",
                     use_container_width=True,
@@ -1048,16 +1253,26 @@ def page_draft_studio():
                 "Select Contact",
                 range(len(contacts)),
                 format_func=lambda x: contact_names[x],
+                key=f"draft_contact_{workspace_key}",
             )
             selected_contact = contacts[selected_contact_idx]
 
             recipient_name = selected_contact.name
             recipient_email = selected_contact.email
         else:
-            recipient_name = st.text_input("Recipient Name", value="Hiring Manager")
-            recipient_email = st.text_input(
-                "Recipient Email", placeholder="hiring@company.com"
+            recipient_name = st.text_input(
+                "Recipient Name",
+                value=workspace.get("recipient_name", "Hiring Manager"),
+                key=f"recipient_name_{workspace_key}",
             )
+            recipient_email = st.text_input(
+                "Recipient Email",
+                value=workspace.get("recipient_email", ""),
+                placeholder="hiring@company.com",
+                key=f"recipient_email_{workspace_key}",
+            )
+        workspace["recipient_name"] = recipient_name
+        workspace["recipient_email"] = recipient_email
 
     with col2:
         st.subheader("Draft")
@@ -1069,7 +1284,7 @@ def page_draft_studio():
             angle = st.selectbox("Angle", ["technical", "impact", "product"])
 
         with col_b:
-            if st.button("Generate Email", type="primary"):
+            if st.button("Generate Email", type="primary", disabled=not llm_ready):
                 with st.spinner("Generating email..."):
                     try:
                         engine = PersonalizationEngine(st.session_state.llm_client)
@@ -1080,14 +1295,14 @@ def page_draft_studio():
                             angle=angle,
                         )
                         draft.recipient_email = recipient_email
-                        st.session_state.current_draft = draft
+                        _set_current_draft(draft, workspace_key)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Generation failed: {e}")
 
         with col_c:
             if st.session_state.current_draft:
-                if st.button("Regenerate"):
+                if st.button("Regenerate", disabled=not llm_ready):
                     with st.spinner("Regenerating..."):
                         try:
                             engine = PersonalizationEngine(st.session_state.llm_client)
@@ -1095,7 +1310,7 @@ def page_draft_studio():
                                 st.session_state.current_draft, angle=angle
                             )
                             draft.recipient_email = recipient_email
-                            st.session_state.current_draft = draft
+                            _set_current_draft(draft, workspace_key)
                             st.rerun()
                         except Exception as e:
                             st.error(f"Regeneration failed: {e}")
@@ -1103,12 +1318,20 @@ def page_draft_studio():
         # Show draft
         if st.session_state.current_draft:
             draft = st.session_state.current_draft
+            draft.recipient_name = recipient_name
+            draft.recipient_email = recipient_email
 
             # Editable subject
-            subject = st.text_input("Subject", value=draft.subject, key="draft_subject")
+            subject_key = f"draft_subject_{workspace_key}"
+            body_key = f"draft_body_{workspace_key}"
+            if subject_key not in st.session_state:
+                st.session_state[subject_key] = draft.subject
+            if body_key not in st.session_state:
+                st.session_state[body_key] = draft.body
+            subject = st.text_input("Subject", key=subject_key)
 
             # Editable body
-            body = st.text_area("Body", value=draft.body, height=300, key="draft_body")
+            body = st.text_area("Body", height=300, key=body_key)
 
             # Update draft if edited
             if subject != draft.subject or body != draft.body:
@@ -1246,7 +1469,9 @@ def page_draft_studio():
                     st.success("Draft saved!")
 
             with col3:
-                if st.button("WhatsApp Link", use_container_width=True):
+                if st.button(
+                    "WhatsApp Link", use_container_width=True, disabled=not llm_ready
+                ):
                     engine = PersonalizationEngine(st.session_state.llm_client)
                     try:
                         wa_draft = engine.generate_whatsapp_message(
@@ -1257,7 +1482,7 @@ def page_draft_studio():
                     except Exception as e:
                         st.error(f"WhatsApp Error: {e}")
 
-            if "current_wa_draft" in st.session_state:
+            if st.session_state.get("current_wa_draft"):
                 st.info("WhatsApp Draft:")
                 st.code(st.session_state.current_wa_draft.message)
                 st.markdown(
@@ -1289,9 +1514,18 @@ def page_export():
         with st.spinner("Creating export bundle..."):
             try:
                 zip_path = st.session_state.storage.create_export_zip()
-                st.success(f"Export created at: {zip_path}")
+                st.session_state.export_zip = Path(zip_path).read_bytes()
+                st.success("Your export is ready to download.")
             except Exception as e:
                 st.error(f"Export failed: {e}")
+    if st.session_state.get("export_zip") is not None:
+        st.download_button(
+            "Download all data (ZIP)",
+            data=st.session_state.export_zip,
+            file_name="careeragent_export.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
 
     st.divider()
 
@@ -1442,10 +1676,27 @@ def page_pipeline():
     with col3:
         company = st.text_input("Company name", placeholder="Display name")
 
+    import_options = {}
+    if ats_type == "smartrecruiters":
+        with st.expander("Import a large job board"):
+            import_options["offset"] = st.number_input(
+                "Skip jobs already imported",
+                min_value=0,
+                value=0,
+                step=1,
+                help="Use the next offset shown in a partial import warning.",
+            )
+            import_options["max_jobs"] = st.number_input(
+                "Jobs per import", min_value=1, max_value=1000, value=250, step=1
+            )
+            st.caption(
+                "Each import is bounded. Repeat with the next offset to continue."
+            )
+
     if st.button("Ingest", type="primary", disabled=not slug):
         with st.spinner(f"Pulling {slug} jobs from {ats_type}..."):
             try:
-                result = facade.ingest_ats(ats_type, slug, company)
+                result = facade.ingest_ats(ats_type, slug, company, **import_options)
                 if result.errors:
                     st.error(f"Ingestion error: {result.errors[0]}")
                 else:
@@ -1454,13 +1705,22 @@ def page_pipeline():
                     )
                     if st.session_state.cv_profile:
                         facade.refresh_matches(st.session_state.cv_profile)
+                for warning in getattr(result, "warnings", []):
+                    st.warning(warning)
             except Exception as e:
                 st.error(f"Ingestion failed: {e}")
 
     if st.session_state.cv_profile and st.button("Re-score matches"):
         with st.spinner("Dedup + score against your CV..."):
-            facade.refresh_matches(st.session_state.cv_profile)
-            st.success("Matches refreshed.")
+            try:
+                facade.refresh_matches(st.session_state.cv_profile)
+                st.session_state.match_refresh_warning = None
+                st.success("Matches refreshed.")
+                st.rerun()
+            except Exception:
+                st.error(
+                    "Matches could not be refreshed. Check database access and try again."
+                )
 
     st.divider()
 
@@ -1533,6 +1793,10 @@ def page_pipeline():
         score = f"{job['score']:.0f}%" if job["score"] is not None else "unscored"
         with st.expander(f"[{score}] {job['title']} - {job['company']}"):
             st.write(f"**Location:** {job['location'] or 'N/A'}")
+            if job.get("source"):
+                st.caption(f"Source: {job['source']}")
+            if job.get("attribution"):
+                st.caption(job["attribution"])
             if job["salary_min"]:
                 st.write(f"**Salary:** {int(job['salary_min']):,}+")
 
@@ -1565,6 +1829,8 @@ def page_pipeline():
                     st.rerun()
                 else:
                     st.warning(res["error"])
+            if st.button("Prepare application", key=f"prepare_{job['id']}"):
+                _prepare_application(job["id"])
 
     st.divider()
 
@@ -1584,6 +1850,7 @@ def page_pipeline():
         "interview",
         "offer",
         "rejected",
+        "withdrawn",
     ]
     next_status = {
         "saved": "applied",
@@ -1600,8 +1867,9 @@ def page_pipeline():
     # Six columns leave ~130px each, so the columns stay a compact overview.
     # Anything the candidate edits lives in the full-width detail panel below --
     # a notes box rendered inside a column here comes out 94px wide.
-    cols = st.columns(len(statuses))
-    for col, status in zip(cols, statuses):
+    visible_statuses = [status for status in statuses if status != "withdrawn"]
+    cols = st.columns(len(visible_statuses))
+    for col, status in zip(cols, visible_statuses):
         with col:
             cards = board.get(status, [])
             st.markdown(f"**{status.title()}** ({len(cards)})")
@@ -1619,6 +1887,12 @@ def page_pipeline():
                             card["application_id"], next_status[status]
                         )
                         st.rerun()
+
+    withdrawn = board.get("withdrawn", [])
+    if withdrawn:
+        with st.expander(f"Withdrawn ({len(withdrawn)})"):
+            for card in withdrawn:
+                st.write(f"{card['title']} — {card['company']}")
 
     _render_application_detail(board, statuses)
 
@@ -1657,9 +1931,19 @@ def _render_application_detail(board: dict, statuses: list):
         return
 
     st.markdown("**Application detail**")
-    labels = {f"{c['title']} — {c['company']} ({s})": (s, c) for s, c in everything}
-    choice = st.selectbox("Application", list(labels), label_visibility="collapsed")
-    status, card = labels[choice]
+    cards_by_id = {
+        card["application_id"]: (status, card) for status, card in everything
+    }
+    choice = st.selectbox(
+        "Application",
+        list(cards_by_id),
+        format_func=lambda app_id: (
+            f"{cards_by_id[app_id][1]['title']} — {cards_by_id[app_id][1]['company']} "
+            f"({cards_by_id[app_id][0]}) · #{app_id}"
+        ),
+        label_visibility="collapsed",
+    )
+    status, card = cards_by_id[choice]
     app_id = card["application_id"]
 
     left, right = st.columns([3, 2])
@@ -1684,6 +1968,12 @@ def _render_application_detail(board: dict, statuses: list):
             st.caption("Notes saved.")
 
     with right:
+        if card.get("job_id") and st.button(
+            "Prepare application",
+            key=f"detail_prepare_{app_id}",
+            use_container_width=True,
+        ):
+            _prepare_application(card["job_id"])
         next_status = {
             "saved": "applied",
             "applied": "screening",
@@ -1724,6 +2014,9 @@ def _render_application_detail(board: dict, statuses: list):
 # Router
 render_sidebar()
 render_stage_rail(st.session_state.get("page", "onboarding"))
+for notice_key in ("match_refresh_warning", "job_save_notice"):
+    if st.session_state.get(notice_key):
+        st.warning(st.session_state[notice_key])
 
 if st.session_state.get("page") == "onboarding":
     page_onboarding()
