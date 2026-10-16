@@ -228,11 +228,21 @@ class TestGmailDraftsLogging:
 
 class TestConfigureLogging:
     @pytest.fixture(autouse=True)
-    def _restore_core_level(self):
-        core_logger = logging.getLogger("core")
-        before = core_logger.level
+    def _restore_logging_state(self):
+        """basicConfig mutates the root logger; undo it so no handler or
+        level leaks into later tests."""
+        root, core_logger = logging.getLogger(), logging.getLogger("core")
+        handlers, root_level, core_level = (
+            root.handlers[:],
+            root.level,
+            core_logger.level,
+        )
         yield
-        core_logger.setLevel(before)
+        for handler in root.handlers[:]:
+            if handler not in handlers:
+                root.removeHandler(handler)
+        root.setLevel(root_level)
+        core_logger.setLevel(core_level)
 
     def test_level_comes_from_env(self, monkeypatch):
         monkeypatch.setenv(LOG_LEVEL_ENV, "debug")
