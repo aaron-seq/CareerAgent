@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import text
-from sqlmodel import select
+from sqlmodel import col, select
 
 from .alerting import build_digest
 from .analytics import compute_funnel, generate_interview_questions
@@ -26,7 +26,7 @@ from .db.repository import (
     JobRepository,
     row_to_job,
 )
-from .db.tables import ApplicationStatus, Company
+from .db.tables import ApplicationStatus, Company, CVProfileRow
 from .enrichment import (
     CompanyEnricher,
     GhostAnnotator,
@@ -59,7 +59,7 @@ from .ingestion import (
 )
 from .matching import DedupService, ScoringService, get_embedder
 from .models import CVProfile, EmailDraft, JobPosting
-from .normalize import normalize_company_name, to_naive_utc, utc_now
+from .normalize import compute_dedup_key, normalize_company_name, to_naive_utc, utc_now
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
@@ -111,6 +111,41 @@ def load_cv(cv_id: int) -> Optional[CVProfile]:
         return CVRepository(session).get(cv_id)
 
 
+def saved_cv_profiles(limit: int = 20) -> list[dict[str, Any]]:
+    """List recent local profiles without decrypting their candidate payloads."""
+    if not 1 <= limit <= 100:
+        raise ValueError("Profile limit must be between 1 and 100.")
+    init_persistence()
+    with get_session() as session:
+        rows = session.exec(
+            select(CVProfileRow.id, CVProfileRow.name, CVProfileRow.created_at)
+            .where(col(CVProfileRow.payload).is_not(None))
+            .order_by(col(CVProfileRow.created_at).desc(), col(CVProfileRow.id).desc())
+            .limit(limit)
+        ).all()
+        return [
+            {"id": cv_id, "name": name, "created_at": created_at.isoformat()}
+            for cv_id, name, created_at in rows
+        ]
+
+
+def job_for_drafting(job_id: int) -> Optional[JobPosting]:
+    """Load a persisted API job using the same domain model as pasted jobs."""
+    with get_session() as session:
+        row = JobRepository(session).get(job_id)
+        return row_to_job(row) if row is not None else None
+
+
+def persist_manual_job(job: JobPosting) -> int:
+    """Keep user-selected/pasted jobs in the same pipeline as API postings."""
+    init_persistence()
+    source_id = job.url or compute_dedup_key(job.title, job.company, job.location)
+    with get_session() as session:
+        row = JobRepository(session).upsert(job, source="manual", source_id=source_id)
+        assert row.id is not None  # upsert flushes the inserted row
+        return row.id
+
+
 # --------------------------------------------------------------------------- #
 # Ingestion + matching
 # --------------------------------------------------------------------------- #
@@ -126,6 +161,7 @@ def ingest_ats(
     slug: str,
     company_name: str | None = None,
     client=None,
+    **params: Any,
 ) -> IngestionResult:
     """Pull a company's jobs from its ATS public API into the DB."""
     init_persistence()
@@ -134,7 +170,7 @@ def ingest_ats(
         raise ValueError(f"Unsupported ATS: {ats_type}")
     source = source_cls(slug, company_name or slug)
     with get_session() as session:
-        return IngestionService(session).ingest(source, client=client)
+        return IngestionService(session).ingest(source, client=client, **params)
 
 
 def link_companies(session) -> int:
@@ -346,6 +382,9 @@ def _job_to_dict(row, company=None) -> dict[str, Any]:
         "company": row.company_name,
         "location": row.location,
         "url": row.url,
+        "source": row.source,
+        "source_id": row.source_id,
+        "attribution": attribution_notice(row.source),
         "remote": row.remote,
         "score": row.match_score,
         "matched": explanation.get("matched_keywords", []),
@@ -406,6 +445,7 @@ def _application_card(app, job, as_of: datetime) -> dict[str, Any]:
     applied = app.applied_at
     return {
         "application_id": app.id,
+        "job_id": job.id if job else None,
         "title": job.title if job else "(job removed)",
         "company": job.company_name if job else "",
         "url": job.url if job else None,
@@ -671,6 +711,7 @@ def discover_from_url(url: str, client=None, fetcher=None) -> dict[str, Any]:
             "fetched": result.fetched,
             "stored": result.upserted,
             "errors": result.errors,
+            "warnings": result.warnings,
         }
 
     if match is not None:

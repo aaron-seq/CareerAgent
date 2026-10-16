@@ -18,9 +18,9 @@ available as an opt-in alternative (ADR 0005).
   lives in `app.py` itself. In practice it calls `core/` two ways: the
   DB-backed platform services (ingestion, matching, resume, tracking,
   outreach, analytics) go through `core/facade.py`; the original CV/contact/
-  personalization/Gmail/storage modules are instantiated directly by
+  personalization/storage modules are instantiated directly by
   `app.py` (`CVParser`, `JobFinder`, `ContactFinder`, `PersonalizationEngine`,
-  `DraftValidator`, `GmailDraftClient`, `LocalStorage`) — a repo-audit finding
+  `DraftValidator`, `LocalStorage`) — a repo-audit finding
   (2026-08) worth routing through the facade too, not yet done.
 - **Logic:** `core/` package — see `ARCHITECTURE.md` for the full module map
   (ingestion, matching, resume, tracking, outreach, enrichment, analytics,
@@ -29,8 +29,10 @@ available as an opt-in alternative (ADR 0005).
   `qwen2.5:7b`, `mistral:7b`); Groq (free-tier cloud, opt-in) as an
   alternative when Ollama isn't installed — see ADR 0005 for the PII tradeoff.
 - **Storage:** SQLModel on SQLite for dev (Postgres in prod, ADR 0003); legacy
-  JSON under `careeragent_data/` for drafts/exports.
-- **Tests:** `tests/` (pytest, 204+); CI in `.github/workflows/ci.yml`.
+  encrypted JSON under `careeragent_data/` for artifacts and readable exports.
+  Compliant Gmail creation is routed through the facade.
+- **Tests:** `tests/` (pytest); `python -m scripts.check` runs lint/format,
+  Python coverage and extension tests. CI includes functional PR Docker checks.
 
 ## Tech stack & direction
 - **Language:** Python (target 3.11+). Stay in Python.
@@ -60,7 +62,8 @@ available as an opt-in alternative (ADR 0005).
 - Every new module ships with pytest tests.
 - **Mock all external APIs** (`respx`/`vcr.py`/`pytest-mock`) — no live network
   calls in CI. Ollama and job-board APIs must be mocked in tests.
-- Run: `pytest`. Lint: `ruff check .`. Types: `mypy .`.
+- Run: `python -m scripts.check`. Optional Docker: `python -m scripts.check docker`.
+  Types remain advisory: `mypy .`; current limitations are documented in the audits.
 
 ## Secrets & PII
 - Never commit secrets. Read config from env (`.env`, already gitignored;

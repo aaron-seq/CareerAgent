@@ -84,6 +84,7 @@ class IngestionResult:
     fetched: int = 0
     upserted: int = 0
     errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class IngestionService:
@@ -111,6 +112,7 @@ class IngestionService:
             if owns_client:
                 client.close()
 
+        result.warnings.extend(getattr(source, "warnings", []))
         result.fetched = len(fetched)
         for fj in fetched:
             row = self.jobs.upsert(fj.job, source=fj.source, source_id=fj.source_id)

@@ -5,8 +5,8 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 
 ## Current status
 - **Current phase:** Phases 0–10 have implementations; production hardening remains ongoing.
-- **Last updated:** 2026-10-15
-- **Next action:** Owner decision on historical PII [#38](https://github.com/aaron-seq/CareerAgent/issues/38), then the hosted-fetch and metadata-encryption prerequisites in `docs/SECURITY_AUDIT.md`. Continue the existing matching, attribution, pagination, dependency, and CI backlog.
+- **Last updated:** 2026-10-16
+- **Next action:** Owner decision on historical PII [#38](https://github.com/aaron-seq/CareerAgent/issues/38), then the hosted-fetch and metadata-encryption prerequisites in `docs/SECURITY_AUDIT.md`. Continue matching quality, dependency reproducibility, and advisory typing work. Source attribution, bounded pagination, and functional PR Docker checks are implemented.
 - **Blockers:** Public-history PII remains unresolved. Actual model inference, Gmail OAuth/delivery, Postgres locking, and real-browser extension behavior remain unverified in this environment. Local job-board access works; some model/log download destinations remain blocked.
 
 ## Verification level per phase
@@ -19,10 +19,50 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **377 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
-Core coverage is **92.48%**. Passing tests do not establish production readiness.
+Totals: **452 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
+Core coverage is **92.78%**. Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-16 — Guided workflow, task automation, and independent PR review
+
+- Fetched latest main and independently reviewed the sole pending PR #44.
+  Resolved a semantic-version metric crash and fresh Docker bind-permission
+  failure before merging it. Its updated Python 3.9–3.11/lint/extension CI and
+  subsequent main CI passed; fresh-volume app/persistence checks passed locally.
+- Reopen encrypted saved CVs without parsing again. Profile changes invalidate
+  generated materials and automatically refresh matches; recovery notices stay
+  visible on failure. Keep browsing, tracking, tailoring, review and exports
+  available without a model; gate only actual AI actions.
+- Scope email/letter/resume/WhatsApp workspaces and editor widgets by job;
+  preserve edits on return and reset editor values on new generations. Connect
+  API and manually selected/pasted jobs to Prepare application and the pipeline.
+- Keep withdrawn and duplicate-titled applications selectable. Preserve source
+  attribution/link per posting (#19), preferences through navigation, and make
+  ZIP exports downloadable in the browser.
+- SmartRecruiters now follows pages (#20), with unique-ID/request/job bounds,
+  clear partial results, malformed-payload checks, and continuation controls.
+- Added `python -m scripts.check` and functional Docker smoke. PR CI now tests
+  app screens, encrypted persistence across containers, nonroot execution and
+  health; Actions use verified SHA pins, Node 24, read-only token permissions,
+  explicit runner versions and bounded runtimes.
+- Digest CLI validates limits/channel configuration, reports rejected deliveries
+  with a failing status, sanitizes database/malformed-URL/network errors, and
+  never retries possibly completed sends automatically. No real delivery run.
+- **Validation:** 452 Python tests, 18 extension tests, lint/format, Compose
+  config, Docker build and functional smoke passed. Core coverage increased
+  92.48% → 92.78%; advisory mypy reports 29 existing errors (previously 32).
+  Existing eight deprecation/reload warnings remain documented. No real-browser
+  screenshot/accessibility or live model/OAuth/Postgres validation is claimed.
+- **Review:** Four subagents split PR, UI, ingestion and CI work, with independent
+  review and regression tests for findings. `docs/WORKFLOW_AUDIT.md` records the
+  findings, evidence, limits and rollback; ADR 0007 records the decisions.
+- Matrix validation exposed older Streamlit 1.50 retaining stale controls after
+  immediate navigation. Prepare application now uses supported callbacks before
+  rendering; the original failing Python 3.9 journey passes unchanged.
+- Independently ran all 452 tests on Python 3.9.25 / Streamlit 1.50: pass,
+  coverage 92.72%, with three additional SDK runtime-support warnings. Python
+  3.11 remains recommended; the runtime transition is tracked in #46.
 
 ### 2026-10-15 — Boundary audit and targeted privacy/reliability fixes
 
