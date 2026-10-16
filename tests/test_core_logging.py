@@ -232,15 +232,17 @@ class TestConfigureLogging:
         """basicConfig mutates the root logger; undo it so no handler or
         level leaks into later tests."""
         root, core_logger = logging.getLogger(), logging.getLogger("core")
-        handlers, root_level, core_level = (
+        handlers, core_handlers, root_level, core_level = (
             root.handlers[:],
+            core_logger.handlers[:],
             root.level,
             core_logger.level,
         )
         yield
-        for handler in root.handlers[:]:
-            if handler not in handlers:
-                root.removeHandler(handler)
+        for logger, before in ((root, handlers), (core_logger, core_handlers)):
+            for handler in logger.handlers[:]:
+                if handler not in before:
+                    logger.removeHandler(handler)
         root.setLevel(root_level)
         core_logger.setLevel(core_level)
 
@@ -258,3 +260,41 @@ class TestConfigureLogging:
         monkeypatch.setenv(LOG_LEVEL_ENV, "chatty")
         configure_logging()
         assert logging.getLogger("core").level == logging.INFO
+
+    def test_level_applies_to_core_only_not_dependencies(self):
+        """Codex review on #50: a root-level basicConfig made INFO the default
+        for every library, and httpx logs full request URLs at INFO -- which
+        for Adzuna include app_id/app_key query parameters."""
+        root = logging.getLogger()
+        # A fresh app process has no root handlers; pytest installs some,
+        # which would make basicConfig a no-op and hide the leak.
+        saved = root.handlers[:]
+        for handler in saved:
+            root.removeHandler(handler)
+        root_level = root.level
+        try:
+            configure_logging("DEBUG")
+            new_root_handlers = [h for h in root.handlers if h not in saved]
+            root_level_after = root.level
+            httpx_info = logging.getLogger("httpx").isEnabledFor(logging.INFO)
+        finally:
+            for handler in root.handlers[:]:
+                root.removeHandler(handler)
+            for handler in saved:
+                root.addHandler(handler)
+            root.setLevel(root_level)
+        assert new_root_handlers == []
+        assert root_level_after == root_level
+        assert not httpx_info
+        assert logging.getLogger("core").level == logging.DEBUG
+
+    def test_repeated_calls_add_one_handler(self):
+        configure_logging()
+        configure_logging()
+        configure_logging()
+        owned = [
+            h
+            for h in logging.getLogger("core").handlers
+            if getattr(h, "_careeragent", False)
+        ]
+        assert len(owned) == 1
