@@ -3,6 +3,7 @@ Job discovery using DuckDuckGo search (free, no API key)
 Finds job postings from web search results
 """
 
+import logging
 import time
 from typing import List, Optional
 
@@ -13,6 +14,8 @@ from duckduckgo_search import DDGS
 from .llm import LocalLLMClient
 from .models import JobPosting, SearchQuery
 from .prompts import JOB_PARSE_PROMPT
+
+logger = logging.getLogger(__name__)
 
 
 class JobFinder:
@@ -45,7 +48,9 @@ class JobFinder:
                     time.sleep(0.5)
 
                 except Exception as e:
-                    print(f"Failed to parse result: {e}")
+                    logger.warning(
+                        "Failed to parse job search result; skipping", exc_info=e
+                    )
                     continue
 
             return job_postings
@@ -165,5 +170,5 @@ class JobFinder:
             return JobPosting(**job_data)
 
         except Exception as e:
-            print(f"Failed to fetch job details from {job_url}: {e}")
+            logger.warning("Failed to fetch job details from %s", job_url, exc_info=e)
             return None

@@ -3,6 +3,7 @@ Contact discovery using web search
 Generates email permutations when exact email not found
 """
 
+import logging
 import re
 import time
 from typing import List, Optional
@@ -12,6 +13,8 @@ from duckduckgo_search import DDGS
 from .llm import LocalLLMClient
 from .models import ContactCandidate
 from .prompts import CONTACT_SEARCH_QUERIES_PROMPT
+
+logger = logging.getLogger(__name__)
 
 
 class ContactFinder:
@@ -53,7 +56,7 @@ class ContactFinder:
         if not isinstance(queries, list):
             queries = [str(queries)]
 
-        for query in queries[:3]:  # Limit to 3 queries
+        for index, query in enumerate(queries[:3]):  # Limit to 3 queries
             try:
                 results = self.ddgs.text(query, max_results=5)
 
@@ -70,7 +73,9 @@ class ContactFinder:
                 time.sleep(0.5)  # Rate limiting
 
             except Exception as e:
-                print(f"Search query failed: {e}")
+                logger.warning(
+                    "Contact search query %d failed; skipping", index + 1, exc_info=e
+                )
                 continue
 
             if len(contacts) >= max_results:
