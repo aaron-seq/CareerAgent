@@ -21,6 +21,7 @@ from core.job_finder import JobFinder
 
 # Core imports
 from core.llm import GROQ_DEFAULT_MODEL, CloudLLMClient, LocalLLMClient
+from core.logging_config import configure_logging
 from core.models import ContactCandidate, CVProfile, EmailDraft, JobPosting, SearchQuery
 from core.outreach import ComplianceConfig, LIARecord
 from core.personalization import PersonalizationEngine
@@ -28,6 +29,7 @@ from core.storage import LocalStorage
 from core.validators import DraftValidator
 
 load_dotenv()
+configure_logging()  # level from CAREERAGENT_LOG_LEVEL (default INFO)
 
 # Page config
 st.set_page_config(

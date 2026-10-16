@@ -4,6 +4,7 @@ Uses OAuth2 for authentication, never sends emails automatically
 """
 
 import base64
+import logging
 import os
 import tempfile
 from email.mime.text import MIMEText
@@ -17,6 +18,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.compose"]
+
+logger = logging.getLogger(__name__)
 
 
 class GmailDraftClient:
@@ -42,7 +45,11 @@ class GmailDraftClient:
             try:
                 creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
             except Exception as e:
-                print(f"Failed to load token: {e}")
+                # Type only: the message can echo token-file contents.
+                logger.warning(
+                    "Failed to load Gmail token (%s); re-authenticating",
+                    type(e).__name__,
+                )
 
         # Refresh or get new credentials
         if not creds or not creds.valid:
@@ -50,7 +57,11 @@ class GmailDraftClient:
                 try:
                     creds.refresh(Request())
                 except Exception as e:
-                    print(f"Token refresh failed: {e}")
+                    # Type only: refresh errors can echo token material.
+                    logger.warning(
+                        "Gmail token refresh failed (%s); re-authenticating",
+                        type(e).__name__,
+                    )
                     creds = None
 
             if not creds:
@@ -114,7 +125,7 @@ class GmailDraftClient:
             )
 
             draft_id = result["id"]
-            print(f"Draft created successfully with ID: {draft_id}")
+            logger.info("Gmail draft created (id=%s)", draft_id)
 
             return draft_id
 

@@ -3,6 +3,7 @@ CV parser with PDF extraction and LLM-based structuring
 Supports both PDF and plain text input
 """
 
+import logging
 import tempfile
 from pathlib import Path
 from typing import List, Optional
@@ -13,6 +14,8 @@ import PyPDF2
 from .llm import LocalLLMClient
 from .models import CVProfile
 from .prompts import CV_PARSE_PROMPT
+
+logger = logging.getLogger(__name__)
 
 
 class CVParser:
@@ -63,9 +66,10 @@ class CVParser:
         prompt = CV_PARSE_PROMPT.format(cv_text=cv_text)
 
         try:
-            print(f"DEBUG: Sending {len(cv_text)} chars to LLM...")
+            # Size only: the prompt is the CV itself and must never be logged.
+            logger.debug("Sending %d chars of CV text to the LLM", len(cv_text))
             cv_data = self.llm.generate_json(prompt, temperature=0.2)
-            print("DEBUG: LLM response received and parsed.")
+            logger.debug("LLM response received and parsed")
             cv_data["raw_text"] = cv_text
 
             # Validate with Pydantic
@@ -103,7 +107,9 @@ class CVParser:
             if text.strip():
                 return text.strip()
         except Exception as e:
-            print(f"pdfplumber extraction failed: {e}")
+            logger.warning(
+                "pdfplumber extraction failed; falling back to PyPDF2", exc_info=e
+            )
 
         # Fallback to PyPDF2
         try:
@@ -117,7 +123,7 @@ class CVParser:
             if text.strip():
                 return text.strip()
         except Exception as e:
-            print(f"PyPDF2 extraction failed: {e}")
+            logger.warning("PyPDF2 extraction failed", exc_info=e)
 
         raise ValueError(
             "Could not extract text from PDF. File may be scanned image or corrupted."
@@ -142,7 +148,10 @@ class CVParser:
                         if uri and uri not in urls:
                             urls.append(uri)
         except Exception as e:  # non-fatal: parsing still works without links
-            print(f"hyperlink extraction failed: {e}")
+            logger.warning(
+                "PDF hyperlink extraction failed; continuing without links",
+                exc_info=e,
+            )
 
         return urls
 
