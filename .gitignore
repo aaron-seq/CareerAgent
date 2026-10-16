@@ -45,6 +45,8 @@ verify_core.py
 legacy_oil_spill/
 temp_cv_*.pdf
 *.log
+.coverage
+/coverage.xml
 
 # Databases (local dev)
 *.db
