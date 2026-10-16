@@ -157,23 +157,21 @@ def test_restore_saved_cv_without_connecting_a_model(temp_db, tmp_path):
     profile_id = facade.persist_cv(profile)
     app = _app(tmp_path)
     assert app.session_state["llm_client"] is None
-    assert _button(app, "Parse CV").disabled
-    _button(app, "Use this CV").click().run()
+    app.radio(key="onboarding_mode").set_value("Upload a CV (uses AI)").run()
+    assert _button(app, "Read my CV").disabled
+    _button(app, "Use this profile").click().run()
     assert not app.exception
     assert app.session_state["cv_id"] == profile_id
     assert app.session_state["cv_profile"] == profile
-    assert any(heading.value == "Parsed CV Profile" for heading in app.subheader)
-    assert _button(app, "Next: Job Discovery")
+    assert any(heading.value == "Application answers" for heading in app.subheader)
+    assert _button(app, "Next: find jobs")
 
 
 def test_disconnected_onboarding_keeps_profile_review_visible(temp_db, tmp_path):
     app = _app(tmp_path, cv_profile=CVProfile(name="Synthetic Candidate"))
     assert not app.exception
-    assert any(heading.value == "Parsed CV Profile" for heading in app.subheader)
-    assert any(
-        element.proto.label == "Download ATS-clean PDF"
-        for element in app.get("download_button")
-    )
+    assert any(heading.value == "Application answers" for heading in app.subheader)
+    assert any(element.proto.label == "PDF" for element in app.get("download_button"))
 
 
 def test_profile_restore_failure_keeps_existing_profile(temp_db, tmp_path, monkeypatch):
@@ -183,7 +181,7 @@ def test_profile_restore_failure_keeps_existing_profile(temp_db, tmp_path, monke
     )
     current = CVProfile(name="Current Candidate")
     app = _app(tmp_path, cv_profile=current)
-    _button(app, "Use this CV").click().run()
+    _button(app, "Use this profile").click().run()
     assert not app.exception
     assert app.session_state["cv_profile"] == current
     assert any("original encryption key" in error.value for error in app.error)
@@ -199,7 +197,7 @@ def test_restoring_another_cv_discards_previous_generated_material(temp_db, tmp_
         ),
         draft_workspaces={"old-job": {"cover": {"letter": "Old candidate's letter"}}},
     )
-    _button(app, "Use this CV").click().run()
+    _button(app, "Use this profile").click().run()
     assert not app.exception
     assert app.session_state["current_draft"] is None
     assert app.session_state["draft_workspaces"] == {}
@@ -352,13 +350,47 @@ def test_zip_export_is_downloadable_in_the_browser(temp_db, tmp_path):
     )
 
 
-def test_preferences_survive_navigation(temp_db, tmp_path):
+def test_profile_can_be_typed_in_without_a_model(temp_db, tmp_path):
+    """Real-user blocker: no model meant no way to create a profile at all."""
     app = _app(tmp_path)
-    _area(app, "Target Roles (one per line)").set_value("Platform Engineer").run()
+    assert app.session_state["llm_client"] is None
+    assert app.radio(key="onboarding_mode").value == "Type it in"
+    _input(app, "Full name *").set_value("Synthetic Candidate")
+    _input(app, "Email *").set_value("not-an-email")
+    _area(app, "Skills").set_value("Python, SQL")
+    _button(app, "Save my profile").click().run()
+    assert not app.exception
+    assert app.session_state["cv_profile"] is None
+    assert any("valid email" in item.value for item in app.markdown)
+
+    _input(app, "Email *").set_value("candidate@example.test")
+    _button(app, "Save my profile").click().run()
+    assert not app.exception
+    saved = app.session_state["cv_profile"]
+    assert saved.skills == ["Python", "SQL"]
+    assert facade.load_cv(app.session_state["cv_id"]) == saved
+    assert any("Profile saved" in item.value for item in app.success)
+
+    # Survives navigation, and the answers form is offered next.
     app.button(key="nav_pipeline").click().run()
     app.button(key="nav_onboarding").click().run()
     assert not app.exception
-    assert _area(app, "Target Roles (one per line)").value == "Platform Engineer"
+    assert _input(app, "Full name *").value == "Synthetic Candidate"
+    assert any(heading.value == "Application answers" for heading in app.subheader)
+
+
+def test_application_answers_keep_unknown_as_unknown(temp_db, tmp_path):
+    cv_id = facade.persist_cv(CVProfile(name="Synthetic", email="s@example.test"))
+    app = _app(tmp_path, cv_profile=facade.load_cv(cv_id), cv_id=cv_id)
+    # Form values reach the app together with the submit click, as in a browser.
+    app.selectbox(key="ans_sponsor").set_value("No")
+    _button(app, "Save answers").click().run()
+    assert not app.exception
+    answers = facade.load_candidate_profile(cv_id)
+    assert answers.work_authorization.requires_sponsorship is False
+    # Untouched yes/no questions stay unknown rather than defaulting to No.
+    assert answers.work_authorization.authorized is None
+    assert answers.preferences.open_to_relocation is None
 
 
 def test_removing_selected_job_resets_invalid_draft_selection(temp_db, tmp_path):
@@ -388,7 +420,7 @@ def test_restored_cv_automatically_updates_previous_candidate_scores(temp_db, tm
     first_score = facade.top_jobs()[0]["score"]
     facade.persist_cv(second)
     app = _app(tmp_path, cv_profile=first)
-    _button(app, "Use this CV").click().run()
+    _button(app, "Use this profile").click().run()
     assert not app.exception
     assert app.session_state["cv_profile"] == second
     assert facade.top_jobs()[0]["score"] < first_score
@@ -401,7 +433,7 @@ def test_profile_score_failure_notice_survives_reruns(temp_db, tmp_path, monkeyp
         facade, "refresh_matches", Mock(side_effect=OSError("Synthetic failure"))
     )
     app = _app(tmp_path)
-    _button(app, "Use this CV").click().run()
+    _button(app, "Use this profile").click().run()
     assert not app.exception
     assert app.session_state["cv_profile"].name == "Saved Candidate"
     assert any("could not be updated" in warning.value for warning in app.warning)

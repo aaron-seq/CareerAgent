@@ -352,8 +352,9 @@ def _render_ai_settings() -> None:
                     )
                 else:
                     st.error(
-                        "Couldn't reach Ollama. Install it from ollama.com, "
-                        f"then run `ollama pull {model}` once and try again."
+                        "Couldn't reach Ollama, or the model isn't downloaded. "
+                        "Install Ollama from ollama.com, then run "
+                        f"`ollama pull {model}` once and try again."
                     )
             except Exception as e:
                 st.error(f"Could not connect: {e}")
@@ -813,8 +814,9 @@ def page_onboarding():
                         st.rerun()
                 except Exception:
                     st.error(
-                        "This profile could not be opened. It was saved with a "
-                        "different encryption key; restore that key in your .env."
+                        "This profile could not be opened: it was saved with a "
+                        "different key. Restore the original encryption key "
+                        "(CAREERAGENT_ENCRYPTION_KEY in .env) to open it."
                     )
 
     profile = st.session_state.cv_profile
