@@ -19,10 +19,34 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **452 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
+Totals: **465 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
 Core coverage is **92.78%**. Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-16 — core/ diagnostics move from print() to logging (#31)
+
+- Replaced the 11 remaining bare `print()` calls in `core/` (the issue
+  counted 14; three had already gone) in `cv_parser`, `contact_finder`,
+  `job_finder` and `gmail_drafts` with module-level `logging` loggers.
+  Handled failures now log a WARNING with the traceback attached instead of
+  vanishing into stdout; LLM send/receive chatter is DEBUG.
+- PII: no print emitted CV text directly, but log content was chosen to
+  stay PII-free: the CV debug line logs size only, Gmail token load/refresh
+  failures log the exception type only (messages can echo token material),
+  and draft creation logs the draft id, not recipient or body.
+- New `core/logging_config.configure_logging()` (stdlib `basicConfig`, no
+  new dependency) is called once in `app.py`; level comes from
+  `CAREERAGENT_LOG_LEVEL` (default INFO, documented in `.env.example`).
+  `scripts/` were left alone: none of them reaches the modules that printed.
+- 13 new tests in `tests/test_core_logging.py` (caplog): every converted
+  error path logs a warning and leaks no CV text/name/email/phone/token; a
+  regression guard fails on any new bare `print(` in `core/`.
+- Note: one full run during this work showed 78 transient failures. They
+  came from a concurrent `pip install` rewriting sqlalchemy/pydantic/sqlmodel
+  in the shared global site-packages mid-run, not from this change. Seven
+  later runs in the same deterministic order passed, three of them
+  concurrently.
 
 ### 2026-10-16 — Guided workflow, task automation, and independent PR review
 
