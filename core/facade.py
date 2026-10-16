@@ -12,11 +12,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlmodel import col, select
 
 from .alerting import build_digest
 from .analytics import compute_funnel, generate_interview_questions
+from .apply import build_answers, resolve_apply_url, resume_attachment
+from .candidate import CandidateProfile, compute_completeness
 from .db import get_session, init_db
 from .db.repository import (
     ApplicationRepository,
@@ -127,6 +130,50 @@ def saved_cv_profiles(limit: int = 20) -> list[dict[str, Any]]:
             {"id": cv_id, "name": name, "created_at": created_at.isoformat()}
             for cv_id, name, created_at in rows
         ]
+
+
+def save_candidate_profile(
+    cv_id: int, candidate: CandidateProfile | dict[str, Any]
+) -> dict[str, Any]:
+    """Store the application answers for a saved CV (encrypted at rest).
+
+    Accepts the model or the plain dict a UI form produces; a dict is
+    validated first, so a bad value is reported rather than stored.
+    """
+    try:
+        profile = CandidateProfile.model_validate(candidate)
+    except ValidationError as exc:
+        return {"ok": False, "error": _validation_message(exc)}
+    init_persistence()
+    with get_session() as session:
+        if not CVRepository(session).save_candidate(cv_id, profile):
+            return {"ok": False, "error": "saved CV not found"}
+    return {"ok": True, "cv_id": cv_id}
+
+
+def load_candidate_profile(cv_id: int) -> Optional[CandidateProfile]:
+    """The answers saved for a CV; all-unknown if none yet, None if no CV."""
+    init_persistence()
+    with get_session() as session:
+        return CVRepository(session).get_candidate(cv_id)
+
+
+def profile_completeness(
+    cv: CVProfile, candidate: CandidateProfile | None = None
+) -> dict[str, Any]:
+    """Weighted completeness of CV + answers, with what each gap costs.
+
+    ``{"percent", "items", "missing", "next_best_action"}``; every item is
+    ``{"key", "label", "done", "weight", "why", "section"}`` and ``missing``
+    is ordered most valuable first.
+    """
+    return compute_completeness(cv, candidate).to_dict()
+
+
+def _validation_message(exc: ValidationError) -> str:
+    return "; ".join(
+        f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in exc.errors()
+    )
 
 
 def job_for_drafting(job_id: int) -> Optional[JobPosting]:
@@ -391,6 +438,8 @@ def _job_to_dict(row, company=None) -> dict[str, Any]:
         "missing": explanation.get("missing_keywords", []),
         "salary_min": row.salary_min,
         "salary_max": row.salary_max,
+        "salary_currency": row.salary_currency,
+        "date_posted": row.date_posted.isoformat() if row.date_posted else None,
         "ghost_score": row.ghost_score,
         "dedup_key": row.dedup_key,
         "sponsors_visa": getattr(company, "sponsors_visa", None),
@@ -791,20 +840,28 @@ def lint_resume(cv: CVProfile, raw_text: str | None = None) -> dict[str, Any]:
     }
 
 
-def extension_profile(cv: CVProfile) -> dict[str, str]:
-    """The parsed CV reduced to the fields the autofill extension fills.
+def extension_profile(
+    cv: CVProfile,
+    candidate: CandidateProfile | None = None,
+    include_resume: bool = False,
+) -> dict[str, Any]:
+    """The autofill extension's import JSON, built from the parsed CV.
 
-    Keys match ``extension/src/field_mapping.js`` exactly. This is the whole
-    bridge between the app and the extension: the candidate copies this JSON
-    into the popup instead of retyping details the CV parser already read.
-    Deliberately not an HTTP endpoint -- the extension needs no origin
-    permission on the app, and the PII never leaves the browser.
+    The seven identity keys match ``extension/src/field_mapping.js`` and are
+    always strings (empty when unknown, so the extension skips the input).
+    With a ``candidate`` profile, ``location`` comes from it, the first
+    website backs an empty ``portfolio``, and an ``answers`` object carries
+    the screening answers the candidate actually gave (see
+    :func:`core.apply.build_answers`; absent key = unknown = left blank and
+    flagged by the extension). With ``include_resume`` a ``resume`` block
+    embeds the ATS-clean PDF for the extension to attach to the resume input.
 
-    ``location`` is absent from :class:`CVProfile`, so it is emitted empty for
-    the candidate to complete in the popup rather than guessed from an address
-    line.
+    Deliberately not an HTTP endpoint: the candidate pastes this into the
+    popup, so the extension needs no host permission and the PII never
+    crosses a socket. ``extension/src/popup.js`` ``parseImport`` whitelists
+    every key and type on the way in.
     """
-    return {
+    profile: dict[str, Any] = {
         "fullName": cv.name or "",
         "email": cv.email or "",
         "phone": cv.phone or "",
@@ -813,6 +870,80 @@ def extension_profile(cv: CVProfile) -> dict[str, str]:
         "portfolio": cv.portfolio or "",
         "location": "",
     }
+    if candidate is not None:
+        profile["location"] = candidate.location or ""
+        if not profile["portfolio"] and candidate.websites:
+            profile["portfolio"] = candidate.websites[0]
+        answers = build_answers(candidate)
+        if answers:
+            profile["answers"] = answers
+    if include_resume:
+        profile["resume"] = resume_attachment(resume_pdf(cv), cv.name)
+    return profile
+
+
+# --------------------------------------------------------------------------- #
+# Apply flow (stored job -> its real application form)
+# --------------------------------------------------------------------------- #
+
+
+def apply_target(job_id: int) -> dict[str, Any]:
+    """Where to apply for a stored job, and whether autofill covers that page.
+
+    ``{"ok", "job_id", "title", "company", "url", "ats",
+    "autofill_supported", "note"}``. ``url`` is ``None`` unless it is a real
+    http(s) link; ``autofill_supported`` is true only on hosts the extension's
+    manifest injects into.
+    """
+    init_persistence()
+    with get_session() as session:
+        row = JobRepository(session).get(job_id)
+        if row is None:
+            return {"ok": False, "job_id": job_id, "error": "job not found"}
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "title": row.title,
+            "company": row.company_name,
+            **resolve_apply_url(row.url).to_dict(),
+        }
+
+
+def mark_applied(job_id: int, cv_profile_id: int | None = None) -> dict[str, Any]:
+    """Record that the human submitted an application for a job.
+
+    Tracks the job if it isn't yet, then moves SAVED -> APPLIED (which starts
+    the follow-up reminder). A further-along status is left alone
+    (``changed: False``); a closed (rejected/withdrawn) one is reported.
+    """
+    init_persistence()
+    with get_session() as session:
+        job = JobRepository(session).get(job_id)
+        if job is None:
+            return {"ok": False, "error": "job not found"}
+        tracker = TrackingService(session)
+        app = tracker.apps.get_by_dedup(job.dedup_key, cv_profile_id)
+        if app is None:
+            try:
+                app = tracker.create_application(job, cv_profile_id)
+            except BlacklistedCompanyError as exc:
+                return {"ok": False, "error": f"blacklisted: {exc}"}
+        if app.status in (ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN):
+            return {
+                "ok": False,
+                "application_id": app.id,
+                "status": app.status.value,
+                "error": f"application is already {app.status.value}",
+            }
+        changed = app.status == ApplicationStatus.SAVED
+        if changed:
+            tracker.transition(app, ApplicationStatus.APPLIED)
+        return {
+            "ok": True,
+            "application_id": app.id,
+            "status": app.status.value,
+            "changed": changed,
+        }
 
 
 def resume_pdf(cv: CVProfile) -> bytes:
