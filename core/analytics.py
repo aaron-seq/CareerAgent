@@ -108,6 +108,5 @@ def generate_interview_questions(job: JobPosting, limit: int = 10) -> list[str]:
         questions.append(f"How would you approach: {problem}?")
     questions.extend(_BEHAVIORAL)
     # De-dupe preserving order, then cap.
-    seen: set[str] = set()
-    ordered = [q for q in questions if not (q in seen or seen.add(q))]
+    ordered = list(dict.fromkeys(questions))
     return ordered[:limit]

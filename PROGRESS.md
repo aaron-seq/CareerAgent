@@ -48,6 +48,23 @@ to `timestamptz` on Postgres (`USING col AT TIME ZONE 'UTC'`). Cap lifted to
 data intact. Postgres SQL inspected offline only (no live Postgres here).
 **Rollback:** `alembic downgrade -1`, revert, restore the cap.
 
+### 2026-10-16 — pypdf migration and working mypy pin (#21, #22)
+
+- **#21:** CV parser fallback moved from deprecated PyPDF2 to pypdf
+  (`pypdf>=6.21.0,<7.0.0`); `PdfReader`/`extract_text` are unchanged. New tests
+  build a PDF with fpdf2 at test time and extract its text through pdfplumber
+  and through the pypdf fallback. The PyPDF2 deprecation warning is gone.
+- **#22:** `mypy==2.4.0` (Python >=3.10 marker) replaces 1.7.1, which aborted on
+  numpy's PEP 695 stubs; mypy target 3.9 -> 3.10 (2.x minimum; pydantic's
+  `match` breaks a 3.9 target); added `types-python-dateutil`. Small fixes:
+  analytics dedupe, `generate_with_schema` type, explicit `sqlmodel.sql`
+  import in the initial migration. `mypy .`: 29 errors in 10 files
+  (configured files: 25 in 7). Remaining: JSON `dict | list` unions in
+  `core/ingestion/`, `contact_finder.py` dict/list reuse, `facade.py`
+  Optional id + abstract `JobSource`, `llm.py` requests JSON typing, test
+  Optional narrowing. Mypy stays advisory.
+- **Validation:** 452 -> 455 Python tests, 18 JS tests, ruff lint/format clean.
+
 ### 2026-10-16 — Guided workflow, task automation, and independent PR review
 
 - Fetched latest main and independently reviewed the sole pending PR #44.
