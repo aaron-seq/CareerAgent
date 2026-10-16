@@ -44,10 +44,9 @@ def _from_epoch(value) -> Optional[datetime]:
 
     Returns an *aware* UTC datetime, deliberately. Bare
     ``datetime.fromtimestamp(v)`` returns naive **local** time, which the
-    naive-UTC storage convention would then take at face value -- on a
-    UTC+05:30 machine every Arbeitnow and Himalayas posting landed 5.5 hours
-    in the future. Handing back an aware value lets ``to_naive_utc`` at the
-    persistence boundary do the one real conversion.
+    "naive means UTC" rule of ``ensure_utc`` would then take at face value --
+    on a UTC+05:30 machine every Arbeitnow and Himalayas posting landed 5.5
+    hours in the future.
     """
     if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
         return None

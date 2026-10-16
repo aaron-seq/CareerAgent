@@ -7,8 +7,9 @@ python-dotenv>=1.0.0,<2.0.0
 ollama>=0.1.6,<1.0.0
 requests>=2.31.0,<3.0.0
 
-# PDF processing
-PyPDF2>=3.0.1,<4.0.0
+# PDF processing (pypdf is the maintained successor to the deprecated PyPDF2;
+# floor set to the release tested here, which carries the recent security fixes)
+pypdf>=6.21.0,<7.0.0
 pdfplumber>=0.10.3,<1.0.0
 
 # Web search and scraping
@@ -26,10 +27,10 @@ pandas>=2.1.3,<3.0.0
 pillow>=10.1.0,<12.0.0
 
 # Persistence (Phase 1): SQLModel on SQLite for dev, Postgres in prod
-# Capped below 0.0.45: that release maps `datetime` fields to a tz-aware
-# UTCDateTime that rejects the naive-UTC values core/normalize.utc_now() stores
-# (56 tests fail). Lift the cap once the models move to aware datetimes.
-sqlmodel>=0.0.14,<0.0.45
+# Datetime columns pin their own aware-UTC type (core/db/tables.UTCDateTime,
+# ADR 0008), so behaviour no longer depends on sqlmodel's inferred type, which
+# changed in 0.0.45. Full suite verified on 0.0.14, 0.0.44 and 0.0.48.
+sqlmodel>=0.0.14,<1.0.0
 SQLAlchemy>=2.0.0,<3.0.0
 alembic>=1.13.0,<2.0.0
 cryptography>=42.0.0

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from core.db.repository import SuppressionRepository
 from core.models import EmailDraft
@@ -115,6 +115,33 @@ def test_send_policy_cap_and_window():
     assert policy.can_send(now) is False
     # A day later the window has rolled over.
     assert policy.can_send(now + timedelta(days=1, seconds=1)) is True
+
+
+def test_send_policy_mixes_naive_and_aware_timestamps():
+    """Timestamps rebuilt from the DB are aware; a caller's ``now`` may be
+    naive. Mixing them must count the same instants, never raise TypeError."""
+    aware = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    policy = SendPolicy(max_per_window=1, window=timedelta(days=1))
+    policy.record(aware)
+    naive_same_day = datetime(2026, 1, 1, 18, 0, 0)
+    assert policy.can_send(naive_same_day) is False
+    assert policy.remaining(naive_same_day) == 0
+    assert policy.can_send(datetime(2026, 1, 2, 12, 0, 1)) is True
+
+
+def test_outreach_window_rebuilt_from_db_accepts_naive_now(session):
+    """The send window is rebuilt from persisted Gmail exports (aware UTC on
+    read); ``prepare_send`` with a naive ``now`` must still compare cleanly."""
+    from core.db.repository import DraftRepository
+
+    DraftRepository(session).save(
+        EmailDraft(subject="s", body="b", gmail_draft_id="g-1"), job_id=None
+    )
+    session.commit()
+    svc = OutreachService(session, _config(), resolver=lambda d: ["mx"])
+    assert svc.policy._sends and svc.policy._sends[0].utcoffset() == timedelta(0)
+    naive_now = datetime.now(timezone.utc).replace(tzinfo=None)
+    assert svc.policy.remaining(naive_now) == svc.policy.max_per_window - 1
 
 
 # --------------------------------------------------------------------------- #

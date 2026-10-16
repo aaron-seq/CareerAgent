@@ -22,7 +22,7 @@ from dateutil import parser as date_parser
 
 from ..db.repository import JobRepository
 from ..models import JobPosting
-from ..normalize import to_naive_utc
+from ..normalize import ensure_utc
 
 DEFAULT_TIMEOUT = 15.0
 USER_AGENT = "CareerAgent/1.0 (+https://github.com/aaron-seq/CareerAgent)"
@@ -35,11 +35,14 @@ def parse_date(value: Optional[str]) -> Optional[datetime]:
     too -- ``aggregators`` imports from ``ats``, so ``ats`` importing back
     would be a cycle. ``aggregators._parse_date`` re-exports this name for the
     existing callers.
+    Always returns an *aware UTC* datetime: ``dateutil`` keeps the offset when
+    the string has one (converted here) and returns naive when it doesn't
+    (taken to be UTC -- the boards publish UTC or offset-qualified stamps).
     """
     if not value:
         return None
     try:
-        return date_parser.parse(value)
+        return ensure_utc(date_parser.parse(value))
     except (ValueError, OverflowError, TypeError):
         return None
 
@@ -121,13 +124,11 @@ class IngestionService:
             row.salary_max = fj.salary_max
             row.salary_currency = fj.salary_currency
             row.employment_type = fj.employment_type
-            # Boards hand back aware datetimes whenever their date string
-            # carries an offset. The column is naive (SQLite DATETIME /
-            # Postgres timestamp-without-time-zone), so assigning an aware
-            # value drops the offset silently and stores e.g. +05:30 as if it
-            # were already UTC. Convert here -- every source converges on this
+            # Normalise to aware UTC here -- every source converges on this
             # one assignment, so it must not be patched per-connector.
-            row.date_posted = to_naive_utc(fj.date_posted) if fj.date_posted else None
+            # ``parse_date`` already does this; ``_from_epoch`` and any future
+            # adapter building datetimes itself are covered too.
+            row.date_posted = ensure_utc(fj.date_posted) if fj.date_posted else None
             self.session.add(row)
             result.upserted += 1
         self.session.flush()

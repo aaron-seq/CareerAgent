@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
-from ..normalize import utc_now
+from ..normalize import ensure_utc, utc_now
 from .verification import verify_email
 
 _FOOTER_MARKER = "-- \nThis message was sent by"
@@ -120,7 +120,7 @@ class SendPolicy:
         self._sends = [t for t in self._sends if t >= cutoff]
 
     def can_send(self, now: datetime | None = None) -> bool:
-        now = now or utc_now()
+        now = ensure_utc(now) if now else utc_now()
         self._prune(now)
         return len(self._sends) < self.max_per_window and (
             not self._sends
@@ -128,11 +128,11 @@ class SendPolicy:
         )
 
     def record(self, now: datetime | None = None) -> None:
-        now = now or utc_now()
+        now = ensure_utc(now) if now else utc_now()
         self._prune(now)
         self._sends.append(now)
 
     def remaining(self, now: datetime | None = None) -> int:
-        now = now or utc_now()
+        now = ensure_utc(now) if now else utc_now()
         self._prune(now)
         return max(0, self.max_per_window - len(self._sends))

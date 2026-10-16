@@ -86,7 +86,7 @@ class TestCVParserLogging:
         assert any("chars" in r.getMessage() for r in debug)
         _assert_no_pii(caplog)
 
-    @patch("core.cv_parser.PyPDF2.PdfReader", side_effect=RuntimeError("bad xref"))
+    @patch("core.cv_parser.PdfReader", side_effect=RuntimeError("bad xref"))
     @patch("core.cv_parser.pdfplumber.open", side_effect=RuntimeError("bad header"))
     def test_extraction_failures_are_logged_as_warnings(
         self, _plumber, _pypdf, tmp_path, caplog
@@ -101,7 +101,7 @@ class TestCVParserLogging:
         records = _warnings(caplog, "core.cv_parser")
         assert len(records) == 2
         assert "pdfplumber" in records[0].getMessage()
-        assert "PyPDF2" in records[1].getMessage()
+        assert "pypdf" in records[1].getMessage()
         assert all(r.exc_info for r in records)
         _assert_no_pii(caplog)
 

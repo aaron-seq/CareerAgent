@@ -413,7 +413,7 @@ def page_onboarding():
                 list(profiles_by_id),
                 format_func=lambda value: (
                     f"{profiles_by_id[value]['name'] or 'Unnamed profile'} "
-                    f"(saved {profiles_by_id[value]['created_at']})"
+                    f"(saved {profiles_by_id[value]['saved_label']})"
                 ),
             )
             if st.button("Use this CV", use_container_width=True):
