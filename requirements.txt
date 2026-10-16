@@ -7,8 +7,9 @@ python-dotenv>=1.0.0,<2.0.0
 ollama>=0.1.6,<1.0.0
 requests>=2.31.0,<3.0.0
 
-# PDF processing
-PyPDF2>=3.0.1,<4.0.0
+# PDF processing (pypdf is the maintained successor to the deprecated PyPDF2;
+# floor set to the release tested here, which carries the recent security fixes)
+pypdf>=6.21.0,<7.0.0
 pdfplumber>=0.10.3,<1.0.0
 
 # Web search and scraping

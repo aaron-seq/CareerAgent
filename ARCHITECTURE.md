@@ -354,7 +354,7 @@ Gmail credentials are optional private mounts; they are excluded from builds.
 | LLM | Ollama (local) or Groq (free-tier cloud, OpenAI-compatible) | AI inference |
 | Validation | Pydantic 2.5+ | Data validation and serialization |
 | Persistence | SQLModel + Alembic, SQLite (dev) / Postgres (prod) | Structured storage, PII encrypted at rest |
-| PDF parsing | pdfplumber, PyPDF2 | CV text + hyperlink extraction |
+| PDF parsing | pdfplumber, pypdf | CV text + hyperlink extraction |
 | PDF rendering | fpdf2 | ATS-friendly resume PDF output |
 | Job data | Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable, Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas | API-first ingestion |
 | Web search | duckduckgo-search | Fallback job/contact discovery |

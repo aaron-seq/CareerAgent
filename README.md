@@ -29,7 +29,7 @@ The application is built with a modern Python stack:
 
 - **Frontend**: Streamlit for a responsive, interactive UI.
 - **LLM Orchestration**: Custom Python client interacting with Ollama API.
-- **Data Parsing**: PyPDF2 and PDFPlumber for robust CV extraction.
+- **Data Parsing**: pdfplumber and pypdf for robust CV extraction.
 - **Search**: DuckDuckGo Search API for real-time contact and job data.
 - **Storage**: Encrypted local JSON artifacts and selected SQLite fields;
   explicit Markdown/ZIP exports contain readable personal data.
