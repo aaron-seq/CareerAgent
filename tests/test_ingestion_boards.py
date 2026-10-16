@@ -11,7 +11,7 @@ actually emit. All HTTP is mocked -- no live calls in CI, per CLAUDE.md.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -502,15 +502,14 @@ def test_remoteok_empty_and_notice_only_payloads_yield_no_jobs():
 
 
 # --------------------------------------------------------------------------- #
-# Timestamps: naive-UTC convention (core/normalize.py)
+# Timestamps: aware-UTC convention (core/normalize.py, ADR 0008)
 # --------------------------------------------------------------------------- #
 
 
 @respx.mock
 def test_offset_bearing_board_date_is_converted_to_utc_not_just_stripped(session):
     """``dateutil`` returns an AWARE datetime when the source string carries an
-    offset, but ``date_posted`` is a naive column (SQLite DATETIME / Postgres
-    timestamp-without-time-zone). Merely dropping the tzinfo would store
+    offset. SQLite keeps no offset, so merely dropping the tzinfo would store
     midnight IST as though it were midnight UTC -- 5.5 hours early -- which
     skews date sorting, the ghost-job age heuristic, and digest freshness.
     The value must be *converted* to UTC first."""
@@ -537,15 +536,17 @@ def test_offset_bearing_board_date_is_converted_to_utc_not_just_stripped(session
     session.commit()
 
     stored = JobRepository(session).list()[0].date_posted
-    assert stored == datetime(2026, 7, 31, 18, 30, 0)
-    assert stored != datetime(2026, 8, 1, 0, 0, 0), "tzinfo stripped, not converted"
-    assert stored.tzinfo is None, "the column holds naive UTC"
+    assert stored == datetime(2026, 7, 31, 18, 30, 0, tzinfo=timezone.utc)
+    assert stored != datetime(2026, 8, 1, 0, 0, 0, tzinfo=timezone.utc), (
+        "tzinfo stripped, not converted"
+    )
+    assert stored.utcoffset() == timedelta(0), "the column reads back aware UTC"
 
 
 @respx.mock
 def test_epoch_board_date_is_utc_not_machine_local_time(session):
     """``datetime.fromtimestamp(v)`` without a tz returns naive *local* time.
-    Under the naive-UTC convention that is taken at face value, so on this
+    ``ensure_utc`` takes naive values as UTC at face value, so on this
     UTC+05:30 machine every Arbeitnow/Himalayas posting landed 5.5 hours in
     the future. 1787766024 is 2026-08-26T17:40:24Z."""
     respx.get(url__regex=r"https://www\.arbeitnow\.com/api/job-board-api.*").mock(
@@ -571,8 +572,8 @@ def test_epoch_board_date_is_utc_not_machine_local_time(session):
     session.commit()
 
     stored = JobRepository(session).list()[0].date_posted
-    assert stored == datetime(2026, 8, 26, 17, 40, 24)
-    assert stored.tzinfo is None
+    assert stored == datetime(2026, 8, 26, 17, 40, 24, tzinfo=timezone.utc)
+    assert stored.utcoffset() == timedelta(0)
 
 
 @respx.mock

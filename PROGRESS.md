@@ -19,10 +19,34 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **452 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
+Totals: **459 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
 Core coverage is **92.78%**. Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-16 — Timezone-aware UTC datetimes; sqlmodel cap lifted (#37)
+
+**Problem:** sqlmodel 0.0.45+ infers a `UTCDateTime` column type that raises on
+naive values; with 0.0.48 installed, 78 of 452 tests failed on `main`. The
+`<0.0.45` stopgap cap (2026-10-14) froze the dependency.
+
+**Fix (ADR 0008, supersedes the 2026-08-27 naive-UTC convention below):**
+`utc_now()` now returns aware UTC; `ensure_utc()` replaces `to_naive_utc()`
+(naive = assume UTC, aware = convert). Every DB datetime column declares a
+project `UTCDateTime` TypeDecorator (`DateTime(timezone=True)`, coerces on
+write and read), so rows read back aware UTC on *every* sqlmodel version.
+Comparison boundaries that take outside input (`due_followups`, snooze,
+application cards, `SendPolicy`, ghost age) coerce with `ensure_utc`;
+`parse_date` returns aware UTC. Migration `3f1c2a9d7e45` moves the 12 columns
+to `timestamptz` on Postgres (`USING col AT TIME ZONE 'UTC'`). Cap lifted to
+`sqlmodel>=0.0.14,<1.0.0`.
+
+**Verified:** 459 passed on sqlmodel 0.0.14 (SQLAlchemy 2.0.54), 0.0.44 and
+0.0.48 (SQLAlchemy 2.1.x); ruff + format clean. Alembic on a temp SQLite DB:
+`upgrade head` → `alembic check` clean → pre-migration naive row reads back
+`2026-03-01 09:00+00:00` → `downgrade -1` → `upgrade head` round-trips with
+data intact. Postgres SQL inspected offline only (no live Postgres here).
+**Rollback:** `alembic downgrade -1`, revert, restore the cap.
 
 ### 2026-10-16 — Guided workflow, task automation, and independent PR review
 
