@@ -1843,10 +1843,15 @@ def page_export():
 
     st.divider()
 
+    st.caption(
+        "One ZIP with everything CareerAgent holds for you, in readable form: "
+        "your saved profiles, your application board with notes, saved jobs "
+        "and drafts. It contains personal details, so store it carefully."
+    )
     if st.button("Export All Data (ZIP)", type="primary"):
         with st.spinner("Creating export bundle..."):
             try:
-                zip_path = st.session_state.storage.create_export_zip()
+                zip_path = facade.export_all_data(st.session_state.storage)
                 st.session_state.export_zip = Path(zip_path).read_bytes()
                 st.success("Your export is ready to download.")
             except Exception as e:

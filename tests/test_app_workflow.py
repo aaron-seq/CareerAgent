@@ -1,5 +1,7 @@
 """Synthetic Streamlit journeys: restore, discover, prepare, review, export."""
 
+import io
+import zipfile
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -349,6 +351,11 @@ def test_zip_export_is_downloadable_in_the_browser(temp_db, tmp_path):
         element.proto.label == "Download all data (ZIP)"
         for element in app.get("download_button")
     )
+    # "All data" must be true: the pipeline and saved profiles are included,
+    # not only job-posting backups (real-user test, 2026-10-16).
+    names = zipfile.ZipFile(io.BytesIO(app.session_state["export_zip"])).namelist()
+    assert "pipeline/applications.json" in names
+    assert "README.txt" in names
 
 
 def test_profile_can_be_typed_in_without_a_model(temp_db, tmp_path):
