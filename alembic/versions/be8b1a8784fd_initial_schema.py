@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 import sqlmodel
+import sqlmodel.sql.sqltypes  # explicit submodule import for type checkers
 
 import core.db.crypto  # custom column types (EncryptedString)
 from alembic import op
