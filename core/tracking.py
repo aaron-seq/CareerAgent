@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 
 from .db.repository import ApplicationRepository, CompanyRepository
 from .db.tables import ApplicationRow, ApplicationStatus, JobPostingRow
-from .normalize import normalize_company_name, utc_now
+from .normalize import ensure_utc, normalize_company_name, utc_now
 
 # Allowed kanban transitions.
 _ALLOWED: dict[ApplicationStatus, set[ApplicationStatus]] = {
@@ -128,17 +128,17 @@ class TrackingService:
 
     def due_followups(self, as_of: datetime | None = None) -> list[ApplicationRow]:
         """Applications whose follow-up date has arrived and are still active."""
-        as_of = as_of or utc_now()
+        as_of = ensure_utc(as_of) if as_of else utc_now()
         return [
             app
             for app in self.apps.list()
             if app.next_follow_up_at is not None
-            and app.next_follow_up_at <= as_of
+            and ensure_utc(app.next_follow_up_at) <= as_of
             and app.status in _ACTIVE
         ]
 
     def snooze_followup(self, app: ApplicationRow, days: int) -> ApplicationRow:
-        base = app.next_follow_up_at or utc_now()
+        base = ensure_utc(app.next_follow_up_at) if app.next_follow_up_at else utc_now()
         app.next_follow_up_at = base + timedelta(days=days)
         self.session.add(app)
         self.session.flush()
