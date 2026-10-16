@@ -822,6 +822,32 @@ def test_snooze_followup_clears_it_from_the_due_list(temp_db):
 
 
 @respx.mock
+def test_offer_card_shows_no_follow_up(temp_db):
+    """The board card at OFFER must not say "due in Nd" -- even for a row
+    whose stale date predates the tracking fix."""
+    from core.db import get_session
+    from core.db.tables import ApplicationRow
+
+    app_id = _seed_application()
+    for status in ("applied", "screening", "interview", "offer"):
+        assert facade.advance_application(app_id, status)["ok"] is True
+    card = facade.pipeline_board()["offer"][0]
+    assert card["next_follow_up"] is None
+    assert card["days_until_follow_up"] is None
+    assert card["overdue"] is False
+
+    # Legacy row: terminal status but a date left behind.
+    with get_session() as session:
+        row = session.get(ApplicationRow, app_id)
+        row.next_follow_up_at = row.applied_at
+        session.add(row)
+    card = facade.pipeline_board()["offer"][0]
+    assert card["next_follow_up"] is None
+    assert card["days_until_follow_up"] is None
+    assert facade.due_followups() == []
+
+
+@respx.mock
 def test_rejecting_an_overdue_application_stops_the_reminder(temp_db):
     app_id = _seed_application()
     facade.advance_application(app_id, "applied")

@@ -73,6 +73,7 @@ from .tracking import (
     BlacklistedCompanyError,
     DuplicateApplicationError,
     TrackingService,
+    follow_up_applies,
 )
 
 _ATS_SOURCES = {
@@ -455,7 +456,11 @@ def _application_card(app, job, as_of: datetime) -> dict[str, Any]:
     # Rows reloaded from the DB are aware already; an in-memory row or a
     # caller's naive ``as_of`` is coerced so the arithmetic can't mix the two.
     as_of = ensure_utc(as_of)
-    due = ensure_utc(app.next_follow_up_at) if app.next_follow_up_at else None
+    due = (
+        ensure_utc(app.next_follow_up_at)
+        if app.next_follow_up_at and follow_up_applies(app.status)
+        else None
+    )
     applied = ensure_utc(app.applied_at) if app.applied_at else None
     return {
         "application_id": app.id,
