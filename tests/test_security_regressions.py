@@ -219,6 +219,24 @@ def test_posting_metrics_cannot_be_claimed_as_candidate_achievements():
     assert verify_grounded(cv, job, "I increased revenue by 70%.")
 
 
+def test_grounding_ignores_semantic_versions_in_every_input():
+    cv = CVProfile(raw_text="Used Node.js 20.11.1+ in production.")
+    job = JobPosting(
+        title="Engineer", company="Target", description="Requires Python 3.11.2+."
+    )
+    assert verify_grounded(cv, job, "I use Node.js 20.11.1+ and Python.") == []
+    # A version suffix must not ground a real achievement claim.
+    assert verify_grounded(cv, job, "I delivered 1+ projects.") == ["1+"]
+
+
+def test_grounding_preserves_grouped_decimal_metrics():
+    cv = CVProfile(raw_text="Processed 1,200+ records at 99.5 percent accuracy.")
+    job = JobPosting(title="Engineer", company="Target")
+    assert (
+        verify_grounded(cv, job, "I processed 1200+ records at 99.5% accuracy.") == []
+    )
+
+
 def test_posting_text_the_model_never_saw_cannot_ground_output():
     job = JobPosting(
         title="Engineer",

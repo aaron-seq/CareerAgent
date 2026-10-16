@@ -24,7 +24,11 @@ from .tailor import FabricationError
 # A claim like "reduced downtime by 70%" or "2100+ samples". Bare years
 # (2021-2025) and small ordinals are excluded: they are rarely achievement
 # claims and would drown the check in false positives.
-_METRIC = re.compile(r"\b\d[\d,.]*\s*(?:%|percent|x\b|\+)", re.IGNORECASE)
+_METRIC = re.compile(
+    r"(?<![\w.,])(?P<number>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
+    r"\s*(?P<unit>%|percent\b|x\b|\+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -51,10 +55,10 @@ def _cv_corpus(cv: CVProfile) -> str:
 
 def _metric_key(token: str) -> tuple[Decimal, str]:
     """Keep numeric boundaries, decimal places, and units intact."""
-    match = re.match(r"\d[\d,.]*", token)
+    match = _METRIC.fullmatch(token)
     assert match is not None  # tokens only come from _METRIC matches
-    number = match.group(0).rstrip(".,")
-    unit = token[len(number) :].strip().lower()
+    number = match.group("number")
+    unit = match.group("unit").lower()
     return Decimal(number.replace(",", "")), "%" if unit == "percent" else unit
 
 

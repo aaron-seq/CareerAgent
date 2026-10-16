@@ -92,8 +92,23 @@ docker compose exec ollama ollama pull llama3.1:8b
 ```
 
 The app port is published on the host's loopback interface. The container runs
-as UID 1000; the mounted `careeragent_data/` directory must be writable by that
-user. SQLite and the generated key both live in that persistent directory.
+as UID 1000. A Docker-managed `careeragent-data` volume is initialized with the
+correct permissions, including on a fresh clone. SQLite, encrypted artifacts,
+and the generated key all live there. Back up the volume together; `docker
+compose down` preserves it, while `docker compose down --volumes` deletes it.
+
+If upgrading from the earlier `./careeragent_data` bind mount, keep that directory
+and its encryption key. To continue using it, add a `compose.override.yaml` file:
+
+```yaml
+services:
+  careeragent:
+    volumes:
+      - ./careeragent_data:/app/careeragent_data
+```
+
+That existing host directory must be writable by UID 1000. Do not start with an
+empty replacement volume and assume the old records have been migrated.
 Compose uses `http://ollama:11434` internally, independently of a host-local
 `OLLAMA_BASE_URL` in `.env`. Gmail credentials are optional and are not mounted
 by default; configure private mounts and `GMAIL_CREDENTIALS_PATH` /

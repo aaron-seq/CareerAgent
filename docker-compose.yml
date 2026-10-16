@@ -12,7 +12,7 @@ services:
       - CAREERAGENT_ENCRYPTION_KEY=${CAREERAGENT_ENCRYPTION_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
     volumes:
-      - ./careeragent_data:/app/careeragent_data
+      - careeragent-data:/app/careeragent_data
     depends_on:
       - ollama
     restart: unless-stopped
@@ -34,5 +34,7 @@ services:
     command: serve
 
 volumes:
+  careeragent-data:
+    driver: local
   ollama-data:
     driver: local
