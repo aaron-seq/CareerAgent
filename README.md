@@ -19,6 +19,9 @@ A local AI-powered career assistant for personalized job outreach. This applicat
 - **Personalized Outreach**: Generates technical, product, or impact-focused email drafts based on your CV and the job description.
 - **Quality Assurance**: Built-in validation to ensure emails meet professional standards (no fluff, concrete metrics, clear CTA).
 - **Multi-Channel Support**: Creates Gmail drafts directly or generates WhatsApp click-to-chat links.
+- **Guided workflow**: Reopen a saved CV, browse jobs before connecting AI,
+  and open saved postings directly in Draft Studio. Drafts and resume variants
+  stay with their selected job.
 
 ## Technical Architecture
 
@@ -35,9 +38,8 @@ The application is built with a modern Python stack:
 
 ### Prerequisites
 
-- Python 3.9 or higher (CI matrix-tests 3.9-3.11; also verified working
-  directly on 3.13 with no venv, see `CLAUDE.md`)
-- An LLM provider — either:
+- Python 3.11 recommended (CI matrix-tests 3.9–3.11).
+- An LLM provider for new CV parsing and AI drafts — either:
   - **Ollama** installed and running locally (standard default port 11434), or
   - A free **Groq** API key (no credit card: console.groq.com/keys) — faster
     to get running, but sends prompts off-machine; see ADR 0005.
@@ -78,9 +80,30 @@ the selected provider again before parsing a CV. Initialization requires the
 selected model to exist; parsing failures are reported rather than saved as
 empty profiles.
 
+### Your first application
+
+1. Browse **Job Discovery** to import a company careers page, query a job board,
+   or paste a description. Browsing and saving jobs work without an AI provider.
+2. In **Onboarding**, connect a model to parse a new CV, or choose **Use a saved
+   CV** to reopen one locally without parsing again. Your matches refresh when
+   you switch profiles; resume checks and downloads also work offline.
+3. Open **Pipeline**, choose **Prepare application** on a posting, and tailor
+   your resume. Connect your chosen model when you want an email or cover letter.
+   Switching jobs preserves each job's edits separately.
+4. Review all claims and recipients before exporting. Use the posting link and
+   browser extension to fill the application, then review and submit yourself.
+   **Export & Logs** provides a browser ZIP download of your local artifacts.
+
+Each imported job shows its source and original posting link. SmartRecruiters
+imports follow later pages automatically, up to 250 jobs and 20 list pages by
+default. A partial-import notice identifies where to continue with the Pipeline
+import controls; requests stop if a provider repeats a page.
+
 ## Deployment
 
-The application is container-ready and supports deployment on platforms like Railway, Render, or Vercel (using docker).
+The container and Compose configuration support local self-hosting. Shared
+hosting still needs authentication, user isolation, and the security work
+listed in [the audit](docs/SECURITY_AUDIT.md).
 
 ### Docker
 
@@ -169,10 +192,21 @@ for decisions.
 ```bash
 pip install -r requirements-test.txt   # includes runtime + test deps
 alembic upgrade head                    # create the schema (SQLite by default)
-pytest                                  # 377 Python tests
-(cd extension && node --test)           # 18 extension tests
+python -m scripts.check                 # lint, format, Python coverage + extension tests
+python -m scripts.check docker          # build + functional app/persistence/health smoke
 python -m scripts.send_digest --dry-run # build a job digest
 ```
+
+Node.js is required for extension tests. Select checks with `python -m
+scripts.check lint test`. For Docker builds behind a trusted TLS proxy, add
+`--docker-ca-bundle /path/to/trusted-ca-bundle.pem`. CI runs the same checks,
+including Docker validation on pull requests before merge. Mypy remains advisory
+with existing errors; see [workflow validation](docs/WORKFLOW_AUDIT.md).
+
+The digest command prints a preview without sending when `--dry-run` is set.
+Delivery requires a complete Telegram configuration or a Discord webhook.
+Invalid configuration, database failures, and rejected deliveries return a
+failure status with safe diagnostics. There are no automatic delivery retries.
 
 Set `DATABASE_URL` to a Postgres URL for production. Delivery/LLM/API keys are
 read from the environment (see `.env.example`).

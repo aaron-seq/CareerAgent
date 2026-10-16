@@ -71,11 +71,15 @@ Example: `feature/add-job-source`
 
 4. Run the Python and extension tests and lint/format gates:
    ```bash
-   pytest tests/
-   (cd extension && node --test)
-   ruff check .
-   ruff format --check .
+   python -m scripts.check
    ```
+
+   This runs lint, format, Python tests with coverage, and Node extension tests.
+   Select subsets with `python -m scripts.check lint test`. Run the optional
+   container check with `python -m scripts.check docker`; it executes real app
+   screens, checks encrypted data across replacement containers, and probes
+   Streamlit health. A trusted proxy CA can be supplied with
+   `--docker-ca-bundle /path/to/trusted.pem`. Pull requests run Docker checks in CI.
 
 5. Commit your changes:
    ```bash
@@ -220,8 +224,9 @@ source of truth for this, kept in sync with the code. In short: `app.py`
 holds no business logic; the DB-backed platform services (job ingestion/
 matching, tracking, outreach compliance, enrichment, analytics, resume/
 cover-letter generation) go through `core/facade.py`, while CV parsing,
-contact finding, personalization, and Gmail drafts are still called
-directly (a known gap worth unifying behind the facade, not yet done).
+contact finding, personalization, and local storage are still called
+directly. Compliant Gmail creation uses the facade. The guided workflow and
+functional validation decisions are recorded in ADR 0007.
 
 ## Questions or Issues?
 

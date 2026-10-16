@@ -118,6 +118,18 @@ graph TB
 |-----------|------|-------------|
 | Facade | `core/facade.py` | Session-managed gateway for DB-backed features and compliant Gmail creation; returns domain objects or plain values, never detached ORM rows. |
 
+The facade lists recent saved-profile metadata and loads encrypted profiles on
+explicit selection. Profile changes trigger a local match refresh. Selected and
+pasted jobs are upserted into the same job repository as API records; persisted
+postings can open Draft Studio directly. Source/attribution fields survive card
+serialization. The UI keeps generated material and editor state in per-job
+session workspaces, invalidating them when the active profile changes (ADR 0007).
+
+An AI connection is required for parsing and prose generation. Browsing,
+tracking, deterministic resume tailoring, profile review, and exports work
+without one. PR Docker checks execute actual screens and encrypted persistence
+across replacement containers in addition to probing server health.
+
 ### Core services
 
 | Package/module | Description |
