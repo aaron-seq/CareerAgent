@@ -398,9 +398,29 @@ _KEYWORD_PARAM = {
 }
 
 
+_PROVIDER_LABELS = {
+    "adzuna": "Adzuna (needs a free API key)",
+    "arbeitnow": "Arbeitnow",
+    "himalayas": "Himalayas",
+    "jobicy": "Jobicy",
+    "remoteok": "RemoteOK",
+    "remotive": "Remotive",
+    "themuse": "The Muse",
+}
+
+
 def aggregator_providers() -> list[str]:
-    """Every aggregator/board provider ``ingest_aggregator`` accepts."""
-    return sorted({*_KEYLESS_AGGREGATORS, "themuse", "adzuna"})
+    """Every provider ``ingest_aggregator`` accepts, keyless ones first.
+
+    The first entry is the UI default, so it must work with no setup; Adzuna,
+    which requires credentials, goes last.
+    """
+    return [*sorted(_KEYLESS_AGGREGATORS), "themuse", "adzuna"]
+
+
+def provider_label(provider: str) -> str:
+    """Human name for a provider id (falls back to the id itself)."""
+    return _PROVIDER_LABELS.get(provider.lower(), provider)
 
 
 def aggregator_supports_keywords(provider: str) -> bool:

@@ -264,7 +264,8 @@ def test_pipeline_prepares_api_job_and_tailors_without_a_model(temp_db, tmp_path
     app = _app(
         tmp_path, "pipeline", cv_profile=CVProfile(name="Candidate", skills=["Python"])
     )
-    assert any("remoteok" in caption.value for caption in app.caption)
+    # Per-posting source credit (issue #19), shown by its human name.
+    assert any(caption.value == "Source: RemoteOK" for caption in app.caption)
     assert any("RemoteOK" in caption.value for caption in app.caption)
     app.button(key=f"prepare_{job_id}").click().run()
     assert not app.exception
@@ -535,3 +536,38 @@ def test_smartrecruiters_import_can_continue_a_partial_board(
         "smartrecruiters", "SyntheticBoard", "", offset=100, max_jobs=3
     )
     assert any("resume at offset 103" in warning.value for warning in app.warning)
+
+
+def test_email_can_be_written_by_hand_and_checked_without_a_model(temp_db, tmp_path):
+    """Real-user test: with no model, Draft Studio offered no way to write."""
+    app = _app(
+        tmp_path,
+        "draft",
+        cv_profile=CVProfile(name="Synthetic Candidate", email="cv@example.test"),
+        selected_jobs=[JobPosting(title="Engineer", company="Alpha")],
+    )
+    assert _button(app, "Generate Email").disabled
+    _button(app, "Write it myself").click().run()
+    assert not app.exception
+    assert app.session_state["current_draft"].company == "Alpha"
+    assert any(heading.value == "Compliance check" for heading in app.subheader)
+
+
+def test_manual_contact_with_invalid_email_is_rejected(temp_db, tmp_path):
+    app = _app(
+        tmp_path,
+        "contacts",
+        selected_jobs=[JobPosting(title="Engineer", company="Alpha")],
+    )
+    _input(app, "Name").set_value("Pat Recruiter")
+    _input(app, "Email").set_value("not-an-email")
+    app.button(key="add_manual_0").click().run()
+    assert not app.exception
+    assert app.session_state["found_contacts"].get("Alpha", []) == []
+    assert any("valid email" in error.value for error in app.error)
+
+    _input(app, "Email").set_value("pat@alpha.example")
+    app.button(key="add_manual_0").click().run()
+    assert not app.exception
+    [contact] = app.session_state["found_contacts"]["Alpha"]
+    assert contact.source == "manual" and contact.email_confidence != "confirmed"

@@ -25,6 +25,7 @@ from core.llm import GROQ_DEFAULT_MODEL, CloudLLMClient, LocalLLMClient
 from core.models import CVProfile, EmailDraft, JobPosting, SearchQuery
 from core.outreach import ComplianceConfig, LIARecord
 from core.personalization import PersonalizationEngine
+from core.presentation import job_chips, match_quality, risk_notes
 from core.storage import LocalStorage
 from core.validators import DraftValidator
 
@@ -897,11 +898,10 @@ def page_onboarding():
 # Page 2: Job Discovery
 def page_discovery():
     """Job discovery screen"""
-    st.title("Job Discovery")
+    st.title("Find jobs")
     st.markdown(
-        "API-first discovery: pull structured postings straight from a "
-        "company's ATS, or extract them from a careers page. Web search is a "
-        "last-resort fallback."
+        "Pull real postings from a company's careers page or from job boards. "
+        "Everything you find is saved and scored in **Pipeline**."
     )
 
     if not st.session_state.cv_profile:
@@ -922,10 +922,12 @@ def page_discovery():
             "Web Search (fallback)",
         ],
         horizontal=True,
+        # A key keeps the chosen mode when the user navigates away and back.
+        key="discovery_mode",
         help=(
-            "Careers URL auto-detects Greenhouse/Lever/Ashby and uses their "
-            "public API; otherwise it reads schema.org JSON-LD, honoring "
-            "robots.txt. Job boards query aggregator APIs by keyword."
+            "A careers page link works best: most company job sites (Greenhouse, "
+            "Lever, Ashby and others) publish their jobs in a form we can read "
+            "directly. Job boards search several remote-job sites by keyword."
         ),
     )
 
@@ -935,11 +937,16 @@ def page_discovery():
         careers_url = st.text_input(
             "Careers page or job board URL",
             placeholder="https://boards.greenhouse.io/stripe",
-            help="e.g. a Greenhouse/Lever/Ashby board, or any careers page.",
+            help="Paste the link to a company's jobs page.",
+            key="careers_url",
         )
         if st.button("Discover jobs", type="primary"):
             if not careers_url:
-                st.warning("Enter a URL first")
+                st.warning("Paste a careers page link first.")
+            elif not careers_url.strip().lower().startswith(("http://", "https://")):
+                st.warning(
+                    "That doesn't look like a web link. It should start with https://"
+                )
             else:
                 with st.spinner("Detecting ATS / reading structured data..."):
                     try:
@@ -982,19 +989,23 @@ def page_discovery():
 
     elif mode == "Job boards (API)":
         st.caption(
-            "Structured results from aggregator APIs. Remotive, Arbeitnow, "
-            "Jobicy, RemoteOK and Himalayas need no key; The Muse works "
-            "keyless at a lower rate limit; Adzuna requires ADZUNA_APP_ID / "
-            "ADZUNA_APP_KEY in your environment."
+            "Search job boards that publish their listings openly. All work "
+            "without setup except Adzuna, which needs a free API key."
         )
         bcol1, bcol2 = st.columns([1, 2])
         with bcol1:
-            provider = st.selectbox("Provider", facade.aggregator_providers())
+            provider = st.selectbox(
+                "Job board",
+                facade.aggregator_providers(),
+                format_func=facade.provider_label,
+                key="board_provider",
+            )
         searchable = facade.aggregator_supports_keywords(provider)
         with bcol2:
             keywords = st.text_input(
                 "Keywords (optional)",
                 placeholder="machine learning",
+                key="board_keywords",
                 disabled=not searchable,
                 help=(
                     "This provider has no server-side search - it returns its "
@@ -1005,7 +1016,8 @@ def page_discovery():
             )
 
         if st.button("Search job boards", type="primary"):
-            with st.spinner(f"Querying {provider}..."):
+            label = facade.provider_label(provider)
+            with st.spinner(f"Searching {label}..."):
                 try:
                     result = facade.ingest_aggregator(provider, keywords=keywords)
                 except ValueError as e:
@@ -1017,11 +1029,15 @@ def page_discovery():
 
             if result is not None:
                 if result.errors:
-                    st.error(f"{provider} error: {result.errors[0]}")
+                    st.error(
+                        f"{label} didn't respond ({result.errors[0]}). The site "
+                        "may be busy or blocked on this network; try another "
+                        "job board or try again later."
+                    )
                 elif result.upserted:
                     st.success(
-                        f"Stored {result.upserted} job(s) from {provider}. "
-                        "See them scored on the Pipeline screen."
+                        f"Saved {result.upserted} job(s) from {label}. "
+                        "See them scored in Pipeline."
                     )
                     if st.session_state.cv_profile:
                         with st.spinner("Scoring against your CV..."):
@@ -1085,7 +1101,7 @@ def page_discovery():
 
                     if st.button("Select This Job", key=f"select_{i}"):
                         _select_job(job)
-                        st.success(f"Added {job.title}")
+                        _flash(f"Added {job.title} at {job.company}.")
                         st.rerun()
 
     elif mode == "Paste Job URL":
@@ -1112,7 +1128,7 @@ def page_discovery():
 
                     if job:
                         _select_job(job)
-                        st.success("Job added!")
+                        _flash(f"Added {job.title} at {job.company}.")
                         st.rerun()
                     else:
                         st.error("Failed to fetch job details")
@@ -1120,19 +1136,23 @@ def page_discovery():
                     st.error(f"Error: {e}")
 
     else:  # Paste Job Description
+        # Keys keep half-typed text when the user navigates away and back.
         job_desc = st.text_area(
             "Paste Job Description",
             height=300,
             help="Paste the full job description text",
+            key="jd_text",
         )
 
         col1, col2 = st.columns(2)
         with col1:
             job_title = st.text_input(
-                "Job Title", placeholder="Senior Software Engineer"
+                "Job Title", placeholder="Senior Software Engineer", key="jd_title"
             )
         with col2:
-            company_name = st.text_input("Company Name", placeholder="Google")
+            company_name = st.text_input(
+                "Company Name", placeholder="Google", key="jd_company"
+            )
 
         if st.button("Add Job", type="primary"):
             if job_desc and job_title and company_name:
@@ -1140,10 +1160,24 @@ def page_discovery():
                     title=job_title, company=company_name, description=job_desc
                 )
                 _select_job(job)
-                st.success("Job added!")
+                for key in ("jd_text", "jd_title", "jd_company"):
+                    st.session_state.pop(key, None)
+                _flash(
+                    f"Added {job_title} at {company_name}. It's in Pipeline and "
+                    "ready in Draft Studio."
+                )
                 st.rerun()
             else:
-                st.warning("Please fill all fields")
+                missing = [
+                    name
+                    for name, value in (
+                        ("the description", job_desc),
+                        ("the job title", job_title),
+                        ("the company name", company_name),
+                    )
+                    if not (value or "").strip()
+                ]
+                st.warning("Please add " + ", ".join(missing) + ".")
 
     if st.button("View saved jobs in Pipeline", use_container_width=True):
         st.session_state.page = "pipeline"
@@ -1544,7 +1578,12 @@ def page_draft_studio():
         col_a, col_b, col_c = st.columns(3)
 
         with col_a:
-            angle = st.selectbox("Angle", ["technical", "impact", "product"])
+            angle = st.selectbox(
+                "Focus",
+                ["technical", "impact", "product"],
+                help="What the AI draft leads with: your technical depth, "
+                "measurable results, or product sense.",
+            )
 
         with col_b:
             if st.button("Generate Email", type="primary", disabled=not llm_ready):
@@ -1577,6 +1616,24 @@ def page_draft_studio():
                             st.rerun()
                         except Exception as e:
                             st.error(f"Regeneration failed: {e}")
+
+        if not st.session_state.current_draft:
+            if not llm_ready:
+                st.caption(
+                    "No AI model connected. You can still write the email "
+                    "yourself and use every check below."
+                )
+            if st.button("Write it myself", use_container_width=True):
+                _set_current_draft(
+                    EmailDraft(
+                        subject=f"{current_job.title} at {current_job.company}",
+                        body="",
+                        company=current_job.company,
+                        job_title=current_job.title,
+                    ),
+                    workspace_key,
+                )
+                st.rerun()
 
         # Show draft
         if st.session_state.current_draft:
@@ -1645,7 +1702,11 @@ def page_draft_studio():
 
             # Outreach compliance gate (CAN-SPAM / GDPR) - Phase 7.
             st.subheader("Compliance check")
-            with st.expander("Sender identity + opt-out (required to send)"):
+            st.caption(
+                "Cold emails are regulated. Before sending, the law asks you to "
+                "say who you are, give a postal address, and let people opt out."
+            )
+            with st.expander("Your sender details (required to send)"):
                 c1, c2 = st.columns(2)
                 with c1:
                     sender_name = st.text_input(
@@ -1656,14 +1717,21 @@ def page_draft_studio():
                         value=st.session_state.cv_profile.email or "",
                     )
                 with c2:
-                    postal_address = st.text_input("Physical postal address")
+                    postal_address = st.text_input(
+                        "Physical postal address",
+                        help="Required by anti-spam law (CAN-SPAM). A PO box works.",
+                    )
                     unsubscribe = st.text_input(
                         "Opt-out (URL or mailto:)",
+                        help="How the recipient can ask you to stop emailing. "
+                        "The default is an email reply asking to unsubscribe.",
                         value=f"mailto:{st.session_state.cv_profile.email or ''}"
                         "?subject=unsubscribe",
                     )
                 lia_purpose = st.text_input(
                     "LIA purpose (GDPR)",
+                    help="Why contacting this person is reasonable. EU privacy "
+                    "law (GDPR) asks you to record this 'legitimate interest'.",
                     value="Relevant B2B job application to a hiring contact.",
                 )
 
@@ -1802,22 +1870,38 @@ def page_export():
         "this app, and your details never leave the browser."
     )
     if not st.session_state.cv_profile:
-        st.info("Upload your CV on the Onboarding screen to fill this in.")
+        st.info("Add your profile on the **Your profile** screen to fill this in.")
     else:
-        ext_json = json.dumps(
-            facade.extension_profile(st.session_state.cv_profile), indent=2
+        answers = None
+        if st.session_state.cv_id is not None:
+            try:
+                answers = facade.load_candidate_profile(st.session_state.cv_id)
+            except Exception:
+                st.warning("Saved application answers could not be loaded.")
+        include_resume = st.checkbox(
+            "Include my resume PDF so the extension can attach it",
+            help="Adds your resume to the file. It stays on your computer.",
         )
-        st.code(ext_json, language="json")
+        preview = facade.extension_profile(st.session_state.cv_profile, answers)
+        st.code(json.dumps(preview, indent=2), language="json")
         st.download_button(
             "Download profile (JSON)",
-            data=ext_json,
+            data=json.dumps(
+                facade.extension_profile(
+                    st.session_state.cv_profile,
+                    answers,
+                    include_resume=include_resume,
+                ),
+                indent=2,
+            ),
             file_name="careeragent_autofill_profile.json",
             mime="application/json",
         )
-        st.caption(
-            "Location is left blank - your CV does not record one. Fill it in "
-            "the popup once and the extension remembers it."
-        )
+        if answers is None or not answers.location:
+            st.caption(
+                "Tip: add where you live and your right-to-work answers under "
+                "**Your profile > Application answers** so forms fill further."
+            )
 
     st.divider()
 
@@ -1932,10 +2016,17 @@ def page_pipeline():
     with col1:
         slug = st.text_input(
             "Board slug",
-            placeholder="the company's board name on the ATS you pick",
+            placeholder="e.g. stripe",
+            help="The company's name as it appears in its jobs-page link, "
+            "e.g. 'stripe' in boards.greenhouse.io/stripe.",
         )
     with col2:
-        ats_type = st.selectbox("ATS", facade.ats_providers())
+        ats_type = st.selectbox(
+            "ATS",
+            facade.ats_providers(),
+            help="The hiring software the company uses (an applicant tracking "
+            "system). It's usually visible in the jobs-page link.",
+        )
     with col3:
         company = st.text_input("Company name", placeholder="Display name")
 
@@ -2003,7 +2094,8 @@ def page_pipeline():
         with f2:
             hide_ghosts = st.checkbox(
                 "Hide likely ghost jobs",
-                help="Excludes stale/vague postings scoring above 0.6 ghost risk.",
+                help="Ghost jobs are postings that look stale or vague and may "
+                "not really be hiring. This hides the riskiest ones.",
             )
             # Only offer the visa filter when a real sponsor register is
             # loaded. Without one we have no basis to say an employer does or
@@ -2015,8 +2107,8 @@ def page_pipeline():
                 help=(
                     f"{status.get('visa_employer_count', 0):,} employers loaded."
                     if visa_loaded
-                    else "No sponsor register loaded. Run "
-                    "`python -m scripts.fetch_datasets --uk` to enable."
+                    else "Off: no visa-sponsor list is installed yet. To turn it "
+                    "on, run `python -m scripts.fetch_datasets --uk` once."
                 ),
             )
         with f3:
@@ -2026,14 +2118,14 @@ def page_pipeline():
 
         if not visa_loaded:
             st.caption(
-                "Sponsorship and employer-signal data are not bundled — they "
-                "are facts about real companies, so nothing is shipped as "
-                "placeholder. See `core/enrichment/data/README.md`."
+                "Visa-sponsor data isn't included, because it has to come from "
+                "official registers rather than guesses. The setup command is "
+                "in the 'Visa sponsors only' tooltip."
             )
         if not status.get("semantic_embeddings", False):
             st.caption(
-                "Matching is using the offline lexical embedder. For semantic "
-                "matching install `sentence-transformers`."
+                "Matching compares words, not meaning. For smarter matching, "
+                "install the optional `sentence-transformers` package."
             )
 
     try:
@@ -2053,51 +2145,64 @@ def page_pipeline():
     if not jobs:
         st.info("No jobs match. Ingest more above, or relax the filters.")
     for job in jobs:
-        score = f"{job['score']:.0f}%" if job["score"] is not None else "unscored"
-        with st.expander(f"[{score}] {job['title']} - {job['company']}"):
-            st.write(f"**Location:** {job['location'] or 'N/A'}")
+        quality, _tone = match_quality(job["score"])
+        score = f" · {job['score']:.0f}%" if job["score"] is not None else ""
+        with st.expander(f"{job['title']} - {job['company']} ({quality}{score})"):
+            chips = job_chips(job)
+            if job.get("glassdoor_rating"):
+                chips.append(f"Glassdoor {job['glassdoor_rating']}")
+            if chips:
+                st.caption(" · ".join(chips))
             if job.get("source"):
-                st.caption(f"Source: {job['source']}")
+                st.caption(f"Source: {facade.provider_label(job['source'])}")
             if job.get("attribution"):
                 st.caption(job["attribution"])
-            if job["salary_min"]:
-                st.write(f"**Salary:** {int(job['salary_min']):,}+")
-
-            # Company + risk signals from enrichment.
-            signals = []
-            if job.get("sponsors_visa"):
-                signals.append("Visa sponsor")
-            if job.get("glassdoor_rating"):
-                signals.append(f"Glassdoor {job['glassdoor_rating']}")
-            if job.get("had_layoffs"):
-                signals.append("Recent layoffs")
-            if signals:
-                st.caption(" · ".join(signals))
-            if job.get("ghost_score") and job["ghost_score"] > 0.6:
-                st.warning(
-                    f"Possible ghost job (risk {job['ghost_score']:.0%}) - "
-                    "stale or vague posting."
-                )
+            for note in risk_notes(job):
+                st.warning(note)
 
             if job["matched"]:
-                st.success("Matched: " + ", ".join(job["matched"][:12]))
+                st.success("You have: " + ", ".join(job["matched"][:12]))
             if job["missing"]:
-                st.warning("Missing: " + ", ".join(job["missing"][:12]))
-            if job["url"]:
-                st.write(f"[View posting]({job['url']})")
-            if st.button("Add to pipeline", key=f"track_{job['id']}"):
-                res = facade.add_to_pipeline(job["id"], st.session_state.cv_id)
+                st.warning("Not in your profile yet: " + ", ".join(job["missing"][:12]))
+
+            target = facade.apply_target(job["id"])
+            a1, a2, a3, a4 = st.columns(4)
+            if target.get("url"):
+                a1.link_button("Apply", target["url"], use_container_width=True)
+            if a2.button(
+                "I applied", key=f"applied_{job['id']}", use_container_width=True
+            ):
+                res = facade.mark_applied(job["id"], st.session_state.cv_id)
                 if res["ok"]:
-                    st.success("Added to pipeline (Saved).")
+                    _flash(
+                        f"Marked as applied: {job['title']}. We'll remind you "
+                        "to follow up."
+                        if res.get("changed", True)
+                        else f"{job['title']} is already further along."
+                    )
                     st.rerun()
                 else:
                     st.warning(res["error"])
-            st.button(
+            if a3.button(
+                "Save for later",
+                key=f"track_{job['id']}",
+                use_container_width=True,
+            ):
+                res = facade.add_to_pipeline(job["id"], st.session_state.cv_id)
+                if res["ok"]:
+                    _flash(f"Saved {job['title']} to your application board.")
+                    st.rerun()
+                else:
+                    st.warning(res["error"])
+            a4.button(
                 "Prepare application",
                 key=f"prepare_{job['id']}",
                 on_click=_prepare_application,
                 args=(job["id"],),
+                use_container_width=True,
             )
+            if target.get("note"):
+                st.caption(target["note"])
 
     st.divider()
 
@@ -2146,8 +2251,9 @@ def page_pipeline():
                 st.caption(f"_{card['company']}_")
                 if status in next_status:
                     if st.button(
-                        next_status[status][:9],
+                        f"→ {next_status[status].title()}",
                         key=f"adv_{card['application_id']}",
+                        help=f"Move to {next_status[status]}",
                         use_container_width=True,
                     ):
                         facade.advance_application(

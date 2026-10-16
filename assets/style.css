@@ -309,22 +309,48 @@ h1 + p {
     color: var(--text);
 }
 
-.stButton > button[kind="primary"] {
+.stButton > button[kind="primary"],
+.stFormSubmitButton > button[kind="primaryFormSubmit"] {
     background: var(--signal);
     border-color: var(--signal);
     color: #17120C;
     font-weight: 650;
 }
 
-.stButton > button[kind="primary"]:hover {
+.stButton > button[kind="primary"]:hover,
+.stFormSubmitButton > button[kind="primaryFormSubmit"]:hover {
     background: #FF8524;
     border-color: #FF8524;
     color: #17120C;
 }
 
-.stButton > button:focus-visible {
+.stButton > button:focus-visible,
+.stFormSubmitButton > button:focus-visible {
     outline: 2px solid var(--signal);
     outline-offset: 2px;
+}
+
+/* Disabled must look disabled. A solid amber button that silently ignores
+   clicks read as broken in the real-user test (2026-10-16). Placed after
+   the primary rules so it wins at equal specificity. */
+.stButton > button:disabled,
+.stButton > button:disabled:hover,
+.stFormSubmitButton > button:disabled,
+.stDownloadButton > button:disabled {
+    background: var(--panel);
+    border: 1px dashed var(--line-bright);
+    color: var(--faint);
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+/* Action buttons inside sidebar panels (e.g. AI settings > Connect) are
+   real buttons, not navigation rows, so they keep a visible outline. */
+[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {
+    border: 1px solid var(--line-bright);
+    color: var(--text);
+    justify-content: center;
+    text-align: center;
 }
 
 /* ---------- Inputs ---------- */

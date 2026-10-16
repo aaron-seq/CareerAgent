@@ -116,3 +116,13 @@ def test_manual_contact_validates_and_never_claims_verification():
     assert bad["ok"] is False and "email" in bad["error"].lower()
     empty = facade.manual_contact("", "", "")
     assert empty["ok"] is False and "name" in empty["error"].lower()
+
+
+def test_job_board_default_needs_no_api_key():
+    """Real-user test: the default provider was Adzuna, the one needing keys."""
+    providers = facade.aggregator_providers()
+    assert providers[0] != "adzuna"
+    assert providers[-1] == "adzuna"
+    assert facade.provider_label("remoteok") == "RemoteOK"
+    assert "API key" in facade.provider_label("adzuna")
+    assert facade.provider_label("unknown-board") == "unknown-board"
