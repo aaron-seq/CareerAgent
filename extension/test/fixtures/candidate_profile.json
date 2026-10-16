@@ -1,0 +1,21 @@
+{
+  "fullName": "Ada Lovelace",
+  "email": "ada@example.com",
+  "phone": "+44 20 7946 0958",
+  "linkedin": "https://linkedin.com/in/ada",
+  "github": "https://github.com/ada",
+  "portfolio": "https://ada.dev",
+  "location": "London, UK",
+  "answers": {
+    "work_authorized": true,
+    "requires_sponsorship": false,
+    "visa_status": "British citizen",
+    "salary_expectation": "GBP 90,000 per year",
+    "notice_period": "4 weeks",
+    "start_date": "2026-12-01",
+    "willing_to_relocate": false,
+    "cover_note": "I build reliable data systems.",
+    "pronouns": "she/her",
+    "share_demographics": true
+  }
+}

@@ -62,7 +62,13 @@ const KEYWORD_RULES = [
 ];
 
 function normalize(text) {
-  return (text || '').toString().trim().toLowerCase();
+  // Strip diacritics so "Résumé" matches "resume".
+  return (text || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 }
 
 // For fuzzy matching, treat any run of non-alphanumeric characters (_ - : .
@@ -137,7 +143,258 @@ function fillValueFor(field, profile) {
   return null;
 }
 
-const api = { mapFieldToProfileKey, fillValueFor, PROFILE_KEYS };
+// ---------------------------------------------------------------------------
+// Screening questions (work authorization, sponsorship, salary, start date...)
+//
+// These usually arrive as a <select> or a yes/no radio group, and they are
+// what stalls an autofill run. Answers come from `profile.answers`, which the
+// app builds from the candidate's own CandidateProfile (core/apply.py
+// build_answers). The keys below are that contract; tests/test_apply.py
+// checks every Python key appears here.
+//
+// Rule: an absent answer is UNKNOWN. The question is left blank and flagged
+// for the human -- never answered with a guessed "No".
+// ---------------------------------------------------------------------------
+
+const BOOLEAN_ANSWER_KEYS = ['work_authorized', 'requires_sponsorship', 'willing_to_relocate'];
+const TEXT_ANSWER_KEYS = [
+  'visa_status',
+  'salary_expectation',
+  'notice_period',
+  'start_date',
+  'cover_note',
+];
+// EEO answers: used only when the export carries the consent marker.
+const DEMOGRAPHIC_ANSWER_KEYS = [
+  'pronouns',
+  'gender',
+  'ethnicity',
+  'veteran_status',
+  'disability_status',
+];
+const CONSENT_KEY = 'share_demographics';
+
+// Ordered: sponsorship is checked before authorization because sponsorship
+// questions often also say "authorized", never the reverse.
+const QUESTION_RULES = [
+  {
+    key: 'requires_sponsorship',
+    type: 'boolean',
+    any: [
+      'require sponsorship',
+      'need sponsorship',
+      'visa sponsorship',
+      'immigration sponsorship',
+      'sponsorship for an employment visa',
+      'sponsorship now or in the future',
+      'require immigration',
+    ],
+  },
+  {
+    key: 'work_authorized',
+    type: 'boolean',
+    any: [
+      'authorized to work',
+      'authorised to work',
+      'eligible to work',
+      'right to work',
+      'work authorization',
+      'work authorisation',
+    ],
+  },
+  {
+    key: 'willing_to_relocate',
+    type: 'boolean',
+    any: ['willing to relocate', 'open to relocation', 'able to relocate', 'open to relocating'],
+  },
+  {
+    key: 'salary_expectation',
+    type: 'text',
+    any: [
+      'salary expectation',
+      'salary expectations',
+      'expected salary',
+      'desired salary',
+      'salary requirement',
+      'salary requirements',
+      'compensation expectation',
+      'compensation expectations',
+      'expected compensation',
+      'desired compensation',
+    ],
+  },
+  { key: 'notice_period', type: 'text', any: ['notice period', 'how much notice'] },
+  {
+    key: 'start_date',
+    type: 'text',
+    any: ['start date', 'when can you start', 'earliest start', 'available to start'],
+  },
+  { key: 'visa_status', type: 'text', any: ['visa status', 'current visa', 'immigration status'] },
+  {
+    key: 'cover_note',
+    type: 'text',
+    any: ['why do you want', 'why are you interested', 'cover letter'],
+  },
+  { key: 'pronouns', type: 'text', any: ['pronoun', 'pronouns'] },
+  { key: 'gender', type: 'text', any: ['gender', 'gender identity'] },
+  { key: 'ethnicity', type: 'text', any: ['ethnicity', 'ethnic', 'race', 'racial'] },
+  { key: 'veteran_status', type: 'text', any: ['veteran', 'veterans'] },
+  { key: 'disability_status', type: 'text', any: ['disability', 'disabled'] },
+];
+
+function haystacksFor(field) {
+  return [field.ariaLabel, field.label, field.name, field.id, field.placeholder]
+    .map(normalizeForFuzzy)
+    .filter(Boolean);
+}
+
+/**
+ * Which screening question a field asks, if any.
+ * @returns {{key: string, type: string}|null}
+ */
+function mapFieldToQuestion(field) {
+  if (!field) return null;
+  const haystacks = haystacksFor(field);
+  for (const rule of QUESTION_RULES) {
+    for (const hay of haystacks) {
+      if (rule.any.some((kw) => includesWord(hay, normalizeForFuzzy(kw)))) {
+        return { key: rule.key, type: rule.type };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The candidate's answer to a question field, or null to leave it blank.
+ * @returns {{key: string, type: 'boolean'|'text', value: boolean|string}|null}
+ */
+function answerFor(field, profile) {
+  const question = mapFieldToQuestion(field);
+  if (!question || !profile || !profile.answers) return null;
+  const answers = profile.answers;
+  if (DEMOGRAPHIC_ANSWER_KEYS.includes(question.key) && answers[CONSENT_KEY] !== true) {
+    return null;
+  }
+  const value = answers[question.key];
+  if (question.type === 'boolean') {
+    return typeof value === 'boolean' ? { key: question.key, type: 'boolean', value } : null;
+  }
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  return { key: question.key, type: 'text', value };
+}
+
+/**
+ * Decide what a field is: a screening question (answered or not) or an
+ * identity field. Questions win, so "Are you authorized to work in this
+ * location?" is never filled with the candidate's city.
+ * @returns {{kind: 'question', key: string, answer: object|null}|
+ *           {kind: 'profile', key: string, value: string|null}|null}
+ */
+function classifyField(field, profile) {
+  const question = mapFieldToQuestion(field);
+  if (question) {
+    return { kind: 'question', key: question.key, answer: answerFor(field, profile) };
+  }
+  const key = mapFieldToProfileKey(field);
+  if (!key) return null;
+  return { kind: 'profile', key, value: fillValueFor(field, profile) };
+}
+
+const NO_PREFIXES = ['no', 'false', 'i am not', 'i do not', 'i don t', 'i will not', 'i won t'];
+const YES_PREFIXES = ['yes', 'true', 'i am', 'i do', 'i will'];
+
+function startsWithPhrase(text, phrase) {
+  return text === phrase || text.startsWith(phrase + ' ');
+}
+
+/** 'yes' | 'no' | null for one option's text. Negatives are checked first. */
+function optionPolarity(text) {
+  const t = normalizeForFuzzy(text);
+  if (!t) return null;
+  if (NO_PREFIXES.some((p) => startsWithPhrase(t, p))) return 'no';
+  if (YES_PREFIXES.some((p) => startsWithPhrase(t, p))) return 'yes';
+  return null;
+}
+
+/** Index of the option meaning yes/no, or -1 (then the human answers). */
+function matchOptionForBoolean(optionTexts, value) {
+  const wanted = value ? 'yes' : 'no';
+  return optionTexts.findIndex((text) => optionPolarity(text) === wanted);
+}
+
+/** Index of the option equal to a text answer (exact, normalized), or -1. */
+function matchOptionForText(optionTexts, value) {
+  const wanted = normalizeForFuzzy(value);
+  if (!wanted) return -1;
+  return optionTexts.findIndex((text) => normalizeForFuzzy(text) === wanted);
+}
+
+// ---------------------------------------------------------------------------
+// Resume attachment
+// ---------------------------------------------------------------------------
+
+// 2 MB of PDF as base64 (mirrors core/apply.py MAX_RESUME_BYTES).
+const MAX_RESUME_B64 = Math.ceil((2 * 1024 * 1024) / 3) * 4;
+
+/** Is this file input the resume upload (not a cover letter / transcript)? */
+function isResumeField(field) {
+  if (!field) return false;
+  const haystacks = haystacksFor(field);
+  if (haystacks.some((h) => includesWord(h, 'cover letter'))) return false;
+  return haystacks.some((h) =>
+    ['resume', 'cv', 'curriculum vitae'].some((kw) => includesWord(h, kw))
+  );
+}
+
+/**
+ * Validate an exported `resume` block. Returns a clean copy or null; never
+ * throws, so a bad import can't break the popup or the page.
+ */
+function validateResume(resume) {
+  if (!resume || typeof resume !== 'object' || Array.isArray(resume)) return null;
+  const { filename, mime, data_b64: data } = resume;
+  if (mime !== 'application/pdf') return null;
+  if (typeof data !== 'string' || data.length === 0 || data.length > MAX_RESUME_B64) return null;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return null;
+  if (!data.startsWith('JVBER')) return null; // base64 of "%PDF"
+  const name = typeof filename === 'string' ? filename.replace(/[^\w.-]/g, '') : '';
+  return {
+    filename: /\.pdf$/i.test(name) ? name : 'resume.pdf',
+    mime,
+    data_b64: data,
+  };
+}
+
+/** Decode a validated resume to bytes for a File, or null. */
+function decodeResume(resume) {
+  const clean = validateResume(resume);
+  if (!clean) return null;
+  const binary = atob(clean.data_b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return { filename: clean.filename, mime: clean.mime, bytes };
+}
+
+const api = {
+  mapFieldToProfileKey,
+  fillValueFor,
+  mapFieldToQuestion,
+  answerFor,
+  classifyField,
+  matchOptionForBoolean,
+  matchOptionForText,
+  isResumeField,
+  validateResume,
+  decodeResume,
+  PROFILE_KEYS,
+  QUESTION_RULES,
+  BOOLEAN_ANSWER_KEYS,
+  TEXT_ANSWER_KEYS,
+  DEMOGRAPHIC_ANSWER_KEYS,
+  CONSENT_KEY,
+  MAX_RESUME_B64,
+};
 
 // Work both as a CommonJS module (node --test) and a browser global.
 if (typeof module !== 'undefined' && module.exports) {
