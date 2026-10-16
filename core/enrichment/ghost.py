@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from ..normalize import to_naive_utc, utc_now
+from ..normalize import ensure_utc, utc_now
 
 
 @dataclass
@@ -23,11 +23,10 @@ class GhostAssessment:
 def _age_days(date_posted: datetime | None, now: datetime) -> float | None:
     if date_posted is None:
         return None
-    # Either side may arrive aware: ``date_posted`` comes from the boards via
-    # ``dateutil``, which keeps an offset when the source string has one, while
-    # rows reloaded from the DB are always naive. Both land on naive UTC before
-    # any arithmetic, so this never raises on a mixed pair.
-    return (to_naive_utc(now) - to_naive_utc(date_posted)).total_seconds() / 86400.0
+    # Either side may arrive naive (a caller's ``now``, an in-memory row not
+    # yet round-tripped) or aware with any offset. Both land on aware UTC
+    # before any arithmetic, so this never raises on a mixed pair.
+    return (ensure_utc(now) - ensure_utc(date_posted)).total_seconds() / 86400.0
 
 
 def ghost_score(
