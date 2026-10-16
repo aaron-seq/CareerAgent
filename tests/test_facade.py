@@ -914,3 +914,29 @@ def test_funnel_reports_stage_conversion_rates(temp_db):
     assert f["conversion"]["screening_to_interview"] == 0.0
     # No division by zero when a stage was never reached.
     assert f["conversion"]["interview_to_offer"] == 0.0
+
+
+@respx.mock
+def test_export_all_data_includes_pipeline_notes_and_cv(temp_db, tmp_path):
+    """Real-user repro: "Export All Data" held only job-posting JSON. It must
+    carry the user's own pipeline (with notes) and saved CV, readable."""
+    import json
+    from zipfile import ZipFile
+
+    from core.storage import LocalStorage
+
+    cv_id = facade.persist_cv(_cv())
+    app_id = _seed_application()
+    facade.advance_application(app_id, "applied")
+    facade.set_application_notes(app_id, "Spoke to Sam, chase Friday")
+
+    storage = LocalStorage(str(tmp_path / "data"))
+    with ZipFile(facade.export_all_data(storage)) as archive:
+        names = set(archive.namelist())
+        apps = json.loads(archive.read("pipeline/applications.json"))
+        cv = json.loads(archive.read(f"cv_profiles/saved_cv_{cv_id}.json"))
+    assert apps[0]["notes"] == "Spoke to Sam, chase Friday"
+    assert apps[0]["status"] == "applied"
+    assert apps[0]["company"] == "Stripe"
+    assert cv["skills"] == _cv().skills
+    assert "README.txt" in names

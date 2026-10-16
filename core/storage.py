@@ -4,16 +4,18 @@ Local storage for drafts and export to JSON/ZIP
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import tempfile
 from pathlib import Path
-from typing import List
+from typing import Any, List, Mapping
 from zipfile import ZipFile
 
 from .db.crypto import decrypt_payload, encrypt_payload
 from .models import CVProfile, EmailDraft, JobPosting, WhatsAppDraft
+from .normalize import compute_dedup_key
 
 
 class LocalStorage:
@@ -112,8 +114,35 @@ class LocalStorage:
         return self._save_json("cv_profiles", "cv_profile", profile.model_dump())
 
     def save_job_posting(self, job: JobPosting) -> str:
-        """Save job posting as JSON"""
-        return self._save_json("job_postings", f"job_{job.company}", job.model_dump())
+        """Save a job posting, one file per posting.
+
+        Keyed on the same title/company/location fingerprint the DB dedups
+        on, and replaced atomically, so re-selecting a posting (often with a
+        different relevance score) updates its backup instead of minting a
+        second file that the export would then carry twice.
+        """
+        path = self._job_posting_path(job.title, job.company, job.location)
+        payload = encrypt_payload(job.model_dump())
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent,
+            mode="w",
+            encoding="utf-8",
+            suffix=".part",
+            delete=False,
+        ) as file:  # mode 0600, like mkstemp
+            temporary = Path(file.name)
+            json.dump(payload, file, indent=2)
+        try:
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return str(path)
+
+    def _job_posting_path(self, title: str, company: str, location: str | None) -> Path:
+        key = compute_dedup_key(title, company, location)
+        digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+        safe = re.sub(r"[^A-Za-z0-9_.-]", "_", company).strip("._")[:60] or "job"
+        return Path(self.storage_dir, "job_postings", f"job_{safe}_{digest}.json")
 
     def export_to_markdown(self, draft: EmailDraft) -> str:
         """Export email draft as markdown"""
@@ -168,25 +197,71 @@ class LocalStorage:
 
         return filepath
 
-    def create_export_zip(self, name: str = "careeragent_export") -> str:
-        """Explicitly export readable content, including personal data."""
+    def create_export_zip(
+        self,
+        name: str = "careeragent_export",
+        extra: Mapping[str, Any] | None = None,
+    ) -> str:
+        """Explicitly export readable content, including personal data.
+
+        Local artifacts are decrypted into readable JSON. ``extra`` maps an
+        archive path to JSON-serializable data the caller wants included
+        (the facade passes the user's DB-held pipeline and CV profiles; this
+        module stays independent of the DB). A ``README.txt`` lists every
+        entry so the user can see what the bundle actually contains.
+        """
         zip_filepath = self._new_path("exports", name, ".zip")
+        entries: dict[str, str] = {}
+        # Job postings saved before saves were idempotent can exist several
+        # times on disk; export each posting once, keeping the newest copy.
+        jobs: dict[str, tuple[float, str, str]] = {}
+
+        for root, dirs, files in os.walk(self.storage_dir):
+            dirs.sort()
+            for file in sorted(files):
+                if not file.endswith((".json", ".md")):
+                    continue
+                file_path = os.path.join(root, file)
+                if Path(file_path).is_symlink():
+                    continue
+                arcname = os.path.relpath(file_path, self.storage_dir)
+                arcname = arcname.replace(os.sep, "/")
+                if file.endswith(".md"):
+                    entries[arcname] = Path(file_path).read_text(encoding="utf-8")
+                    continue
+                with open(file_path, encoding="utf-8") as source:
+                    data = decrypt_payload(json.load(source))
+                text = json.dumps(data, indent=2)
+                if arcname.startswith("job_postings/") and isinstance(data, dict):
+                    key = compute_dedup_key(
+                        str(data.get("title", "")),
+                        str(data.get("company", "")),
+                        data.get("location"),
+                    )
+                    mtime = os.path.getmtime(file_path)
+                    if key not in jobs or mtime >= jobs[key][0]:
+                        jobs[key] = (mtime, arcname, text)
+                    continue
+                entries[arcname] = text
+
+        for _, arcname, text in jobs.values():
+            entries[arcname] = text
+        for arcname, data in (extra or {}).items():
+            entries[arcname] = json.dumps(data, indent=2, default=str)
+
+        manifest = [
+            "CareerAgent data export",
+            "",
+            "This archive contains READABLE personal data (CV, applications,",
+            "notes, drafts). Store and share it carefully.",
+            "",
+            "Contents:",
+        ] + [f"  {arcname}" for arcname in sorted(entries)]
 
         with ZipFile(zip_filepath, "w") as zipf:
-            # Add all JSON files
-            for root, dirs, files in os.walk(self.storage_dir):
-                for file in files:
-                    if file.endswith((".json", ".md")):
-                        file_path = os.path.join(root, file)
-                        if Path(file_path).is_symlink():
-                            continue
-                        arcname = os.path.relpath(file_path, self.storage_dir)
-                        if file.endswith(".json"):
-                            with open(file_path, encoding="utf-8") as source:
-                                data = decrypt_payload(json.load(source))
-                            zipf.writestr(arcname, json.dumps(data, indent=2))
-                        else:
-                            zipf.write(file_path, arcname)
+            zipf.writestr("README.txt", "\n".join(manifest) + "\n")
+            for arcname in sorted(entries):
+                zipf.writestr(arcname, entries[arcname])
 
         return zip_filepath
 
