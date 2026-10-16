@@ -185,6 +185,22 @@ class CVRepository:
         self.session.flush()
         return row
 
+    def update(self, cv_id: int, profile: CVProfile) -> bool:
+        """Replace a saved CV in place, keeping its answers. False if absent."""
+        row = self.session.get(CVProfileRow, cv_id)
+        if row is None:
+            return False
+        row.name = profile.name
+        row.email = profile.email
+        row.phone = profile.phone
+        row.linkedin = profile.linkedin
+        row.github = profile.github
+        row.summary = profile.summary
+        row.payload = profile.model_dump_json()
+        self.session.add(row)
+        self.session.flush()
+        return True
+
     def get(self, cv_id: int) -> Optional[CVProfile]:
         row = self.session.get(CVProfileRow, cv_id)
         if row is None or not row.payload:

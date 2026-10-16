@@ -61,14 +61,20 @@ from .ingestion import (
     WorkableSource,
 )
 from .matching import DedupService, ScoringService, get_embedder
-from .models import CVProfile, EmailDraft, JobPosting
+from .models import ContactCandidate, CVProfile, EmailDraft, Experience, JobPosting
 from .normalize import (
     compute_dedup_key,
     ensure_utc,
     normalize_company_name,
     utc_now,
 )
-from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
+from .outreach import (
+    ComplianceConfig,
+    LIARecord,
+    OutreachService,
+    SendDecision,
+    is_valid_email,
+)
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
 from .resume import render_markdown, render_pdf, tailor_resume, to_json_resume
@@ -112,6 +118,134 @@ def persist_cv(profile: CVProfile) -> int:
     with get_session() as session:
         row = CVRepository(session).save(profile)
         return row.id
+
+
+def _split_items(value: Any) -> list[str]:
+    """Comma/newline text (or a list) -> trimmed, blank-free, de-duplicated."""
+    if isinstance(value, str):
+        value = value.replace("\n", ",").split(",")
+    seen: set[str] = set()
+    items = []
+    for item in value or []:
+        item = str(item).strip()
+        if item and item.lower() not in seen:
+            seen.add(item.lower())
+            items.append(item)
+    return items
+
+
+def _lines(value: Any) -> list[str]:
+    if isinstance(value, str):
+        value = value.splitlines()
+    return [str(line).strip() for line in value or [] if str(line).strip()]
+
+
+def _optional(form: dict[str, Any], key: str) -> Optional[str]:
+    value = str(form.get(key) or "").strip()
+    return value or None
+
+
+def save_manual_profile(
+    form: dict[str, Any], cv_id: int | None = None
+) -> dict[str, Any]:
+    """Create (or, with ``cv_id``, update) a CV typed in by hand -- no model.
+
+    Returns ``{"ok", "cv_id", "profile", "errors"}``. Every problem is
+    reported at once and nothing is stored unless all of them are fixed.
+    Blank optional fields stay unknown (``None``) rather than ``""``.
+    """
+    errors: list[str] = []
+    name = _optional(form, "name")
+    email = _optional(form, "email")
+    if not name:
+        errors.append("Enter your name.")
+    if not is_valid_email(email):
+        errors.append("Enter a valid email address, like name@example.com.")
+    for key, label in (
+        ("linkedin", "LinkedIn"),
+        ("github", "GitHub"),
+        ("portfolio", "Portfolio"),
+    ):
+        link = _optional(form, key)
+        if link and not link.lower().startswith(("http://", "https://")):
+            errors.append(f"{label} link must start with https://")
+
+    experiences = []
+    for index, raw in enumerate(form.get("experiences") or [], start=1):
+        title = str(raw.get("title") or "").strip()
+        company = str(raw.get("company") or "").strip()
+        duration = str(raw.get("duration") or "").strip()
+        achievements = _lines(raw.get("achievements"))
+        if not (title or company or duration or achievements):
+            continue  # an untouched blank row
+        if not title or not company:
+            errors.append(f"Job {index}: enter both a job title and a company.")
+            continue
+        experiences.append(
+            Experience(
+                title=title,
+                company=company,
+                duration=duration,
+                achievements=achievements,
+            )
+        )
+
+    if errors:
+        return {"ok": False, "cv_id": None, "profile": None, "errors": errors}
+
+    profile = CVProfile(
+        name=name,
+        email=email,
+        phone=_optional(form, "phone"),
+        linkedin=_optional(form, "linkedin"),
+        github=_optional(form, "github"),
+        portfolio=_optional(form, "portfolio"),
+        summary=_optional(form, "summary"),
+        skills=_split_items(form.get("skills")),
+        education=_lines(form.get("education")),
+        experiences=experiences,
+    )
+    init_persistence()
+    with get_session() as session:
+        repo = CVRepository(session)
+        if cv_id is None:
+            cv_id = repo.save(profile).id
+        elif not repo.update(cv_id, profile):
+            return {
+                "ok": False,
+                "cv_id": None,
+                "profile": None,
+                "errors": ["That saved profile no longer exists. Save it as new."],
+            }
+    return {"ok": True, "cv_id": cv_id, "profile": profile, "errors": []}
+
+
+def manual_contact(name: str, email: str, role: str = "") -> dict[str, Any]:
+    """Validate a contact the user typed in.
+
+    ``{"ok", "contact"}`` or ``{"ok": False, "error"}``. A typed address is
+    never marked verified -- nothing checked that it delivers.
+    """
+    name, email, role = (
+        (name or "").strip(),
+        (email or "").strip(),
+        (role or "").strip(),
+    )
+    if not name:
+        return {"ok": False, "error": "Enter the contact's name."}
+    if not is_valid_email(email):
+        return {
+            "ok": False,
+            "error": "Enter a valid email address, like name@company.com.",
+        }
+    contact = ContactCandidate(
+        name=name,
+        email=email,
+        role=role or None,
+        email_confidence="unknown",
+        source="manual",
+    )
+    return {"ok": True, "contact": contact}
 
 
 def load_cv(cv_id: int) -> Optional[CVProfile]:

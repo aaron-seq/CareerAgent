@@ -55,6 +55,11 @@ def _default_resolver(domain: str) -> Optional[list[str]]:
         return None
 
 
+def is_valid_email(email: Optional[str]) -> bool:
+    """Syntax-only check for addresses a person types in (no DNS lookup)."""
+    return bool(_EMAIL_RE.match((email or "").strip()))
+
+
 def verify_email(
     email: str, resolver: MxResolver | None = None, require_mx: bool = True
 ) -> VerificationResult:

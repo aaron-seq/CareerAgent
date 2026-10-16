@@ -9,7 +9,7 @@ from .compliance import (
     has_compliant_footer,
 )
 from .service import OutreachService, SendDecision
-from .verification import VerificationResult, verify_email
+from .verification import VerificationResult, is_valid_email, verify_email
 
 __all__ = [
     "ComplianceConfig",
@@ -21,5 +21,6 @@ __all__ = [
     "OutreachService",
     "SendDecision",
     "VerificationResult",
+    "is_valid_email",
     "verify_email",
 ]
