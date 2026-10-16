@@ -19,7 +19,7 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **472 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
+Totals: **475 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
 Core coverage is **92.78%** (not re-measured for the 2026-10-16 core fixes).
 Passing tests do not establish production readiness.
 
