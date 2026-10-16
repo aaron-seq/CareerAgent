@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
+from sqlalchemy import text
 from sqlmodel import select
 
 from .alerting import build_digest
@@ -21,6 +22,7 @@ from .db.repository import (
     ApplicationRepository,
     CompanyRepository,
     CVRepository,
+    DraftRepository,
     JobRepository,
     row_to_job,
 )
@@ -56,7 +58,7 @@ from .ingestion import (
     WorkableSource,
 )
 from .matching import DedupService, ScoringService, get_embedder
-from .models import CVProfile, JobPosting
+from .models import CVProfile, EmailDraft, JobPosting
 from .normalize import normalize_company_name, to_naive_utc, utc_now
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
@@ -572,6 +574,56 @@ def compliance_gate(
     with get_session() as session:
         service = OutreachService(session, config, resolver=resolver)
         return service.prepare_send(draft, lia)
+
+
+def create_gmail_draft(
+    draft: EmailDraft,
+    config: ComplianceConfig,
+    lia: LIARecord,
+    gmail_client=None,
+    resolver=None,
+) -> EmailDraft:
+    """Recheck current content/recipient and export only the compliant body.
+
+    A preview decision is not authorization for a later, possibly edited
+    draft. Keeping the gate and Gmail call together also survives UI reruns.
+    This creates a draft for human review; it never sends email.
+    """
+    decision = compliance_gate(draft, config, lia, resolver=resolver)
+    if not decision.allowed:
+        raise ValueError(f"Outreach blocked: {decision.reason}")
+    if gmail_client is None:
+        from .gmail_drafts import GmailDraftClient
+
+        gmail_client = GmailDraftClient()
+        if not gmail_client.authenticate():
+            raise ValueError("Gmail authentication was not completed.")
+    with get_session() as session:
+        # Serialize the final quota check and successful export record. SQLite
+        # needs its write lock before reading; Postgres uses a transaction-scoped
+        # advisory lock. OAuth runs above so it never holds this lock open.
+        dialect = session.get_bind().dialect.name
+        if dialect == "sqlite":
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+        elif dialect == "postgresql":
+            session.execute(text("SELECT pg_advisory_xact_lock(4846243046034915655)"))
+        else:
+            raise ValueError("Outreach quota locking requires SQLite or Postgres.")
+        decision = OutreachService(session, config, resolver=resolver).prepare_send(
+            draft, lia
+        )
+        if not decision.allowed:
+            raise ValueError(f"Outreach blocked: {decision.reason}")
+        prepared = EmailDraft.model_validate(
+            {**draft.model_dump(), "body": decision.body}
+        )
+        prepared.gmail_draft_id = gmail_client.create_draft(
+            to=prepared.recipient_email,
+            subject=prepared.subject,
+            body=prepared.body,
+        )
+        DraftRepository(session).save(prepared)
+    return prepared
 
 
 def record_opt_out(email: str) -> None:

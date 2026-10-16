@@ -20,8 +20,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from sqlmodel import col, select
+
 from ..db.repository import SuppressionRepository
+from ..db.tables import EmailDraftRow
 from ..models import EmailDraft
+from ..normalize import utc_now
 from .compliance import ComplianceConfig, LIARecord, SendPolicy, ensure_compliant
 from .verification import MxResolver, VerificationResult, verify_email
 
@@ -46,6 +50,17 @@ class OutreachService:
         self.suppression = SuppressionRepository(session)
         self.config = config
         self.policy = policy or SendPolicy()
+        if policy is None:
+            # Recreate the window from successful Gmail exports, not from a
+            # fresh per-request counter. Previews do not consume the quota.
+            timestamps = session.exec(
+                select(EmailDraftRow.created_at).where(
+                    col(EmailDraftRow.gmail_draft_id).is_not(None),
+                    EmailDraftRow.created_at >= utc_now() - self.policy.window,
+                )
+            ).all()
+            for timestamp in timestamps:
+                self.policy.record(timestamp)
         self.resolver = resolver
         self.require_mx = require_mx
 
@@ -70,7 +85,9 @@ class OutreachService:
             return SendDecision(False, f"unverifiable email: {vr.reason}", None, vr)
 
         if not self.policy.can_send(now):
-            return SendDecision(False, "send cap reached for this window", None, vr)
+            return SendDecision(
+                False, "send cap or minimum interval reached for this window", None, vr
+            )
 
         result = ensure_compliant(draft.body, self.config)
         return SendDecision(True, "ok", result.body, vr)

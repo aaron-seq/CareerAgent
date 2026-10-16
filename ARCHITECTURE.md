@@ -9,7 +9,7 @@ CareerAgent is a Streamlit UI over a `core/` package of independent business-
 logic services — `app.py` holds no business logic itself. It reaches `core/`
 two ways: the DB-backed platform services (ingestion, matching, resume,
 tracking, outreach, analytics) go through `core/facade.py`; the original
-CV/contact/personalization/Gmail/storage modules are instantiated directly
+CV/contact/personalization/storage modules are instantiated directly
 by `app.py` (see the diagram below — the `UI --> CF/PE/DV/Gmail/WA` edges
 are that direct path, not routed through the facade). A 2026-08 repo audit
 flagged this as worth unifying behind the facade; not yet done. LLM
@@ -79,7 +79,7 @@ graph TB
     UI --> CF
     UI --> PE
     UI --> DV
-    UI --> Gmail
+    Facade --> Gmail
     UI --> WA
     CV -.->|persist_cv| Facade
 
@@ -110,13 +110,13 @@ graph TB
 
 | Component | File | Description |
 |-----------|------|-------------|
-| Streamlit UI | `app.py` | 6-screen app: Onboarding, Job Discovery, Pipeline, Contact Finder, Draft Studio, Export & Logs. Calls only `core/facade.py`. |
+| Streamlit UI | `app.py` | 6 screens. DB-backed operations and compliant Gmail creation use `core/facade.py`; CV parsing, contact finding, personalization, and legacy storage still have direct calls. |
 
 ### Facade
 
 | Component | File | Description |
 |-----------|------|-------------|
-| Facade | `core/facade.py` | The single tested entry point the UI calls — session-managed, returns plain dicts (never ORM objects), keeps business logic out of `app.py`. |
+| Facade | `core/facade.py` | Session-managed gateway for DB-backed features and compliant Gmail creation; returns domain objects or plain values, never detached ORM rows. |
 
 ### Core services
 
@@ -143,7 +143,7 @@ graph TB
 | Component | File | Description |
 |-----------|------|-------------|
 | LLM Client | `core/llm.py` | `LocalLLMClient` (Ollama) and `CloudLLMClient` (Groq free tier, OpenAI-compatible). `CloudLLMClient` subclasses the local client and overrides only the three HTTP-touching methods — JSON cleaning, retry, and schema validation are shared. |
-| Gmail Drafts | `core/gmail_drafts.py` | Gmail API integration for draft creation. |
+| Gmail Drafts | `core/gmail_drafts.py` | Gmail API transport for draft creation; the UI uses the facade to gate the exact body and record successful exports. OAuth tokens are written atomically with private permissions. |
 | WhatsApp | `core/whatsapp.py` | WhatsApp click-to-chat URL generation. |
 | Prompts | `core/prompts.py` | LLM prompt templates for structured JSON responses. |
 
@@ -155,7 +155,7 @@ graph TB
 | DB session | `core/db/session.py` | Engine/session management; `init_db` for dev/test, Alembic (`alembic/`) for migrations. |
 | Repository | `core/db/repository.py` | Query/persistence layer over the SQLModel tables. |
 | Models | `core/models.py` | Pydantic data models shared across the whole app (`CVProfile`, `JobPosting`, `ContactCandidate`, `EmailDraft`, ...). |
-| Storage | `core/storage.py` | Legacy local-JSON persistence + ZIP export, still used for drafts/exports alongside the DB. |
+| Storage | `core/storage.py` | Encrypted local JSON beside the DB; supports legacy plaintext reads and explicit migration. User-requested Markdown/ZIP exports are readable. |
 
 ## Data flow (CV → job → draft)
 
@@ -164,15 +164,19 @@ sequenceDiagram
     participant User
     participant UI as Streamlit UI
     participant Facade as core/facade.py
+    participant CV as CVParser
     participant LLM as LLM Client (Ollama/Groq)
     participant Storage
+    participant DB as SQLite/Postgres
 
     User->>UI: Upload CV (PDF/text)
-    UI->>Facade: parse CV
-    Facade->>LLM: extract structured data (+ recovered PDF hyperlinks)
-    LLM-->>Facade: CVProfile JSON
-    Facade->>Storage: save profile (DB + legacy JSON)
-    Facade-->>UI: CVProfile
+    UI->>CV: parse CV
+    CV->>LLM: extract structured data (+ recovered PDF hyperlinks)
+    LLM-->>CV: CVProfile JSON
+    CV-->>UI: validated profile, or error
+    UI->>Storage: save encrypted JSON
+    UI->>Facade: persist_cv
+    Facade->>DB: save profile
 
     User->>UI: Ingest jobs (ATS/aggregator or search)
     UI->>Facade: ingest_ats / ingest_aggregator
@@ -203,10 +207,13 @@ machine — surfaced in the sidebar UI, the class docstring, and
 deviation this represents.
 
 ### Never fabricate
-Resume tailoring (`assert_no_fabrication` in `core/resume/tailor.py`) and
-cover letter generation (`assert_no_fabrication` in
-`core/resume/cover_letter.py`) both raise rather than return output that
-invents an employer, credential, or metric the CV doesn't support. Company
+Resume tailoring only reorders existing skills and complete experience
+records; its guard rejects changes to identity, education, summary, and
+experience details. Cover-letter generation preserves numeric boundaries,
+units, and decimal values when checking supporting metrics. Quoted job
+metrics require attribution and must occur in the prompt-visible text.
+Free-prose checks remain heuristic and require human review; they do not
+prove every statement is true. Company
 enrichment (`core/enrichment/company.py`) uses tri-state fields so *absence
 of data* is never rendered as a false negative (e.g. "does not sponsor
 visas").
@@ -226,11 +233,20 @@ The browser extension (`extension/`) fills form fields; it never submits.
 A human always reviews before applying.
 
 ### Quality gates
-Email drafts must pass validation before send: contains a metric, includes
-a project link, references the target company, has a clear CTA, stays
-under 180 words, no emojis or bullet dashes — plus the outreach compliance
-gate (`core/outreach/`) blocking send until sender identity, postal
-address, opt-out, and a per-campaign LIA are all present.
+The UI displays quality checks for metrics, project links, company hooks,
+CTA, length, emojis, and bullets. Gmail draft creation separately rechecks
+MX, suppression, sender identity, postal address, opt-out, LIA, and quota,
+then exports the approved body with its footer. Successful Gmail exports
+are recorded in SQLite/Postgres so counters survive service/process restart.
+SQLite write locking and a Postgres transaction advisory lock serialize the
+final check and export record; only the SQLite path has integration coverage.
+The app does not send mail or control messages sent manually in Gmail.
+
+`CAREERAGENT_ENCRYPTION_KEY` overrides the local key file. Otherwise a key is
+published atomically at `CAREERAGENT_KEY_PATH` (default `.careeragent_key`)
+with mode 0600 and reused across processes. Keep it with database/data backups.
+Not every DB metadata field is encrypted; see `docs/SECURITY_AUDIT.md` before
+hosted deployment.
 
 ## Directory structure
 
@@ -286,8 +302,11 @@ streamlit run app.py
 ```bash
 docker-compose up
 ```
-Starts the Streamlit application; point it at a reachable Ollama instance or
-set `GROQ_API_KEY` for the cloud provider.
+Starts Streamlit and Ollama on the Compose network. Pull a model explicitly
+with `docker compose exec ollama ollama pull llama3.1:8b`. The app uses the
+Ollama service name, publishes its UI on host loopback, runs as UID 1000, and
+persists SQLite plus its key under the mounted `careeragent_data/` directory.
+Gmail credentials are optional private mounts; they are excluded from builds.
 
 ## Technology stack
 
@@ -302,4 +321,4 @@ set `GROQ_API_KEY` for the cloud provider.
 | Job data | Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable, Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas | API-first ingestion |
 | Web search | duckduckgo-search | Fallback job/contact discovery |
 | Email | Google Gmail API | Draft creation |
-| Testing | pytest | Unit and integration tests (204+) |
+| Testing | pytest | 377 Python tests and 18 Node extension tests |

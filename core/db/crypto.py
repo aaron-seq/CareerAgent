@@ -19,8 +19,11 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
+import tempfile
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 from cryptography.fernet import Fernet
@@ -30,29 +33,38 @@ ENV_KEY = "CAREERAGENT_ENCRYPTION_KEY"
 
 
 @lru_cache(maxsize=1)
-def _get_cipher() -> Fernet:
-    """Return a process-wide Fernet cipher.
+def _get_key() -> bytes:
+    """Use the configured key, or atomically retain a private local dev key.
 
-    Reads the key from ``CAREERAGENT_ENCRYPTION_KEY``. If unset, a key is
-    generated for the lifetime of the process and a warning is emitted -- this
-    keeps local/dev runs working, but data written under an ephemeral key
-    cannot be decrypted in a later process. Production and tests should set the
-    env var explicitly.
+    Publishing a complete temporary file with link() avoids another process
+    reading a partially written key. Never replace an existing key: both
+    encrypted records and suppression hashes depend on it across restarts.
     """
     key = os.environ.get(ENV_KEY)
-    if not key:
-        key = Fernet.generate_key().decode()
-        os.environ[ENV_KEY] = key
-        import warnings
+    if key:
+        value = key.encode()
+    else:
+        path = Path(os.environ.get("CAREERAGENT_KEY_PATH") or ".careeragent_key")
+        if not path.is_file():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                dir=path.parent, prefix=".careeragent-key-", delete=False
+            ) as file:
+                temporary = Path(file.name)
+                file.write(Fernet.generate_key())
+            try:
+                os.link(temporary, path)
+            except FileExistsError:
+                pass  # another process published its complete key first
+            finally:
+                temporary.unlink()
+        value = path.read_bytes().strip()
+    Fernet(value)  # reject invalid supplied/stored keys before any write
+    return value
 
-        warnings.warn(
-            f"{ENV_KEY} not set; generated an ephemeral key. Data encrypted "
-            "now will not be readable in a future process. Set the env var to "
-            "persist PII across runs.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-    return Fernet(key.encode() if isinstance(key, str) else key)
+
+def _get_cipher() -> Fernet:
+    return Fernet(_get_key())
 
 
 def encrypt(value: Optional[str]) -> Optional[str]:
@@ -75,11 +87,26 @@ def deterministic_hash(value: str) -> str:
     Deterministic and one-way: safe for equality lookups (suppression list,
     dedup) without exposing the plaintext.
     """
-    key = os.environ.get(ENV_KEY) or _get_cipher()  # ensure a key exists
-    if isinstance(key, Fernet):  # _get_cipher() side-effected the env var
-        key = os.environ[ENV_KEY]
     normalized = value.strip().lower().encode("utf-8")
-    return hmac.new(key.encode("utf-8"), normalized, hashlib.sha256).hexdigest()
+    return hmac.new(_get_key(), normalized, hashlib.sha256).hexdigest()
+
+
+def encrypt_payload(value: dict) -> dict:
+    """Encrypt a JSON artifact without storing candidate fields in plaintext."""
+    return {
+        "format": "careeragent.fernet.v1",
+        "ciphertext": encrypt(json.dumps(value, default=str)),
+    }
+
+
+def decrypt_payload(value: dict) -> dict:
+    """Read encrypted artifacts and existing plaintext legacy JSON."""
+    if value.get("format") == "careeragent.fernet.v1":
+        plaintext = decrypt(value["ciphertext"])
+        if plaintext is None:
+            raise ValueError("Encrypted payload has no ciphertext.")
+        return json.loads(plaintext)
+    return value
 
 
 class EncryptedString(TypeDecorator):

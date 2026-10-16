@@ -1,17 +1,18 @@
-version: '3.8'
-
 services:
   careeragent:
     build: .
     container_name: careeragent-app
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     environment:
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - DATABASE_URL=sqlite:////app/careeragent_data/careeragent.db
+      - CAREERAGENT_KEY_PATH=/app/careeragent_data/.careeragent_key
+      - CAREERAGENT_ENCRYPTION_KEY=${CAREERAGENT_ENCRYPTION_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
     volumes:
-      - ./careeragent_data:/app/careeragent_data
-      - ./credentials.json:/app/credentials.json:ro
+      - careeragent-data:/app/careeragent_data
     depends_on:
       - ollama
     restart: unless-stopped
@@ -23,15 +24,17 @@ services:
       start_period: 40s
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.4
     container_name: careeragent-ollama
-    ports:
-      - "11434:11434"
+    environment:
+      - OLLAMA_NO_CLOUD=1
     volumes:
       - ollama-data:/root/.ollama
     restart: unless-stopped
     command: serve
 
 volumes:
+  careeragent-data:
+    driver: local
   ollama-data:
     driver: local

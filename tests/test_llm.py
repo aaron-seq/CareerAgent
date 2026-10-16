@@ -7,6 +7,17 @@ import pytest
 from core.llm import CloudLLMClient, LocalLLMClient
 
 
+def test_ollama_uses_deployment_configuration(monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434/")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2:3b")
+    client = LocalLLMClient()
+    assert client.base_url == "http://ollama:11434"
+    assert client.model == "llama3.2:3b"
+    explicit = LocalLLMClient(base_url="http://custom:11434", model="custom")
+    assert explicit.base_url == "http://custom:11434"
+    assert explicit.model == "custom"
+
+
 class TestCloudLLMClient:
     """Test suite for the OpenAI-compatible cloud client"""
 

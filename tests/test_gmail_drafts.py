@@ -8,7 +8,7 @@ create_draft() refuses to run before authenticate() -- both are exercised
 here.
 """
 
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from googleapiclient.errors import HttpError
@@ -37,10 +37,9 @@ class TestAuthenticate:
 
     @patch("core.gmail_drafts.build")
     @patch("core.gmail_drafts.InstalledAppFlow")
-    @patch("builtins.open", new_callable=mock_open)
     @patch("core.gmail_drafts.os.path.exists")
     def test_runs_oauth_flow_when_no_token(
-        self, mock_exists, _mock_open, mock_flow_cls, mock_build
+        self, mock_exists, mock_flow_cls, mock_build, tmp_path
     ):
         # token.json absent, credentials.json present.
         mock_exists.side_effect = lambda path: path == "credentials.json"
@@ -51,19 +50,20 @@ class TestAuthenticate:
         mock_flow_cls.from_client_secrets_file.return_value = mock_flow
         mock_build.return_value = Mock()
 
-        client = _client()
+        client = _client(token_path=str(tmp_path / "token.json"))
         assert client.authenticate() is True
         mock_flow_cls.from_client_secrets_file.assert_called_once_with(
             "credentials.json", ["https://www.googleapis.com/auth/gmail.compose"]
         )
         assert client.service is not None
+        assert (tmp_path / "token.json").read_text() == "{}"
+        assert (tmp_path / "token.json").stat().st_mode & 0o777 == 0o600
 
     @patch("core.gmail_drafts.build", side_effect=Exception("build failed"))
     @patch("core.gmail_drafts.InstalledAppFlow")
-    @patch("builtins.open", new_callable=mock_open)
     @patch("core.gmail_drafts.os.path.exists")
     def test_service_build_failure_is_surfaced(
-        self, mock_exists, _mock_open, mock_flow_cls, _mock_build
+        self, mock_exists, mock_flow_cls, _mock_build, tmp_path
     ):
         mock_exists.side_effect = lambda path: path == "credentials.json"
         mock_creds = Mock(valid=True)
@@ -72,7 +72,7 @@ class TestAuthenticate:
         mock_flow.run_local_server.return_value = mock_creds
         mock_flow_cls.from_client_secrets_file.return_value = mock_flow
 
-        client = _client()
+        client = _client(token_path=str(tmp_path / "token.json"))
         with pytest.raises(Exception, match="Failed to build Gmail service"):
             client.authenticate()
 

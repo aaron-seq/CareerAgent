@@ -17,8 +17,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
 from ..normalize import utc_now
+from .verification import verify_email
 
 _FOOTER_MARKER = "-- \nThis message was sent by"
 
@@ -39,13 +41,24 @@ class ComplianceConfig:
 
     def validate(self) -> list[str]:
         missing = []
-        if not self.sender_name:
+        if not self.sender_name.strip():
             missing.append("sender_name")
-        if not self.sender_email:
+        if not verify_email(
+            self.sender_email, resolver=lambda _: None, require_mx=False
+        ).syntax_ok:
             missing.append("sender_email")
-        if not self.postal_address:
+        if not self.postal_address.strip():
             missing.append("postal_address")
-        if not self.unsubscribe:
+        opt_out = urlsplit(self.unsubscribe.strip())
+        if not (
+            (opt_out.scheme in {"http", "https"} and opt_out.hostname)
+            or (
+                opt_out.scheme == "mailto"
+                and verify_email(
+                    opt_out.path, resolver=lambda _: None, require_mx=False
+                ).syntax_ok
+            )
+        ):
             missing.append("unsubscribe")
         return missing
 
@@ -58,11 +71,7 @@ class ComplianceResult:
 
 
 def has_compliant_footer(body: str, config: ComplianceConfig) -> bool:
-    return (
-        _FOOTER_MARKER in body
-        and config.postal_address in body
-        and config.unsubscribe in body
-    )
+    return config.footer() in body
 
 
 def ensure_compliant(body: str, config: ComplianceConfig) -> ComplianceResult:
@@ -91,7 +100,10 @@ class LIARecord:
     created_at: datetime = field(default_factory=utc_now)
 
     def is_complete(self) -> bool:
-        return all([self.campaign, self.purpose, self.necessity, self.balancing])
+        return all(
+            value.strip()
+            for value in [self.campaign, self.purpose, self.necessity, self.balancing]
+        )
 
 
 @dataclass
@@ -110,7 +122,10 @@ class SendPolicy:
     def can_send(self, now: datetime | None = None) -> bool:
         now = now or utc_now()
         self._prune(now)
-        return len(self._sends) < self.max_per_window
+        return len(self._sends) < self.max_per_window and (
+            not self._sends
+            or (now - max(self._sends)).total_seconds() >= self.min_gap_seconds
+        )
 
     def record(self, now: datetime | None = None) -> None:
         now = now or utc_now()

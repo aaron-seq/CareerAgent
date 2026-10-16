@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 from core import facade
 from core.contact_finder import ContactFinder
 from core.cv_parser import CVParser
-from core.gmail_drafts import GmailDraftClient
 from core.job_finder import JobFinder
 
 # Core imports
@@ -94,7 +93,9 @@ init_session_state()
 try:
     facade.init_persistence()
 except Exception:  # pragma: no cover - defensive UI guard
-    pass
+    st.warning(
+        "The database could not be opened. Check its location and permissions before saving."
+    )
 
 
 # Sidebar configuration
@@ -154,18 +155,37 @@ def render_sidebar():
                 or GROQ_DEFAULT_MODEL
             )
             st.caption(
-                "Prompts leave this machine. CLAUDE.md reserves cloud "
-                "inference for non-PII work - your CV is PII."
+                "CV text and other prompts are sent to Groq when you use this provider."
             )
         else:
+            configured_model = os.getenv("OLLAMA_MODEL") or "llama3.1:8b"
+            models = list(
+                dict.fromkeys(
+                    [
+                        configured_model,
+                        "llama3.1:8b",
+                        "llama3.2:3b",
+                        "qwen2.5:7b",
+                        "mistral:7b",
+                    ]
+                )
+            )
             model = (
                 st.selectbox(
                     "Model",
-                    ["llama3.1:8b", "llama3.2:3b", "qwen2.5:7b", "mistral:7b"],
+                    models,
                     key="selected_model",
                 )
-                or "llama3.1:8b"
+                or configured_model
             )
+
+        connected = st.session_state.llm_client
+        if connected is not None and (
+            isinstance(connected, CloudLLMClient) != use_cloud
+            or connected.model != model
+        ):
+            # The displayed provider must describe the client receiving CV data.
+            st.session_state.llm_client = None
 
         if st.button("Initialize LLM", use_container_width=True):
             target = "Groq" if use_cloud else "Ollama"
@@ -178,15 +198,17 @@ def render_sidebar():
                     else:
                         llm = LocalLLMClient(model=model)
 
-                    if llm.check_connection():
+                    if llm.check_connection() and llm.check_model_availability(model):
                         st.session_state.llm_client = llm
                         st.success(f"Connected to {model}")
                     elif use_cloud:
                         st.error(
-                            "Groq unreachable or key rejected. Check GROQ_API_KEY."
+                            "Groq or the selected model is unavailable. Check GROQ_API_KEY and the model."
                         )
                     else:
-                        st.error("Ollama not running. Run `ollama serve`")
+                        st.error(
+                            f"Ollama or the selected model is unavailable. Start Ollama and run `ollama pull {model}`."
+                        )
                 except Exception as e:
                     st.error(f"Error: {e}")
 
@@ -306,16 +328,10 @@ def page_onboarding():
                         parser = CVParser(st.session_state.llm_client)
 
                         if cv_file:
-                            # Save temp file
-                            temp_path = f"temp_cv_{cv_file.name}"
-                            with open(temp_path, "wb") as f:
-                                f.write(cv_file.getbuffer())
-
                             progress_bar.progress(
                                 40, text="Extracting text from PDF..."
                             )
-                            profile = parser.parse_pdf(temp_path)
-                            os.remove(temp_path)
+                            profile = parser.parse_pdf_bytes(cv_file.getbuffer())
                         else:
                             progress_bar.progress(
                                 40, text="Analyzing text structure..."
@@ -332,6 +348,9 @@ def page_onboarding():
                             st.session_state.cv_id = facade.persist_cv(profile)
                         except Exception:
                             st.session_state.cv_id = None
+                            st.warning(
+                                "Your CV was parsed but could not be saved to the database. Check storage access before continuing."
+                            )
                         st.success(
                             f"✅ CV parsed successfully! Found {len(profile.experiences)} experiences."
                         )
@@ -1162,31 +1181,33 @@ def page_draft_studio():
                     value="Relevant B2B job application to a hiring contact.",
                 )
 
-            st.session_state.compliance_ok = False
+            cfg = ComplianceConfig(
+                sender_name=sender_name,
+                sender_email=sender_email,
+                postal_address=postal_address,
+                unsubscribe=unsubscribe,
+            )
+            lia = LIARecord(
+                campaign="outreach",
+                purpose=lia_purpose,
+                necessity="Direct role-specific contact.",
+                balancing="Business address + opt-out honored.",
+            )
+            gate_draft = EmailDraft.model_validate(
+                {
+                    **draft.model_dump(),
+                    "subject": subject,
+                    "body": body,
+                    "recipient_email": recipient_email,
+                    "recipient_name": recipient_name,
+                    "company": current_job.company,
+                }
+            )
             if st.button("Run compliance check"):
                 try:
-                    cfg = ComplianceConfig(
-                        sender_name=sender_name,
-                        sender_email=sender_email,
-                        postal_address=postal_address,
-                        unsubscribe=unsubscribe,
-                    )
-                    lia = LIARecord(
-                        campaign="outreach",
-                        purpose=lia_purpose,
-                        necessity="Direct role-specific contact.",
-                        balancing="Business address + opt-out honored.",
-                    )
-                    gate_draft = EmailDraft(
-                        subject=subject,
-                        body=body,
-                        recipient_email=recipient_email,
-                        company=current_job.company,
-                    )
                     decision = facade.compliance_gate(gate_draft, cfg, lia)
                     if decision.allowed:
-                        st.session_state.compliance_ok = True
-                        st.success("Compliant. A footer was added:")
+                        st.success("Compliance preview passed:")
                         st.code(decision.body)
                     else:
                         st.error(f"Blocked: {decision.reason}")
@@ -1202,25 +1223,19 @@ def page_draft_studio():
                 if st.button("Create Gmail Draft", use_container_width=True):
                     if not recipient_email:
                         st.error("Please enter recipient email")
-                    elif not st.session_state.get("compliance_ok"):
-                        st.error("Run the compliance check first (required to send).")
                     else:
                         with st.spinner("Creating Gmail draft..."):
                             try:
-                                if not st.session_state.gmail_client:
-                                    gmail = GmailDraftClient()
-                                    gmail.authenticate()
-                                    st.session_state.gmail_client = gmail
-
-                                draft_id = st.session_state.gmail_client.create_draft(
-                                    to=recipient_email, subject=subject, body=body
+                                prepared = facade.create_gmail_draft(
+                                    gate_draft,
+                                    cfg,
+                                    lia,
+                                    gmail_client=st.session_state.gmail_client,
                                 )
-
-                                draft.gmail_draft_id = draft_id
-                                st.session_state.draft_history.append(draft)
-                                st.session_state.storage.save_email_draft(draft)
-
-                                st.success(f"Draft created: {draft_id}")
+                                st.session_state.current_draft = prepared
+                                st.session_state.draft_history.append(prepared)
+                                st.session_state.storage.save_email_draft(prepared)
+                                st.success(f"Draft created: {prepared.gmail_draft_id}")
                             except Exception as e:
                                 st.error(f"Gmail Error: {e}")
 
@@ -1255,6 +1270,9 @@ def page_export():
     """Export screen"""
     st.title("Export & Logs")
 
+    st.caption(
+        "Downloaded exports contain readable personal data. Share and store them carefully."
+    )
     st.subheader("Draft History")
 
     drafts = st.session_state.storage.list_email_drafts()

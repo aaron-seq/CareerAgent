@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from ..models import CVProfile, JobPosting
 from ..prompts import COVER_LETTER_PROMPT
@@ -23,7 +24,11 @@ from .tailor import FabricationError
 # A claim like "reduced downtime by 70%" or "2100+ samples". Bare years
 # (2021-2025) and small ordinals are excluded: they are rarely achievement
 # claims and would drown the check in false positives.
-_METRIC = re.compile(r"\b\d[\d,.]*\s*(?:%|percent|x\b|\+)", re.IGNORECASE)
+_METRIC = re.compile(
+    r"(?<![\w.,])(?P<number>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
+    r"\s*(?P<unit>%|percent\b|x\b|\+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -48,39 +53,45 @@ def _cv_corpus(cv: CVProfile) -> str:
     return "\n".join(p for p in parts if p)
 
 
-def _normalize_number(token: str) -> str:
-    """Strip to digits only -- the same reduction applied to a letter's claim
-    below, so both sides compare on the same footing.
-
-    Previously this only stripped commas/whitespace and kept the decimal
-    point, while the claim side (``digits`` below) stripped every non-digit
-    character. A CV metric like "99.5%" therefore stayed "99.5" in the
-    supported corpus while the identical number quoted back in a letter
-    reduced to "995" -- never a substring of "99.5" because of the period in
-    between. Any decimal-point metric was guaranteed to false-trigger the
-    fabrication guard even when quoted verbatim from the CV (confirmed live:
-    6 of 10 real Groq-generated letters were rejected over a true "99.5%"
-    CV metric). Digit-only on both sides restores the "matched on digits
-    alone" contract this function's docstring already promised.
-    """
-    return re.sub(r"[^\d]", "", token)
+def _metric_key(token: str) -> tuple[Decimal, str]:
+    """Keep numeric boundaries, decimal places, and units intact."""
+    match = _METRIC.fullmatch(token)
+    assert match is not None  # tokens only come from _METRIC matches
+    number = match.group("number")
+    unit = match.group("unit").lower()
+    return Decimal(number.replace(",", "")), "%" if unit == "percent" else unit
 
 
 def verify_grounded(cv: CVProfile, job: JobPosting, letter: str) -> list[str]:
     """Return metric claims in ``letter`` that the CV does not support.
 
-    Numbers are matched on digits alone, so "70%" in the letter is satisfied
-    by "70%" anywhere in the CV. The job's own text counts as a valid source
-    too -- quoting the posting's team size back at them is not a claim about
-    the candidate.
+    Candidate metrics must occur as complete metrics in the CV. Job metrics
+    may only be quoted in explicitly job-attributed sentences without a
+    first-person candidate claim, and only from text actually sent to the LLM.
+    This is a conservative numeric guard, not semantic proof of every claim.
     """
-    supported = _normalize_number(_cv_corpus(cv) + "\n" + (job.description or ""))
+    supported = {
+        _metric_key(match.group(0)) for match in _METRIC.finditer(_cv_corpus(cv))
+    }
+    job_metrics = {
+        _metric_key(match.group(0))
+        for match in _METRIC.finditer((job.description or "")[:3000])
+    }
     unsupported = []
-    for m in _METRIC.finditer(letter):
-        claim = m.group(0)
-        digits = re.sub(r"[^\d]", "", claim)
-        if digits and digits not in supported:
-            unsupported.append(claim.strip())
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", letter):
+        attributed = re.search(
+            r"\b(?:your|the (?:job|role|position|posting|team))\b",
+            sentence,
+            re.IGNORECASE,
+        )
+        candidate_claim = re.search(r"\b(?:I|my|we|our)\b", sentence, re.IGNORECASE)
+        for match in _METRIC.finditer(sentence):
+            claim = match.group(0)
+            key = _metric_key(claim)
+            if key not in supported and not (
+                attributed and not candidate_claim and key in job_metrics
+            ):
+                unsupported.append(claim.strip())
     return unsupported
 
 

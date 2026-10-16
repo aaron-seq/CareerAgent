@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
 # Set working directory
@@ -6,20 +7,25 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
-    build-essential \
+    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=secret,id=pip_ca_bundle \
+    if [ -f /run/secrets/pip_ca_bundle ]; then export PIP_CERT=/run/secrets/pip_ca_bundle; fi; \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+RUN useradd --create-home --uid 1000 careeragent
+
+# Secrets and local data are excluded by .dockerignore.
+COPY --chown=careeragent:careeragent . .
 
 # Create data directory
-RUN mkdir -p careeragent_data
+RUN mkdir -p careeragent_data && chown -R careeragent:careeragent /app
+USER careeragent
 
 # Expose Streamlit port
 EXPOSE 8501

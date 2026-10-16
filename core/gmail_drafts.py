@@ -5,7 +5,9 @@ Uses OAuth2 for authentication, never sends emails automatically
 
 import base64
 import os
+import tempfile
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Optional
 
 from google.auth.transport.requests import Request
@@ -21,10 +23,14 @@ class GmailDraftClient:
     """Gmail API client for draft creation only"""
 
     def __init__(
-        self, credentials_path: str = "credentials.json", token_path: str = "token.json"
+        self, credentials_path: Optional[str] = None, token_path: Optional[str] = None
     ):
-        self.credentials_path = credentials_path
-        self.token_path = token_path
+        self.credentials_path = (
+            credentials_path
+            or os.getenv("GMAIL_CREDENTIALS_PATH")
+            or "credentials.json"
+        )
+        self.token_path = token_path or os.getenv("GMAIL_TOKEN_PATH") or "token.json"
         self.service = None
 
     def authenticate(self) -> bool:
@@ -60,8 +66,20 @@ class GmailDraftClient:
                 creds = flow.run_local_server(port=0)
 
             # Save credentials
-            with open(self.token_path, "w") as token:
+            token_path = Path(self.token_path)
+            with tempfile.NamedTemporaryFile(
+                dir=token_path.parent,
+                prefix=".careeragent-oauth-",
+                mode="w",
+                encoding="utf-8",
+                delete=False,
+            ) as token:
+                temporary = Path(token.name)
                 token.write(creds.to_json())
+            try:
+                temporary.replace(token_path)
+            finally:
+                temporary.unlink(missing_ok=True)
 
         try:
             self.service = build("gmail", "v1", credentials=creds)

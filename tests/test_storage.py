@@ -47,7 +47,12 @@ class TestLocalStorage:
         # Verify contents
         with open(filepath, "r") as f:
             data = json.load(f)
-        assert data["subject"] == "Test Subject"
+        assert data["format"] == "careeragent.fernet.v1"
+        assert "Test Subject" not in json.dumps(data)
+        assert (
+            temp_storage.load_email_draft(os.path.basename(filepath)).subject
+            == "Test Subject"
+        )
 
     def test_save_cv_profile(self, temp_storage):
         """Test saving CV profile"""

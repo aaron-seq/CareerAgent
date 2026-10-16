@@ -4,16 +4,10 @@ Living status log. Update the top block at the end of every working session.
 Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARCH.md`.
 
 ## Current status
-- **Current phase:** Phases 0–10 **complete**. Post-Phase-10 hardening ongoing.
-- **Last updated:** 2026-09-11
-- **Next action:** **Decide on SECURITY_AUDIT C-1** (real CV PII in public git
-  history — needs `git filter-repo` + force-push, owner decision). Then the
-  outreach-compliance findings F-1/F-2/F-3, which breach guardrail 5. Then the
-  older job-matching keyword-extraction fix (see 2026-07-27 entry).
-- **Blockers:** C-1 is live PII exposure on a public repo and is unresolved. This session ran with live network access (real Remotive
-  API pulls, real Groq LLM calls) for the first time — see log below. Earlier
-  entries' "build env can't reach external services" note no longer applies
-  to LLM calls or job-board APIs; still true for pgvector.
+- **Current phase:** Phases 0–10 have implementations; production hardening remains ongoing.
+- **Last updated:** 2026-10-15
+- **Next action:** Owner decision on historical PII [#38](https://github.com/aaron-seq/CareerAgent/issues/38), then the hosted-fetch and metadata-encryption prerequisites in `docs/SECURITY_AUDIT.md`. Continue the existing matching, attribution, pagination, dependency, and CI backlog.
+- **Blockers:** Public-history PII remains unresolved. Actual model inference, Gmail OAuth/delivery, Postgres locking, and real-browser extension behavior remain unverified in this environment. Local job-board access works; some model/log download destinations remain blocked.
 
 ## Verification level per phase
 - **Genuinely run + tested here:** P1 data layer, P4 dedup/scoring, P5 resume
@@ -25,9 +19,51 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **204 Python tests + 11 JS tests green; `ruff` + `ruff format` clean.**
+Totals: **377 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
+Core coverage is **92.48%**. Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-15 — Boundary audit and targeted privacy/reliability fixes
+
+- Audited implementation/history and all 21 open GitHub issues; zero open PRs
+  needed consolidation. Restored a current `docs/SECURITY_AUDIT.md` with explicit
+  evidence, residual risks, benchmark, migration, and rollback guidance.
+- Moved Gmail creation behind the facade so Streamlit reruns cannot discard
+  approval or the compliant footer. Recheck current recipient/content/opt-out;
+  persist successful exports and serialize quota checks. The quota survives
+  request/service recreation, and simultaneous SQLite requests cannot both
+  consume the same minimum-gap allowance. Postgres locking is not live-tested.
+- Required MX verification now fails closed on unknown status; distinguish DNS
+  timeout from missing/null MX. Validate complete sender/footer/opt-out fields.
+  Added dnspython to implement the existing DNS requirement.
+- Retain a private local key across restarts; encrypt JSON artifacts, sanitize
+  and uniquely allocate filenames, contain reads, and support explicit atomic
+  legacy migration. Keep readable exports and warn at export. OAuth tokens are
+  privately written, and credentials/tokens/temp key material are ignored.
+- Reject failed/empty CV extraction; always clean private temporary uploads.
+  Resume tailoring only reorders unchanged candidate facts. Cover-letter metric
+  checks no longer join unrelated digits or conflate decimals/units, trust unseen
+  JD suffixes, or accept candidate claims solely from job metrics. Free prose
+  still needs human review.
+- Disconnect active inference on provider/model selection changes, honor Ollama
+  deployment settings, and reject unavailable models at initialization.
+- Harden local Docker deployment: non-root, excluded secrets/data, service-name
+  routing, loopback publication, persistent DB/key, optional Gmail credentials,
+  and optional trusted CA build-secret support. Container UI/imports and
+  encrypted continuity across replacement were verified.
+- Empty `DATABASE_URL` now selects SQLite, fixing a local digest-workflow
+  reproduction. The latest remote digest runs still fail; their logs were
+  inaccessible, so no remote repair is claimed.
+- **Validation:** 338 → 377 Python tests, 18 JS tests, lint/format, SQLite
+  migrations, Compose config, Docker build and functional checks pass. Coverage
+  92.07% → 92.48%. Mypy remains advisory (32 errors versus 33 baseline with
+  Python 3.11 target). Existing PyPDF2 deprecation and deliberate SQLModel-reload
+  warnings are documented rather than suppressed.
+- **Performance baseline:** 200 encrypted 8,000-byte-body save/load cycles;
+  save p50/p95 0.135/0.296 ms, load p50/p95 0.153/0.280 ms on this shared machine.
+  No end-to-end speedup or production load claim.
+- **Decision:** ADR 0006 records persistent key/artifact and gated-export semantics.
 
 ### 2026-10-14 — Fresh installs broke 56 tests: sqlmodel 0.0.45 tz change
 
