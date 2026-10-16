@@ -128,8 +128,14 @@ def saved_cv_profiles(limit: int = 20) -> list[dict[str, Any]]:
             .order_by(col(CVProfileRow.created_at).desc(), col(CVProfileRow.id).desc())
             .limit(limit)
         ).all()
+        # ``saved_label`` is for people; ``created_at`` stays ISO for machines.
         return [
-            {"id": cv_id, "name": name, "created_at": created_at.isoformat()}
+            {
+                "id": cv_id,
+                "name": name,
+                "created_at": created_at.isoformat(),
+                "saved_label": created_at.strftime("%d %b %Y, %H:%M UTC"),
+            }
             for cv_id, name, created_at in rows
         ]
 
