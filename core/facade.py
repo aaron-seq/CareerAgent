@@ -78,10 +78,12 @@ from .outreach import (
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
 from .resume import render_markdown, render_pdf, tailor_resume, to_json_resume
+from .storage import LocalStorage
 from .tracking import (
     BlacklistedCompanyError,
     DuplicateApplicationError,
     TrackingService,
+    follow_up_applies,
 )
 
 _ATS_SOURCES = {
@@ -658,7 +660,11 @@ def _application_card(app, job, as_of: datetime) -> dict[str, Any]:
     # Rows reloaded from the DB are aware already; an in-memory row or a
     # caller's naive ``as_of`` is coerced so the arithmetic can't mix the two.
     as_of = ensure_utc(as_of)
-    due = ensure_utc(app.next_follow_up_at) if app.next_follow_up_at else None
+    due = (
+        ensure_utc(app.next_follow_up_at)
+        if app.next_follow_up_at and follow_up_applies(app.status)
+        else None
+    )
     applied = ensure_utc(app.applied_at) if app.applied_at else None
     return {
         "application_id": app.id,
@@ -740,6 +746,63 @@ def set_application_notes(application_id: int, notes: str) -> dict[str, Any]:
         app.updated_at = utc_now()
         session.add(app)
         return {"ok": True}
+
+
+def export_all_data(storage: LocalStorage) -> str:
+    """Build the "Export All Data (ZIP)" bundle and return its path.
+
+    The user's own data on their own machine, readable: local artifacts
+    (drafts, job-posting backups, markdown exports) plus what lives in the
+    encrypted DB -- every pipeline application with its notes, and each
+    saved CV profile -- decrypted into JSON. Mirrors the existing
+    readable-export design of :meth:`LocalStorage.create_export_zip`.
+    """
+    from .db.tables import ApplicationRow
+
+    init_persistence()
+    extra: dict[str, Any] = {}
+    with get_session() as session:
+        jobs = JobRepository(session)
+        applications = []
+        for app in session.exec(
+            select(ApplicationRow).order_by(col(ApplicationRow.id))
+        ):
+            job = jobs.get(app.job_id) if app.job_id else None
+            due = app.next_follow_up_at if follow_up_applies(app.status) else None
+            applications.append(
+                {
+                    "application_id": app.id,
+                    "title": job.title if job else None,
+                    "company": job.company_name if job else None,
+                    "location": job.location if job else None,
+                    "url": job.url if job else None,
+                    "status": app.status.value,
+                    "notes": app.notes or "",
+                    "applied_at": _iso(app.applied_at),
+                    "next_follow_up": _iso(due),
+                    "created_at": _iso(app.created_at),
+                    "updated_at": _iso(app.updated_at),
+                }
+            )
+        extra["pipeline/applications.json"] = applications
+
+        cv_ids = session.exec(
+            select(CVProfileRow.id)
+            .where(col(CVProfileRow.payload).is_not(None))
+            .order_by(col(CVProfileRow.id))
+        ).all()
+        cvs = CVRepository(session)
+        for cv_id in cv_ids:
+            profile = cvs.get(cv_id)
+            if profile is not None:
+                extra[f"cv_profiles/saved_cv_{cv_id}.json"] = profile.model_dump(
+                    mode="json"
+                )
+    return storage.create_export_zip(extra=extra)
+
+
+def _iso(value: Optional[datetime]) -> Optional[str]:
+    return ensure_utc(value).isoformat() if value else None
 
 
 def funnel() -> dict[str, Any]:

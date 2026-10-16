@@ -173,6 +173,39 @@ def test_tailor_never_fabricates():
     assert_no_fabrication(cv, tailored)  # must not raise
 
 
+def test_tailor_gaps_are_real_skill_gaps_not_prose():
+    """Real-user repro: salary figures, years, filler verbs and words the CV
+    already contains ("data", "engineer") must not be reported as gaps."""
+    cv = CVProfile(
+        name="Dana",
+        skills=["Python", "SQL"],
+        experiences=[
+            Experience(
+                title="Data engineer",
+                company="Acme",
+                duration="2021-2024",
+                achievements=["Maintained reporting jobs"],
+                technologies=["Python"],
+            )
+        ],
+    )
+    job = JobPosting(
+        title="Data Engineer",
+        company="Beta",
+        description=(
+            "$110k–$140k. 3+ years with AWS and dbt. You will build data "
+            "pipelines in a friendly team. We are hiring now!"
+        ),
+    )
+    _, report = tailor_resume(cv, job, embedder=HashingEmbedder())
+    assert {"aws", "dbt"} <= set(report.gaps)
+    for junk in ("110k", "140k", "3+", "build", "friendly", "hiring", "now"):
+        assert junk not in report.gaps
+    # Already on the CV (in the job title) -- never a gap.
+    assert "data" not in report.gaps
+    assert "engineer" not in report.gaps
+
+
 def test_assert_no_fabrication_catches_injected_skill():
     cv = _sample_cv()
     bad = cv.model_copy(update={"skills": cv.skills + ["Rust"]})

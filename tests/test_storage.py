@@ -149,3 +149,45 @@ class TestLocalStorage:
 
         assert os.path.exists(zip_path)
         assert zip_path.endswith(".zip")
+
+    def test_saving_the_same_job_twice_keeps_one_file(self, temp_storage):
+        """Real-user repro: the export held the same posting twice because
+        every save_job_posting call minted a new random file."""
+        job = JobPosting(title="Data Engineer", company="Beta", location="Remote")
+        first = temp_storage.save_job_posting(job)
+        # Same posting re-selected later carries a different score.
+        second = temp_storage.save_job_posting(
+            job.model_copy(update={"relevance_score": 0.8})
+        )
+        assert first == second
+        files = os.listdir(os.path.join(temp_storage.storage_dir, "job_postings"))
+        assert len(files) == 1
+        other = temp_storage.save_job_posting(
+            JobPosting(title="Analyst", company="Beta", location="Remote")
+        )
+        assert other != first
+
+    def test_export_zip_skips_legacy_duplicate_job_files(self, temp_storage):
+        from zipfile import ZipFile
+
+        job = JobPosting(title="Data Engineer", company="Beta")
+        # Two files for one posting, as written before saves were idempotent.
+        temp_storage._save_json("job_postings", "job_Beta", job.model_dump())
+        temp_storage._save_json("job_postings", "job_Beta", job.model_dump())
+        with ZipFile(temp_storage.create_export_zip()) as archive:
+            jobs = [n for n in archive.namelist() if n.startswith("job_postings/")]
+        assert len(jobs) == 1
+
+    def test_export_zip_includes_extra_entries_and_manifest(self, temp_storage):
+        from zipfile import ZipFile
+
+        zip_path = temp_storage.create_export_zip(
+            extra={"pipeline/applications.json": [{"status": "offer"}]}
+        )
+        with ZipFile(zip_path) as archive:
+            names = archive.namelist()
+            apps = json.loads(archive.read("pipeline/applications.json"))
+            manifest = archive.read("README.txt").decode()
+        assert apps == [{"status": "offer"}]
+        assert "pipeline/applications.json" in manifest
+        assert "README.txt" in names
