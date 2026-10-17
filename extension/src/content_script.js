@@ -201,7 +201,15 @@ function fillOnce(profile) {
     });
 
   document.querySelectorAll('select').forEach((el) => {
-    if (el.disabled || el.selectedIndex > 0) return; // already answered
+    if (el.disabled) return;
+    const selected = (el.options || [])[el.selectedIndex];
+    // A real first option is still an answer. Fill only an absent selection
+    // or an explicit non-answer placeholder, never an existing choice.
+    if (selected) {
+      const text = (selected.textContent || '').trim();
+      const placeholder = selected.value === '' || /^(?:please )?(?:select|choose)(?:\.\.\.| (?:an? )?(?:option|answer)| one)?[.!]?$/i.test(text);
+      if (!placeholder) return;
+    }
     fillSelect(el, result);
   });
 

@@ -55,7 +55,11 @@ class WorkAuthorization(BaseModel):
     visa_status: Optional[str] = None  # free text, e.g. "H-1B", "Skilled Worker"
 
     def is_complete(self) -> bool:
-        return self.authorized is not None and self.requires_sponsorship is not None
+        return (
+            bool(self.country and self.country.strip())
+            and self.authorized is not None
+            and self.requires_sponsorship is not None
+        )
 
 
 class Compensation(BaseModel):
@@ -202,7 +206,7 @@ def compute_completeness(
             c.work_authorization.is_complete(),
             12,
             "The most common blocking question on US and UK forms; autofill "
-            "leaves it blank until you answer it.",
+            "leaves it blank until you supply both answers and their country.",
             "Eligibility",
         ),
         ChecklistItem(

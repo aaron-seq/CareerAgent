@@ -52,6 +52,10 @@ function parseAnswers(raw) {
   mapping.BOOLEAN_ANSWER_KEYS.forEach((k) => {
     if (typeof raw[k] === 'boolean') answers[k] = raw[k];
   });
+  const country = raw[mapping.AUTHORIZATION_COUNTRY_KEY];
+  if (typeof country === 'string' && country.trim()) {
+    answers[mapping.AUTHORIZATION_COUNTRY_KEY] = country.trim().slice(0, 100);
+  }
   const consent = raw[mapping.CONSENT_KEY] === true;
   const textKeys = consent
     ? [...mapping.TEXT_ANSWER_KEYS, ...mapping.DEMOGRAPHIC_ANSWER_KEYS]
@@ -96,7 +100,9 @@ function parseImport(text) {
 function importSummary(profile) {
   const parts = ['Imported from CareerAgent'];
   const count = profile.answers
-    ? Object.keys(profile.answers).filter((k) => k !== mapping.CONSENT_KEY).length
+    ? Object.keys(profile.answers).filter(
+        (k) => k !== mapping.CONSENT_KEY && k !== mapping.AUTHORIZATION_COUNTRY_KEY
+      ).length
     : 0;
   if (count) parts.push(`${count} screening answer(s)`);
   if (profile.resume) parts.push(`resume ${profile.resume.filename}`);

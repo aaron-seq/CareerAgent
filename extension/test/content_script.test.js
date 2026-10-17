@@ -101,6 +101,7 @@ const PROFILE = {
   email: 'ada@example.com',
   location: 'London, UK',
   answers: {
+    work_authorization_country: 'United Kingdom',
     work_authorized: true,
     requires_sponsorship: false,
     cover_note: 'I build reliable data systems.',
@@ -114,7 +115,7 @@ const PROFILE = {
 };
 
 function form() {
-  const sponsor = fieldset('Will you now or in the future require visa sponsorship?');
+  const sponsor = fieldset('Will you now or in the future require visa sponsorship in the UK?');
   const relocate = fieldset('Are you willing to relocate?');
   const radio = (name, value, fs) =>
     new FakeEl('input', { type: 'radio', name, value }, { label: value, fieldset: fs, props: { checked: false } });
@@ -213,4 +214,35 @@ test('popup and content scripts share field_mapping.js without global clashes', 
   vm.runInContext(read('field_mapping.js'), ctx);
   vm.runInContext(read('popup.js'), ctx);
   vm.runInContext(read('content_script.js'), ctx);
+});
+
+
+test('a real first select option is never overwritten', () => {
+  const chosen = new FakeEl('select', {}, {
+    label: 'Are you authorized to work in the UK?',
+    props: { options: [{ textContent: 'No', value: 'no' }, { textContent: 'Yes', value: 'yes' }], selectedIndex: 0 },
+  });
+  const result = load([chosen])(PROFILE);
+  assert.equal(chosen.selectedIndex, 0);
+  assert.equal(result.answered, 0);
+  assert.deepEqual(chosen.events, []);
+});
+
+test('unsafe eligibility questions are flagged without selecting an answer', () => {
+  for (const label of [
+    'Are you authorized to work in the United States?',
+    'Are you authorized to work in the UK without visa sponsorship?',
+    'Do you not require sponsorship in the UK?',
+    'Are you authorized to work?',
+  ]) {
+    const select = new FakeEl('select', {}, {
+      label,
+      props: { options: [{ textContent: 'Select...', value: '' }, { textContent: 'Yes', value: 'yes' }, { textContent: 'No', value: 'no' }], selectedIndex: 0 },
+    });
+    const result = load([select])(PROFILE);
+    assert.equal(select.selectedIndex, 0, label);
+    assert.equal(result.answered, 0, label);
+    assert.ok(result.needsYou.includes(label));
+    assert.match(select.style.outline, /#f59e0b/);
+  }
 });

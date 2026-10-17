@@ -37,7 +37,11 @@ def _full_candidate() -> CandidateProfile:
     return CandidateProfile.model_validate(
         {
             "location": "London, UK",
-            "work_authorization": {"authorized": True, "requires_sponsorship": False},
+            "work_authorization": {
+                "country": "United Kingdom",
+                "authorized": True,
+                "requires_sponsorship": False,
+            },
             "compensation": {"minimum": 90000, "currency": "GBP"},
             "availability": {"notice_period_weeks": 4},
             "preferences": {
@@ -57,10 +61,18 @@ def test_every_answer_defaults_to_unknown_not_no():
     assert c.demographics.share_on_applications is False
 
 
-def test_work_authorization_needs_both_answers():
+def test_work_authorization_needs_country_and_both_answers():
     assert not WorkAuthorization(authorized=True).is_complete()
     # False is a real answer, distinct from unknown.
-    assert WorkAuthorization(authorized=False, requires_sponsorship=False).is_complete()
+    assert not WorkAuthorization(
+        authorized=False, requires_sponsorship=False
+    ).is_complete()
+    assert not WorkAuthorization(
+        country="   ", authorized=True, requires_sponsorship=False
+    ).is_complete()
+    assert WorkAuthorization(
+        country="United Kingdom", authorized=False, requires_sponsorship=False
+    ).is_complete()
 
 
 @pytest.mark.parametrize(

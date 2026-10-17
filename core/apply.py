@@ -55,6 +55,8 @@ DEMOGRAPHIC_ANSWER_KEYS = (
 )
 #: Marker the extension requires before it will use any demographic answer.
 CONSENT_KEY = "share_demographics"
+#: Country context for eligibility answers; never inferred from location/visa.
+AUTHORIZATION_COUNTRY_KEY = "work_authorization_country"
 
 #: Upper bound on an embedded resume, so a stray file can't blow the
 #: extension's ``chrome.storage.local`` quota. Mirrors ``MAX_RESUME_B64``.
@@ -131,6 +133,8 @@ def build_answers(candidate: CandidateProfile) -> dict[str, Any]:
         answers["requires_sponsorship"] = auth.requires_sponsorship
     if auth.visa_status:
         answers["visa_status"] = auth.visa_status
+    if answers and auth.country and auth.country.strip():
+        answers[AUTHORIZATION_COUNTRY_KEY] = auth.country.strip()
 
     comp = candidate.compensation
     if comp.minimum is not None:

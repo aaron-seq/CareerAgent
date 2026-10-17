@@ -11,6 +11,7 @@ import pytest
 
 from core import facade
 from core.apply import (
+    AUTHORIZATION_COUNTRY_KEY,
     AUTOFILL_HOSTS,
     BOOLEAN_ANSWER_KEYS,
     CONSENT_KEY,
@@ -41,6 +42,7 @@ CANDIDATE = CandidateProfile.model_validate(
         "location": "London, UK",
         "websites": ["https://ada.dev"],
         "work_authorization": {
+            "country": "United Kingdom",
             "authorized": True,
             "requires_sponsorship": False,
             "visa_status": "British citizen",
@@ -173,6 +175,7 @@ def test_every_answer_key_is_understood_by_the_extension():
         *TEXT_ANSWER_KEYS,
         *DEMOGRAPHIC_ANSWER_KEYS,
         CONSENT_KEY,
+        AUTHORIZATION_COUNTRY_KEY,
     ):
         assert f"'{key}'" in source, key
 
@@ -336,3 +339,24 @@ def test_mark_applied_respects_the_blacklist(temp_db):
     facade.blacklist_company("Acme")
     result = facade.mark_applied(job_id)
     assert result["ok"] is False and "blacklisted" in result["error"]
+
+
+def test_eligibility_export_preserves_candidate_country_not_location():
+    candidate = CandidateProfile.model_validate(
+        {
+            "location": "Boston, United States",
+            "work_authorization": {
+                "country": "  United Kingdom  ",
+                "authorized": True,
+                "requires_sponsorship": False,
+            },
+        }
+    )
+    answers = build_answers(candidate)
+    assert answers[AUTHORIZATION_COUNTRY_KEY] == "United Kingdom"
+    assert answers["work_authorized"] is True
+    assert answers["requires_sponsorship"] is False
+    candidate.work_authorization.country = None
+    assert AUTHORIZATION_COUNTRY_KEY not in build_answers(candidate)
+    candidate.work_authorization.country = "   "
+    assert AUTHORIZATION_COUNTRY_KEY not in build_answers(candidate)

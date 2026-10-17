@@ -66,7 +66,7 @@ test('the app-exported candidate profile imports intact', () => {
   assert.equal(profile.location, 'London, UK');
   assert.equal(profile.portfolio, 'https://ada.dev');
   // ...and the imported answers drive the question filler.
-  assert.equal(answerFor({ label: 'Do you need visa sponsorship?' }, profile).value, false);
+  assert.equal(answerFor({ label: 'Do you need visa sponsorship in the UK?' }, profile).value, false);
   assert.equal(answerFor({ label: 'Pronouns' }, profile).value, 'she/her');
 });
 
@@ -121,4 +121,14 @@ test('status lines say what happened and hand back to the human', () => {
   assert.match(text, /1 question\(s\) need your answer/);
   assert.match(text, /submit yourself\.$/);
   assert.match(fillSummary(null), /Open the application page/);
+});
+
+
+test('authorization country metadata survives import and edits without becoming an answer count', () => {
+  const profile = parseImport(JSON.stringify({ answers: { work_authorization_country: '  United Kingdom ', work_authorized: true } }));
+  assert.equal(profile.answers.work_authorization_country, 'United Kingdom');
+  assert.equal(withEdits(profile, {}).answers.work_authorization_country, 'United Kingdom');
+  assert.match(importSummary(profile), /1 screening answer/);
+  const malformed = parseImport(JSON.stringify({ answers: { work_authorization_country: true, work_authorized: true } }));
+  assert.equal(malformed.answers.work_authorization_country, undefined);
 });

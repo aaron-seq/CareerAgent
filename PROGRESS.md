@@ -24,6 +24,20 @@ Core coverage is **92.78%**. Passing tests do not establish production readiness
 
 ## Log
 
+### 2026-10-17 — Review fixes: country-scoped, conservative eligibility autofill
+
+Work-authorization exports now preserve the candidate's country. Authorization,
+sponsorship and visa-status questions are filled only when they name the same
+recognized country and match a supported positive wording. Missing/mismatched
+countries, negation and compound questions stay blank and are flagged for the
+human. Completeness requires the authorization country. Real select choices at
+index zero are preserved, just as typed text and existing uploads are.
+
+Verified in an isolated public-source checkout: **52 Python tests** covering
+apply/candidate/migrations and **55 extension tests** passed; focused Ruff lint
+and format checks passed. Country/polarity cases use synthetic profiles; no live
+application or email was submitted.
+
 ### 2026-10-16 — Timezone-aware UTC datetimes; sqlmodel cap lifted (#37)
 
 **Problem:** sqlmodel 0.0.45+ infers a `UTCDateTime` column type that raises on

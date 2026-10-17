@@ -39,3 +39,12 @@ within `chrome.storage.local`. Roll back with `alembic downgrade cbb284f817e8`
 (drops only the answers column) and revert the feature commits; the seven-key
 export without a candidate profile is unchanged, so older extension builds keep
 working.
+
+
+Review hardening: eligibility exports carry `work_authorization_country` as
+context, never inferred from location. Browser answers require an explicitly
+matching country and a supported positive question grammar; unknown country,
+negation and compound wording abstain for human review. The country metadata
+survives popup import/edit but does not count as an answered question. Selects
+are filled only on an explicit non-answer placeholder or no selection, so a
+candidate's first-option answer is preserved.

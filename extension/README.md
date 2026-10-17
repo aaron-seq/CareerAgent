@@ -98,3 +98,12 @@ This is still manual-QA-in-CI territory, not automated: `node --test` has no
 browser/DOM, so the live-browser pass is not part of the regular test run.
 A real user still needs to load this unpacked via `chrome://extensions` to
 use it for real.
+
+
+Eligibility answers retain the country the candidate supplied. The extension
+fills authorization, sponsorship and visa-status questions only when the
+question explicitly names that same recognized country and uses supported
+positive wording. Missing countries, unfamiliar country names, inverted and
+compound questions remain outlined in amber for the candidate. A city or visa
+name never supplies missing authorization context. Existing select choices,
+including a real first option, are preserved.

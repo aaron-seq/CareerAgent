@@ -22,6 +22,7 @@ const PROFILE = {
   email: 'ada@example.com',
   location: 'London, UK',
   answers: {
+    work_authorization_country: 'US',
     work_authorized: true,
     requires_sponsorship: false,
     salary_expectation: 'GBP 90,000 per year',
@@ -78,7 +79,7 @@ test('answerFor returns typed answers from the profile', () => {
     type: 'boolean',
     value: true,
   });
-  assert.deepEqual(answerFor({ label: 'Will you require sponsorship?' }, PROFILE), {
+  assert.deepEqual(answerFor({ label: 'Will you require sponsorship in the United States?' }, PROFILE), {
     key: 'requires_sponsorship',
     type: 'boolean',
     value: false,
@@ -145,4 +146,45 @@ test('text option matching is exact, so "Male" never selects "Female"', () => {
   assert.equal(matchOptionForText(options, 'Woman'), -1);
   assert.equal(matchOptionForText(['She/Her', 'He/Him'], 'she/her'), 0);
   assert.equal(matchOptionForText(options, ''), -1);
+});
+
+
+test('eligibility answers require the explicitly matching country', () => {
+  const uk = { answers: { work_authorization_country: 'United Kingdom', work_authorized: true, requires_sponsorship: false, visa_status: 'British citizen' } };
+  for (const country of ['UK', 'GB', 'United Kingdom', 'U.K.']) {
+    assert.equal(answerFor({ label: `Are you authorized to work in the ${country}?` }, uk).value, true);
+    assert.equal(answerFor({ label: `Do you need visa sponsorship in the ${country}?` }, uk).value, false);
+  }
+  for (const label of [
+    'Are you authorized to work in the United States?',
+    'Are you authorized to work in Canada?',
+    'Are you authorized to work in Atlantis?',
+    'Are you authorized to work in this country?',
+    'Are you authorized to work?',
+    'Will you require sponsorship?',
+    'Will you require sponsorship in the US?',
+    'Current visa status in India?',
+    'Visa status',
+  ]) assert.equal(answerFor({ label }, uk), null, label);
+  assert.equal(answerFor({ label: 'Current visa status in the UK?' }, uk).value, 'British citizen');
+  const noCountry = { answers: { work_authorized: true, requires_sponsorship: false } };
+  assert.equal(answerFor({ label: 'Are you authorized to work in the UK?' }, noCountry), null);
+  const unknownCountry = { answers: { ...uk.answers, work_authorization_country: 'Atlantis' } };
+  assert.equal(answerFor({ label: 'Are you authorized to work in Atlantis?' }, unknownCountry), null);
+});
+
+test('negated and compound questions are recognized but left for the human', () => {
+  for (const label of [
+    'Are you not authorized to work in the United States?',
+    'Do you not require sponsorship in the United States?',
+    'Are you authorized to work in the United States without visa sponsorship?',
+    'Are you authorized to work without visa sponsorship?',
+    'Are you authorized to work in the US and do you require sponsorship?',
+    'Will you require sponsorship to remain authorized to work in the US?',
+    'Are you willing to relocate without assistance?',
+  ]) {
+    assert.ok(mapFieldToQuestion({ label }), label);
+    assert.equal(answerFor({ label }, PROFILE), null, label);
+  }
+  assert.equal(answerFor({ label: 'Do you not require sponsorship in the US?', name: 'work_authorized' }, PROFILE), null);
 });

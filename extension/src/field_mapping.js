@@ -173,6 +173,7 @@ const DEMOGRAPHIC_ANSWER_KEYS = [
   'disability_status',
 ];
 const CONSENT_KEY = 'share_demographics';
+const AUTHORIZATION_COUNTRY_KEY = 'work_authorization_country';
 
 // Ordered: sponsorship is checked before authorization because sponsorship
 // questions often also say "authorized", never the reverse.
@@ -265,6 +266,51 @@ function mapFieldToQuestion(field) {
   return null;
 }
 
+// Eligibility is country-specific. Only these explicit country names/codes are
+// recognized; unfamiliar countries stay for the human rather than guessing.
+const AUTHORIZATION_COUNTRIES = [
+  ['us', 'usa', 'u s', 'u s a', 'united states', 'united states of america'],
+  ['gb', 'gbr', 'uk', 'u k', 'united kingdom', 'great britain'],
+  ['ie', 'irl', 'ireland'],
+  ['ca', 'can', 'canada'],
+  ['au', 'aus', 'australia'],
+  ['nz', 'nzl', 'new zealand'],
+  ['in', 'ind', 'india'],
+  ['de', 'deu', 'germany'],
+  ['fr', 'fra', 'france'],
+  ['nl', 'nld', 'netherlands'],
+  ['sg', 'sgp', 'singapore'],
+];
+
+function authorizationCountry(value) {
+  const name = normalizeForFuzzy(value);
+  const group = AUTHORIZATION_COUNTRIES.find((aliases) => aliases.includes(name));
+  return group ? group[0] : null;
+}
+
+// An exact, positive question grammar is intentional. Substring matching is
+// enough to recognize/flag a question, never enough to decide its meaning.
+// Unknown, inverted and compound wording is left for the candidate.
+const ELIGIBILITY_QUESTION_PATTERNS = {
+  work_authorized: /^(?:are you (?:currently )?(?:legally )?(?:authorized|authorised|eligible) to work|do you (?:currently )?have (?:the )?(?:legal )?right to work|work authori[sz]ation) (?:in|for) (?:the )?(.+)$/,
+  requires_sponsorship: /^(?:will you (?:now or in the future )?(?:require|need)|do you (?:currently )?(?:require|need)) (?:(?:visa|immigration|employment visa) )?sponsorship(?: for an employment visa)? (?:in|to work in) (?:the )?(.+)$/,
+  visa_status: /^(?:current )?(?:visa|immigration) status (?:in|for) (?:the )?(.+)$/,
+};
+
+function questionCanUseAnswer(field, key, answers) {
+  // Use the actual question, not a name/id such as "work_authorized" that
+  // omits its country or reverses the visible question's polarity.
+  const question = normalizeForFuzzy(field.label || field.ariaLabel || field.placeholder);
+  if (key === 'willing_to_relocate') {
+    return /^(?:are you )?(?:willing to relocate|open to relocation|able to relocate|open to relocating)$/.test(question);
+  }
+  const pattern = ELIGIBILITY_QUESTION_PATTERNS[key];
+  if (!pattern) return true;
+  const match = pattern.exec(question);
+  const country = authorizationCountry(answers[AUTHORIZATION_COUNTRY_KEY]);
+  return Boolean(match && country && authorizationCountry(match[1]) === country);
+}
+
 /**
  * The candidate's answer to a question field, or null to leave it blank.
  * @returns {{key: string, type: 'boolean'|'text', value: boolean|string}|null}
@@ -276,6 +322,7 @@ function answerFor(field, profile) {
   if (DEMOGRAPHIC_ANSWER_KEYS.includes(question.key) && answers[CONSENT_KEY] !== true) {
     return null;
   }
+  if (!questionCanUseAnswer(field, question.key, answers)) return null;
   const value = answers[question.key];
   if (question.type === 'boolean') {
     return typeof value === 'boolean' ? { key: question.key, type: 'boolean', value } : null;
@@ -393,6 +440,7 @@ const api = {
   TEXT_ANSWER_KEYS,
   DEMOGRAPHIC_ANSWER_KEYS,
   CONSENT_KEY,
+  AUTHORIZATION_COUNTRY_KEY,
   MAX_RESUME_B64,
 };
 
