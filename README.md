@@ -16,6 +16,9 @@ A local AI-powered career assistant for personalized job outreach. This applicat
 - **Resume tailoring & cover letters**: Truthfully reorders/emphasizes your
   real CV content per job, and checks cover-letter metrics against it.
   Free-prose checks are heuristic; review generated claims before exporting.
+- **CV builder without AI**: Create or edit your own facts, check content
+  readiness, compare recognized skills against a selected job, and download
+  selectable-text PDF, Markdown, or JSON Resume.
 - **Personalized Outreach**: Generates technical, product, or impact-focused email drafts based on your CV and the job description.
 - **Quality Assurance**: Built-in validation to ensure emails meet professional standards (no fluff, concrete metrics, clear CTA).
 - **Multi-Channel Support**: Creates Gmail drafts directly or generates WhatsApp click-to-chat links.
@@ -84,9 +87,10 @@ empty profiles.
 
 1. Browse **Job Discovery** to import a company careers page, query a job board,
    or paste a description. Browsing and saving jobs work without an AI provider.
-2. In **Onboarding**, connect a model to parse a new CV, or choose **Use a saved
-   CV** to reopen one locally without parsing again. Your matches refresh when
-   you switch profiles; resume checks and downloads also work offline.
+2. In **Onboarding**, choose **Build or edit your CV** without connecting AI,
+   connect a model to parse a PDF/text CV, or choose **Use a saved CV**. Your
+   matches refresh when you switch profiles; resume checks and downloads work
+   offline.
 3. Open **Pipeline**, choose **Prepare application** on a posting, and tailor
    your resume. Connect your chosen model when you want an email or cover letter.
    Switching jobs preserves each job's edits separately.
@@ -98,6 +102,29 @@ Each imported job shows its source and original posting link. SmartRecruiters
 imports follow later pages automatically, up to 250 jobs and 20 list pages by
 default. A partial-import notice identifies where to continue with the Pipeline
 import controls; requests stop if a provider repeats a page.
+
+### Build a CV and improve its readiness
+
+In **Build or edit your CV**, enter your name and your actual skills, education,
+roles, or projects. Add work/project entries with the count controls; entirely
+blank entries are ignored. Save with **Create CV and check readiness**. Edits
+create a new saved profile, keeping the previous version available. A failed
+database save leaves your active CV unchanged.
+
+**Local CV readiness** is a 100-point content checklist: name 10, usable email
+15, skills 15, experience or projects 25, supporting details 15, education 10,
+and complete entries 10. Project-only applicants can satisfy it. The checklist
+explains each missing item; it does not verify qualifications or measure PDF
+layout. **Job skill coverage** separately reports matched/missing recognized
+skills for a selected job. Repeating or reordering facts cannot improve it.
+Neither number is an external ATS score or a hiring prediction. Add a skill
+only when you have it.
+
+PDF exports use bundled offline fonts and preserve links, technologies and
+project impact. Unsupported glyphs or scripts needing shaping/right-to-left
+layout show a clear message; Markdown and JSON remain available with the
+original text. See [the CV and live-URL validation report](docs/CV_VALIDATION.md)
+for tested behavior and limits.
 
 ## Deployment
 
@@ -167,7 +194,7 @@ for decisions.
 | `core/ingestion` | API-first job ingestion: `ats.py` company boards (Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable) + `aggregators.py`/`boards.py` (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) → canonical `JobPosting`. |
 | `core/fetching` | ATS detection (regex), JSON-LD `JobPosting` extraction, robots-respecting rate-limited fetcher (scraping fallback only). |
 | `core/matching` | Pluggable embeddings, fuzzy dedup, and **explainable** resume↔job scoring (matched/missing keywords). |
-| `core/resume` | JSON Resume interchange, ATS-friendliness linter, single-column PDF, **truthful** tailoring and cover-letter generation (both raise rather than fabricate an employer or metric). |
+| `core/resume` | Model-free CV builder, explainable content readiness and job-skill coverage, JSON Resume interchange, ATS linter, selectable PDF/Markdown, truthful tailoring and cover letters. |
 | `core/tracking` | Kanban application pipeline, follow-up reminders, duplicate-apply prevention, company blacklist. |
 | `core/outreach` | Email verification + CAN-SPAM/GDPR compliance (postal address, opt-out, per-campaign LIA), send caps, suppression list, single pre-send gate. |
 | `core/enrichment` | Salary parsing, company signals (Glassdoor/layoffs), visa-sponsor filter, ghost-job detection, filters. |
@@ -202,6 +229,16 @@ scripts.check lint test`. For Docker builds behind a trusted TLS proxy, add
 `--docker-ca-bundle /path/to/trusted-ca-bundle.pem`. CI runs the same checks,
 including Docker validation on pull requests before merge. Mypy remains advisory
 with existing errors; see [workflow validation](docs/WORKFLOW_AUDIT.md).
+
+Public API smoke checks are opt-in and stay outside default tests/CI:
+
+```bash
+python -m scripts.live_url_smoke --live --output /tmp/careeragent-live-results.json
+```
+
+This reads eight fixed public job sources with request/response bounds, without
+saving jobs or opening applications. It checks parsed fields and attribution;
+it does not establish that every returned application page is available.
 
 The digest command prints a preview without sending when `--dry-run` is set.
 Delivery requires a complete Telegram configuration or a Discord webhook.

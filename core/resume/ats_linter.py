@@ -63,8 +63,8 @@ def lint(cv: CVProfile, raw_text: str | None = None) -> list[ATSIssue]:
         issues.append(ATSIssue("error", "Missing candidate name."))
     if not cv.skills:
         issues.append(ATSIssue("warning", "No skills section detected."))
-    if not cv.experiences:
-        issues.append(ATSIssue("warning", "No work experience detected."))
+    if not cv.experiences and not cv.projects:
+        issues.append(ATSIssue("warning", "No work experience or projects detected."))
 
     text = raw_text if raw_text is not None else (cv.raw_text or "")
 

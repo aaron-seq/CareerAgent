@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -389,11 +390,230 @@ def render_stage_rail(current: str) -> None:
     )
 
 
+def _save_cv_profile(profile: CVProfile) -> bool:
+    """Activate a draft only after encrypted database persistence succeeds."""
+    try:
+        cv_id = facade.persist_cv(profile)
+    except Exception:
+        st.error(
+            "Your CV could not be saved. Check database access and try again. "
+            "Your current CV and application materials are unchanged."
+        )
+        return False
+    try:
+        st.session_state.storage.save_cv_profile(profile)
+        st.session_state.cv_backup_warning = None
+    except Exception:
+        st.session_state.cv_backup_warning = (
+            "Your CV is saved in the encrypted database, but its local backup "
+            "could not be written. Check the backup folder permissions before "
+            "relying on that copy."
+        )
+    _use_profile(profile, cv_id)
+    return True
+
+
+def _render_cv_builder() -> None:
+    """Collect explicit candidate facts; core validates the submitted draft."""
+    profile = st.session_state.cv_profile or CVProfile()
+    source = f"{st.session_state.cv_id}:{profile.model_dump_json()}"
+    scope = hashlib.sha256(source.encode()).hexdigest()[:16]
+    prefix = f"cv_builder_{scope}"
+    with st.expander("Build or edit your CV", expanded=not st.session_state.cv_profile):
+        st.caption(
+            "Create a CV without connecting a model. Use your own facts; this "
+            "editor never invents skills, employers, achievements or credentials. "
+            "Changes become active only when you choose Create CV and check readiness."
+        )
+        if len(profile.experiences) > 30 or len(profile.projects) > 30:
+            st.warning(
+                "This CV has more than 30 work or project entries. The editor "
+                "supports up to 30 of each, so editing is unavailable to avoid "
+                "dropping your records. Your complete CV remains available for export."
+            )
+            return
+        data: dict[str, Any] = {}
+        columns = st.columns(2)
+        for index, (field, label) in enumerate(
+            (
+                ("name", "Full name"),
+                ("email", "CV email"),
+                ("phone", "CV phone (optional)"),
+                ("linkedin", "LinkedIn URL (optional)"),
+                ("github", "GitHub URL (optional)"),
+                ("portfolio", "Portfolio URL (optional)"),
+            )
+        ):
+            with columns[index % 2]:
+                data[field] = st.text_input(
+                    label, value=getattr(profile, field) or "", key=f"{prefix}_{field}"
+                )
+        data["summary"] = st.text_area(
+            "Professional summary (optional)",
+            value=profile.summary or "",
+            key=f"{prefix}_summary",
+        )
+        data["skills"] = st.text_area(
+            "Skills (one per line)",
+            value="\n".join(profile.skills),
+            key=f"{prefix}_skills",
+        )
+        data["education"] = st.text_area(
+            "Education or training (one per line)",
+            value="\n".join(profile.education),
+            key=f"{prefix}_education",
+        )
+        st.caption(
+            "Projects count as experience evidence for entry-level applicants. "
+            "Add only the entries you need; reducing a count removes those entries "
+            "from the next saved CV. Your existing saved CV stays available."
+        )
+        count_columns = st.columns(2)
+        with count_columns[0]:
+            work_count = st.number_input(
+                "Work experience entries",
+                min_value=0,
+                max_value=30,
+                value=len(profile.experiences),
+                step=1,
+                key=f"{prefix}_work_count",
+            )
+        with count_columns[1]:
+            project_count = st.number_input(
+                "Project entries",
+                min_value=0,
+                max_value=30,
+                value=len(profile.projects),
+                step=1,
+                key=f"{prefix}_project_count",
+            )
+        data["experiences"] = []
+        for index in range(work_count):
+            original = (
+                profile.experiences[index].model_dump()
+                if index < len(profile.experiences)
+                else {}
+            )
+            with st.container(border=True):
+                st.markdown(f"**Work experience {index + 1}**")
+                entry = {}
+                for field, label in (
+                    ("title", "Job title"),
+                    ("company", "Employer"),
+                    ("duration", "Actual dates or duration"),
+                ):
+                    entry[field] = st.text_input(
+                        f"Role {index + 1}: {label}",
+                        value=original.get(field, ""),
+                        key=f"{prefix}_role_{index}_{field}",
+                    )
+                for field, label in (
+                    ("achievements", "Accomplishments"),
+                    ("metrics", "Existing metrics (optional)"),
+                    ("technologies", "Technologies"),
+                ):
+                    entry[field] = st.text_area(
+                        f"Role {index + 1}: {label} (one per line)",
+                        value="\n".join(original.get(field, [])),
+                        key=f"{prefix}_role_{index}_{field}",
+                    )
+                data["experiences"].append(entry)
+        data["projects"] = []
+        for index in range(project_count):
+            original = (
+                profile.projects[index].model_dump()
+                if index < len(profile.projects)
+                else {}
+            )
+            with st.container(border=True):
+                st.markdown(f"**Project {index + 1}**")
+                entry = {}
+                for field, label in (
+                    ("name", "Name"),
+                    ("link", "Project URL (optional)"),
+                    ("github", "Repository URL (optional)"),
+                ):
+                    entry[field] = st.text_input(
+                        f"Project {index + 1}: {label}",
+                        value=original.get(field) or "",
+                        key=f"{prefix}_project_{index}_{field}",
+                    )
+                for field, label in (
+                    ("description", "Factual description"),
+                    ("impact", "Real impact (optional)"),
+                ):
+                    entry[field] = st.text_area(
+                        f"Project {index + 1}: {label}",
+                        value=original.get(field) or "",
+                        key=f"{prefix}_project_{index}_{field}",
+                    )
+                entry["technologies"] = st.text_area(
+                    f"Project {index + 1}: Technologies (one per line)",
+                    value="\n".join(original.get("technologies", [])),
+                    key=f"{prefix}_project_{index}_technologies",
+                )
+                data["projects"].append(entry)
+        if st.button(
+            "Create CV and check readiness",
+            type="primary",
+            key=f"{prefix}_save",
+            use_container_width=True,
+        ):
+            try:
+                created = facade.build_cv_profile(data)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                if _save_cv_profile(created):
+                    st.session_state.cv_save_notice = "Your CV is saved. Review its readiness and download the format you need."
+                    st.rerun()
+
+
+def _render_cv_assessment(profile: CVProfile, job: JobPosting | None = None) -> None:
+    """Present the core checklist and its explicit limits."""
+    assessment = facade.assess_resume(profile, job)
+    st.metric("Local CV readiness", f"{assessment['readiness_score']}/100")
+    st.caption(
+        "This weighted checklist measures CV content completeness. Layout checks "
+        "are separate. It is not an external ATS score and cannot "
+        "guarantee ranking, interviews or a hiring outcome."
+    )
+    with st.expander("Readiness checklist"):
+        for check in assessment["checks"]:
+            status = "Complete" if check["passed"] else "Needs attention"
+            st.markdown(f"**{check['label']} — {status} ({check['weight']} points)**")
+            st.caption(check["detail"])
+    if assessment["actions"]:
+        with st.expander("Ways to improve your CV", expanded=True):
+            for action in assessment["actions"]:
+                st.write(action)
+    match = assessment["job_match"]
+    if match is not None:
+        if match["score"] is None:
+            st.info(
+                "There is not enough useful job-skill evidence to calculate coverage."
+            )
+        else:
+            st.metric("Job skill coverage", f"{match['score']:g}%")
+            st.write("Matched skills: " + (", ".join(match["matched"]) or "None found"))
+            st.write(
+                "Skills to review: "
+                + (
+                    ", ".join(match["missing"])
+                    or "No gaps found in the recognized signals"
+                )
+            )
+        st.caption(match["method"])
+        st.caption(
+            "Add a missing skill only when it truthfully describes you. Reordering the same facts does not increase coverage."
+        )
+
+
 # Page 1: Onboarding
 def page_onboarding():
     """Onboarding screen - CV upload and preferences"""
     st.title("Onboarding")
-    st.markdown("Upload your CV and define your target roles")
+    st.markdown("Create, upload or restore your CV and define your target roles")
 
     st.caption(
         "1. Add or restore your CV. 2. Discover jobs. 3. Prepare materials and "
@@ -435,9 +655,16 @@ def page_onboarding():
     llm_ready = bool(st.session_state.llm_client)
     if not llm_ready:
         st.info(
-            "Connect a model in the sidebar to parse a new CV. Saved profiles, "
-            "job browsing, tracking, and resume exports work without it."
+            "Build a CV below without a model, or connect one in the sidebar to parse "
+            "an existing PDF or CV text. Saved profiles, job browsing, tracking, "
+            "and resume exports also work without a model."
         )
+
+    if st.session_state.get("cv_save_notice"):
+        st.success(st.session_state.cv_save_notice)
+    if st.session_state.get("cv_backup_warning"):
+        st.warning(st.session_state.cv_backup_warning)
+    _render_cv_builder()
 
     col1, col2 = st.columns([2, 1])
 
@@ -486,20 +713,9 @@ def page_onboarding():
                         elapsed = time.time() - start_time
                         progress_bar.progress(100, text=f"Complete in {elapsed:.1f}s!")
 
-                        _use_profile(profile)
-                        st.session_state.storage.save_cv_profile(profile)
-                        # Persist to the encrypted DB (Phase 1) for matching/tracking.
-                        try:
-                            st.session_state.cv_id = facade.persist_cv(profile)
-                        except Exception:
-                            st.session_state.cv_id = None
-                            st.warning(
-                                "Your CV was parsed but could not be saved to the database. Check storage access before continuing."
-                            )
-                        st.success(
-                            f"✅ CV parsed successfully! Found {len(profile.experiences)} experiences."
-                        )
-                        st.rerun()
+                        if _save_cv_profile(profile):
+                            st.session_state.cv_save_notice = f"CV parsed and saved. Found {len(profile.experiences)} work experiences."
+                            st.rerun()
 
                     except Exception as e:
                         st.error(f"❌ Parsing failed: {e}")
@@ -560,7 +776,7 @@ def page_onboarding():
     # Show parsed CV
     if st.session_state.cv_profile:
         st.divider()
-        st.subheader("Parsed CV Profile")
+        st.subheader("CV Profile")
 
         profile = st.session_state.cv_profile
 
@@ -572,6 +788,27 @@ def page_onboarding():
 
         with st.expander("View Full Profile"):
             st.json(profile.model_dump())
+
+        st.subheader("CV readiness")
+        selected_job = None
+        selected_jobs = st.session_state.selected_jobs
+        if selected_jobs:
+            options = [None, *range(len(selected_jobs))]
+            if st.session_state.get("cv_readiness_job") not in options:
+                st.session_state.cv_readiness_job = None
+            index = st.selectbox(
+                "Compare CV with a selected job",
+                options,
+                format_func=lambda value: (
+                    "Choose a job (optional)"
+                    if value is None
+                    else f"{selected_jobs[value].title} at {selected_jobs[value].company}"
+                ),
+                key="cv_readiness_job",
+            )
+            if index is not None:
+                selected_job = selected_jobs[index]
+        _render_cv_assessment(profile, selected_job)
 
         # --- ATS-friendliness report + ATS-clean exports (Phase 5) --- #
         st.divider()
@@ -596,13 +833,18 @@ def page_onboarding():
         )
         exp1, exp2, exp3 = st.columns(3)
         with exp1:
-            st.download_button(
-                "Download ATS-clean PDF",
-                data=facade.resume_pdf(profile),
-                file_name="resume_ats.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
+            try:
+                pdf = facade.resume_pdf(profile)
+            except ValueError as exc:
+                st.warning(f"{exc} Markdown and JSON downloads remain available.")
+            else:
+                st.download_button(
+                    "Download ATS-clean PDF",
+                    data=pdf,
+                    file_name="resume_ats.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
         with exp2:
             st.download_button(
                 "Download Markdown",
@@ -1160,11 +1402,35 @@ def page_draft_studio():
                     )
                 if tailored["reordered_experience"]:
                     st.caption("Experience order adjusted for relevance.")
+                _render_cv_assessment(tailored["profile"], current_job)
+                try:
+                    pdf = facade.resume_pdf(tailored["profile"])
+                except ValueError as exc:
+                    st.warning(f"{exc} Markdown and JSON downloads remain available.")
+                else:
+                    st.download_button(
+                        "Download tailored ATS PDF",
+                        data=pdf,
+                        file_name=f"resume_{current_job.company}.pdf".replace(" ", "_"),
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
                 st.download_button(
-                    "Download tailored ATS PDF",
-                    data=facade.resume_pdf(tailored["profile"]),
-                    file_name=f"resume_{current_job.company}.pdf".replace(" ", "_"),
-                    mime="application/pdf",
+                    "Download tailored Markdown",
+                    data=facade.resume_markdown(tailored["profile"]),
+                    file_name="resume_tailored.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+                st.download_button(
+                    "Download tailored JSON Resume",
+                    data=json.dumps(
+                        facade.resume_json(tailored["profile"]),
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    file_name="resume_tailored.json",
+                    mime="application/json",
                     use_container_width=True,
                 )
 
@@ -1517,7 +1783,7 @@ def page_export():
     if st.button("Export All Data (ZIP)", type="primary"):
         with st.spinner("Creating export bundle..."):
             try:
-                zip_path = st.session_state.storage.create_export_zip()
+                zip_path = facade.export_all_data(st.session_state.storage)
                 st.session_state.export_zip = Path(zip_path).read_bytes()
                 st.success("Your export is ready to download.")
             except Exception as e:
