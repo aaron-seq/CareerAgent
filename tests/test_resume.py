@@ -93,6 +93,15 @@ def test_ats_linter_clean_resume_passes():
     assert is_ats_friendly(cv, raw_text=raw) is True
 
 
+def test_project_only_cv_does_not_need_an_employer():
+    cv = _sample_cv()
+    cv.experiences = []
+    assert not any("experience" in issue.message for issue in lint(cv))
+
+    cv.projects = []
+    assert any("experience or projects" in issue.message for issue in lint(cv))
+
+
 # --------------------------------------------------------------------------- #
 # Rendering
 # --------------------------------------------------------------------------- #

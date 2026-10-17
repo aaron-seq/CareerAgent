@@ -72,6 +72,8 @@ from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
 from .resume import render_markdown, render_pdf, tailor_resume, to_json_resume
+from .resume.assessment import assess_resume as _assess_resume
+from .resume.builder import build_cv_profile as _build_cv_profile
 from .storage import LocalStorage
 from .tracking import (
     BlacklistedCompanyError,
@@ -600,14 +602,31 @@ def export_all_data(storage: LocalStorage) -> str:
     The user's own data on their own machine, readable: local artifacts
     (drafts, job-posting backups, markdown exports) plus what lives in the
     encrypted DB -- every pipeline application with its notes, and each
-    saved CV profile -- decrypted into JSON. Mirrors the existing
+    saved CV/candidate profile, contacts, jobs, drafts and suppression records
+    -- decrypted into JSON. Mirrors the existing
     readable-export design of :meth:`LocalStorage.create_export_zip`.
     """
-    from .db.tables import ApplicationRow
+    from .db.tables import (
+        ApplicationRow,
+        ContactRow,
+        EmailDraftRow,
+        JobPostingRow,
+        SuppressionRow,
+    )
 
     init_persistence()
     extra: dict[str, Any] = {}
     with get_session() as session:
+        for filename, model in (
+            ("companies", Company),
+            ("jobs", JobPostingRow),
+            ("contacts", ContactRow),
+            ("gmail_drafts", EmailDraftRow),
+            ("suppression", SuppressionRow),
+        ):
+            extra[f"database/{filename}.json"] = [
+                row.model_dump(mode="json") for row in session.exec(select(model))
+            ]
         jobs = JobRepository(session)
         applications = []
         for app in session.exec(
@@ -639,10 +658,17 @@ def export_all_data(storage: LocalStorage) -> str:
         ).all()
         cvs = CVRepository(session)
         for cv_id in cv_ids:
+            if cv_id is None:
+                continue
             profile = cvs.get(cv_id)
             if profile is not None:
                 extra[f"cv_profiles/saved_cv_{cv_id}.json"] = profile.model_dump(
                     mode="json"
+                )
+            candidate = cvs.get_candidate(cv_id)
+            if candidate is not None:
+                extra[f"candidate_profiles/saved_candidate_{cv_id}.json"] = (
+                    candidate.model_dump(mode="json")
                 )
     return storage.create_export_zip(extra=extra)
 
@@ -904,6 +930,16 @@ def discover_from_url(url: str, client=None, fetcher=None) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Resume tooling (no DB required -- pure functions over a CVProfile)
 # --------------------------------------------------------------------------- #
+
+
+def build_cv_profile(data: dict[str, Any]) -> CVProfile:
+    """Create a validated CV only from explicit user-supplied facts."""
+    return _build_cv_profile(data)
+
+
+def assess_resume(cv: CVProfile, job: JobPosting | None = None) -> dict[str, Any]:
+    """Explain local CV completeness and optional job evidence coverage."""
+    return _assess_resume(cv, job)
 
 
 def lint_resume(cv: CVProfile, raw_text: str | None = None) -> dict[str, Any]:

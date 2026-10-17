@@ -162,14 +162,14 @@ def test_restore_saved_cv_without_connecting_a_model(temp_db, tmp_path):
     assert not app.exception
     assert app.session_state["cv_id"] == profile_id
     assert app.session_state["cv_profile"] == profile
-    assert any(heading.value == "Parsed CV Profile" for heading in app.subheader)
+    assert any(heading.value == "CV Profile" for heading in app.subheader)
     assert _button(app, "Next: Job Discovery")
 
 
 def test_disconnected_onboarding_keeps_profile_review_visible(temp_db, tmp_path):
     app = _app(tmp_path, cv_profile=CVProfile(name="Synthetic Candidate"))
     assert not app.exception
-    assert any(heading.value == "Parsed CV Profile" for heading in app.subheader)
+    assert any(heading.value == "CV Profile" for heading in app.subheader)
     assert any(
         element.proto.label == "Download ATS-clean PDF"
         for element in app.get("download_button")

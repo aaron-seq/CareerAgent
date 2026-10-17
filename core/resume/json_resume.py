@@ -49,6 +49,9 @@ def to_json_resume(cv: CVProfile) -> dict[str, Any]:
             "keywords": list(proj.technologies),
             "url": proj.link or proj.github or "",
             "highlights": [proj.impact] if proj.impact else [],
+            # JSON Resume has one project URL; retain the secondary repository
+            # using an explicit extension instead of silently discarding it.
+            **({"x-github": proj.github} if proj.github else {}),
         }
         for proj in cv.projects
     ]
@@ -90,6 +93,7 @@ def from_json_resume(doc: dict[str, Any]) -> CVProfile:
             description=p.get("description", ""),
             technologies=list(p.get("keywords", [])),
             link=p.get("url") or None,
+            github=p.get("x-github") or None,
             impact=(p.get("highlights") or [None])[0],
         )
         for p in doc.get("projects", [])

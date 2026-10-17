@@ -1,0 +1,520 @@
+{
+  "started_at": "2026-10-17T04:05:22.036284+00:00",
+  "finished_at": "2026-10-17T04:07:00.711352+00:00",
+  "scope": "Read-only public APIs; no persistence, models, outreach or applications",
+  "limits": {
+    "requests_per_source": 3,
+    "timeout_seconds": 15.0,
+    "decoded_bytes_per_response": 12582912
+  },
+  "summary": {
+    "passed": 8
+  },
+  "results": [
+    {
+      "source": "greenhouse",
+      "started_at": "2026-10-17T04:05:22.080459+00:00",
+      "status": "passed",
+      "parsed_count": 731,
+      "checks": {
+        "title": {
+          "passed": 731,
+          "failed": 0
+        },
+        "company": {
+          "passed": 731,
+          "failed": 0
+        },
+        "description": {
+          "passed": 731,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 731,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 731,
+          "failed": 0
+        },
+        "source": {
+          "passed": 731,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true",
+          "started_at": "2026-10-17T04:05:22.080623+00:00",
+          "http_status": 200,
+          "decoded_bytes": 5697327,
+          "finished_at": "2026-10-17T04:05:22.903225+00:00",
+          "duration_seconds": 0.823
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:05:24.188270+00:00",
+      "duration_seconds": 2.108,
+      "careers_url": "https://boards.greenhouse.io/stripe",
+      "careers_url_detection": {
+        "method": "Local ATS URL signature; careers/application page HTTP not tested",
+        "expected_source": "greenhouse",
+        "expected_slug": "stripe",
+        "detected_source": "greenhouse",
+        "detected_slug": "stripe",
+        "passed": true,
+        "checked_at": "2026-10-17T04:13:39.760145+00:00",
+        "evidence_note": "Appended local routing validation after original live API run; no additional HTTP requests."
+      }
+    },
+    {
+      "source": "lever",
+      "started_at": "2026-10-17T04:06:57.973223+00:00",
+      "status": "passed",
+      "parsed_count": 310,
+      "checks": {
+        "title": {
+          "passed": 310,
+          "failed": 0
+        },
+        "company": {
+          "passed": 310,
+          "failed": 0
+        },
+        "description": {
+          "passed": 310,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 310,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 310,
+          "failed": 0
+        },
+        "source": {
+          "passed": 310,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.lever.co/v0/postings/palantir?mode=json",
+          "started_at": "2026-10-17T04:06:57.973388+00:00",
+          "http_status": 200,
+          "decoded_bytes": 6020551,
+          "finished_at": "2026-10-17T04:06:59.046522+00:00",
+          "duration_seconds": 1.073
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:06:59.074343+00:00",
+      "duration_seconds": 1.101,
+      "careers_url": "https://jobs.lever.co/palantir",
+      "careers_url_detection": {
+        "method": "Local ATS URL signature; careers/application page HTTP not tested",
+        "expected_source": "lever",
+        "expected_slug": "palantir",
+        "detected_source": "lever",
+        "detected_slug": "palantir",
+        "passed": true,
+        "checked_at": "2026-10-17T04:13:39.760164+00:00",
+        "evidence_note": "Appended local routing validation after original live API run; no additional HTTP requests."
+      }
+    },
+    {
+      "source": "ashby",
+      "started_at": "2026-10-17T04:05:24.725670+00:00",
+      "status": "passed",
+      "parsed_count": 167,
+      "checks": {
+        "title": {
+          "passed": 167,
+          "failed": 0
+        },
+        "company": {
+          "passed": 167,
+          "failed": 0
+        },
+        "description": {
+          "passed": 167,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 167,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 167,
+          "failed": 0
+        },
+        "source": {
+          "passed": 167,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.ashbyhq.com/posting-api/job-board/ramp?includeCompensation=true",
+          "started_at": "2026-10-17T04:05:24.726292+00:00",
+          "http_status": 200,
+          "decoded_bytes": 3037506,
+          "finished_at": "2026-10-17T04:05:24.955146+00:00",
+          "duration_seconds": 0.229
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:05:24.981487+00:00",
+      "duration_seconds": 0.256,
+      "careers_url": "https://jobs.ashbyhq.com/ramp",
+      "careers_url_detection": {
+        "method": "Local ATS URL signature; careers/application page HTTP not tested",
+        "expected_source": "ashby",
+        "expected_slug": "ramp",
+        "detected_source": "ashby",
+        "detected_slug": "ramp",
+        "passed": true,
+        "checked_at": "2026-10-17T04:13:39.760172+00:00",
+        "evidence_note": "Appended local routing validation after original live API run; no additional HTTP requests."
+      }
+    },
+    {
+      "source": "smartrecruiters",
+      "started_at": "2026-10-17T04:06:59.101925+00:00",
+      "status": "passed",
+      "parsed_count": 2,
+      "checks": {
+        "title": {
+          "passed": 2,
+          "failed": 0
+        },
+        "company": {
+          "passed": 2,
+          "failed": 0
+        },
+        "description": {
+          "passed": 2,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 2,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 2,
+          "failed": 0
+        },
+        "source": {
+          "passed": 2,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.smartrecruiters.com/v1/companies/Ubisoft2/postings?limit=2&offset=0",
+          "started_at": "2026-10-17T04:06:59.103179+00:00",
+          "http_status": 200,
+          "decoded_bytes": 5398,
+          "finished_at": "2026-10-17T04:06:59.681243+00:00",
+          "duration_seconds": 0.578
+        },
+        {
+          "url": "https://api.smartrecruiters.com/v1/companies/Ubisoft2/postings/744000156048035",
+          "started_at": "2026-10-17T04:06:59.681661+00:00",
+          "http_status": 200,
+          "decoded_bytes": 6852,
+          "finished_at": "2026-10-17T04:07:00.210211+00:00",
+          "duration_seconds": 0.529
+        },
+        {
+          "url": "https://api.smartrecruiters.com/v1/companies/Ubisoft2/postings/744000156045329",
+          "started_at": "2026-10-17T04:07:00.227076+00:00",
+          "http_status": 200,
+          "decoded_bytes": 5433,
+          "finished_at": "2026-10-17T04:07:00.710130+00:00",
+          "duration_seconds": 0.483
+        }
+      ],
+      "warnings": [
+        "SmartRecruiters import reached its budget after 2 jobs and 1 pages. More jobs may be available; continue with offset=2."
+      ],
+      "finished_at": "2026-10-17T04:07:00.711116+00:00",
+      "duration_seconds": 1.609,
+      "careers_url": "https://careers.smartrecruiters.com/Ubisoft2",
+      "careers_url_detection": {
+        "method": "Local ATS URL signature; careers/application page HTTP not tested",
+        "expected_source": "smartrecruiters",
+        "expected_slug": "Ubisoft2",
+        "detected_source": "smartrecruiters",
+        "detected_slug": "Ubisoft2",
+        "passed": true,
+        "checked_at": "2026-10-17T04:13:39.760184+00:00",
+        "evidence_note": "Appended local routing validation after original live API run; no additional HTTP requests."
+      }
+    },
+    {
+      "source": "remotive",
+      "started_at": "2026-10-17T04:05:25.560931+00:00",
+      "status": "passed",
+      "parsed_count": 15,
+      "checks": {
+        "title": {
+          "passed": 15,
+          "failed": 0
+        },
+        "company": {
+          "passed": 15,
+          "failed": 0
+        },
+        "description": {
+          "passed": 15,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 15,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 15,
+          "failed": 0
+        },
+        "source": {
+          "passed": 15,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://remotive.com/api/remote-jobs?search=python",
+          "started_at": "2026-10-17T04:05:25.561461+00:00",
+          "http_status": 200,
+          "decoded_bytes": 188598,
+          "finished_at": "2026-10-17T04:05:25.767778+00:00",
+          "duration_seconds": 0.206
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:05:25.808000+00:00",
+      "duration_seconds": 0.247,
+      "careers_url": null,
+      "careers_url_detection": null
+    },
+    {
+      "source": "arbeitnow",
+      "started_at": "2026-10-17T04:05:25.829936+00:00",
+      "status": "passed",
+      "parsed_count": 300,
+      "checks": {
+        "title": {
+          "passed": 300,
+          "failed": 0
+        },
+        "company": {
+          "passed": 300,
+          "failed": 0
+        },
+        "description": {
+          "passed": 300,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 300,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 300,
+          "failed": 0
+        },
+        "source": {
+          "passed": 300,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://www.arbeitnow.com/api/job-board-api?page=1",
+          "started_at": "2026-10-17T04:05:25.830377+00:00",
+          "http_status": 200,
+          "decoded_bytes": 2491499,
+          "finished_at": "2026-10-17T04:05:26.402800+00:00",
+          "duration_seconds": 0.573
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:05:27.171127+00:00",
+      "duration_seconds": 1.341,
+      "careers_url": null,
+      "careers_url_detection": null
+    },
+    {
+      "source": "jobicy",
+      "started_at": "2026-10-17T04:05:27.206720+00:00",
+      "status": "passed",
+      "parsed_count": 5,
+      "checks": {
+        "title": {
+          "passed": 5,
+          "failed": 0
+        },
+        "company": {
+          "passed": 5,
+          "failed": 0
+        },
+        "description": {
+          "passed": 5,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 5,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 5,
+          "failed": 0
+        },
+        "source": {
+          "passed": 5,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://jobicy.com/api/v2/remote-jobs?count=5",
+          "started_at": "2026-10-17T04:05:27.207233+00:00",
+          "http_status": 200,
+          "decoded_bytes": 51785,
+          "finished_at": "2026-10-17T04:05:27.618567+00:00",
+          "duration_seconds": 0.411
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:05:27.630781+00:00",
+      "duration_seconds": 0.424,
+      "careers_url": null,
+      "careers_url_detection": null
+    },
+    {
+      "source": "himalayas",
+      "started_at": "2026-10-17T04:05:27.652742+00:00",
+      "status": "passed",
+      "parsed_count": 5,
+      "checks": {
+        "title": {
+          "passed": 5,
+          "failed": 0
+        },
+        "company": {
+          "passed": 5,
+          "failed": 0
+        },
+        "description": {
+          "passed": 5,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 5,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 5,
+          "failed": 0
+        },
+        "source": {
+          "passed": 5,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://himalayas.app/jobs/api?limit=5&offset=0",
+          "started_at": "2026-10-17T04:05:27.653241+00:00",
+          "http_status": 200,
+          "decoded_bytes": 38881,
+          "finished_at": "2026-10-17T04:05:27.976738+00:00",
+          "duration_seconds": 0.324
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:05:27.984077+00:00",
+      "duration_seconds": 0.331,
+      "careers_url": null,
+      "careers_url_detection": null
+    }
+  ],
+  "previous_attempts": [
+    {
+      "source": "lever",
+      "started_at": "2026-10-17T04:05:24.212318+00:00",
+      "status": "failed",
+      "parsed_count": 0,
+      "checks": {},
+      "requests": [
+        {
+          "url": "https://api.lever.co/v0/postings/netflix?mode=json",
+          "started_at": "2026-10-17T04:05:24.213643+00:00",
+          "http_status": 404,
+          "decoded_bytes": 41,
+          "finished_at": "2026-10-17T04:05:24.692032+00:00",
+          "duration_seconds": 0.478
+        }
+      ],
+      "error_type": "HTTPStatusError",
+      "error": "Public API returned HTTP 404",
+      "finished_at": "2026-10-17T04:05:24.692124+00:00",
+      "duration_seconds": 0.48
+    },
+    {
+      "source": "smartrecruiters",
+      "started_at": "2026-10-17T04:05:25.005021+00:00",
+      "status": "empty",
+      "parsed_count": 0,
+      "checks": {
+        "title": {
+          "passed": 0,
+          "failed": 0
+        },
+        "company": {
+          "passed": 0,
+          "failed": 0
+        },
+        "description": {
+          "passed": 0,
+          "failed": 0
+        },
+        "original_url": {
+          "passed": 0,
+          "failed": 0
+        },
+        "source_id": {
+          "passed": 0,
+          "failed": 0
+        },
+        "source": {
+          "passed": 0,
+          "failed": 0
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.smartrecruiters.com/v1/companies/Visa/postings?limit=2&offset=0",
+          "started_at": "2026-10-17T04:05:25.005409+00:00",
+          "http_status": 200,
+          "decoded_bytes": 50,
+          "finished_at": "2026-10-17T04:05:25.539574+00:00",
+          "duration_seconds": 0.534
+        }
+      ],
+      "warnings": [],
+      "finished_at": "2026-10-17T04:05:25.539641+00:00",
+      "duration_seconds": 0.535
+    }
+  ],
+  "all_attempts_summary": {
+    "passed": 8,
+    "failed": 1,
+    "empty": 1
+  },
+  "aggregation_note": "Eight provider checks across an initial scan and a targeted follow-up with current public board slugs; original failed/empty board observations are retained in previous_attempts.",
+  "careers_url_note": "Careers URLs are local routing metadata only. Live requests remain the original twelve public API GETs; careers/application HTML pages were not fetched."
+}

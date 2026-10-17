@@ -5,7 +5,7 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 
 ## Current status
 - **Current phase:** Phases 0–10 have implementations; production hardening remains ongoing.
-- **Last updated:** 2026-10-16
+- **Last updated:** 2026-10-17
 - **Next action:** Owner decision on historical PII [#38](https://github.com/aaron-seq/CareerAgent/issues/38), then the hosted-fetch and metadata-encryption prerequisites in `docs/SECURITY_AUDIT.md`. Continue matching quality, dependency reproducibility, and advisory typing work. Source attribution, bounded pagination, and functional PR Docker checks are implemented.
 - **Blockers:** Public-history PII remains unresolved. Actual model inference, Gmail OAuth/delivery, Postgres locking, and real-browser extension behavior remain unverified in this environment. Local job-board access works; some model/log download destinations remain blocked.
 
@@ -19,11 +19,47 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **572 Python tests + 55 JS tests pass; `ruff` + `ruff format` clean.**
-Core coverage is **94.46%**, measured on the combined candidate and core fixes.
+Totals: **711 Python tests + 55 JS tests pass; `ruff` + `ruff format` clean.**
+Core coverage is **94.83%**, up from the combined-PR baseline of 94.46%.
 Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-17 — Model-free CV builder, transparent readiness, live public APIs
+
+- Added explicit fact entry/editing without a model. Validate locally, clear
+  obsolete extracted text, and persist a new encrypted CV before activation;
+  failed database saves preserve the current profile/materials. Older profiles
+  remain available. Project-only applicants are supported without inventing jobs.
+- Expose weighted content readiness with actionable checks, separately from
+  selected-job recognized-skill coverage. Raw identities/contacts/employers,
+  explicit negative clauses (including contractions), and C-level wording no
+  longer inflate this coverage. No external ATS ranking is claimed.
+- Preserve social links, work technologies, project impact and both project
+  URLs in exports. Bundle licensed offline fonts for selectable Unicode PDF
+  text. Reject unsupported glyphs/shaping with Markdown/JSON fallbacks; normalize
+  PDF tabs/CR to prevent joined words. Contact lines no longer resemble columns.
+- Wire the All Data button through the facade and include database-only contacts,
+  drafts, companies, jobs, suppression records and saved candidate answers.
+- Added an opt-in bounded live API command. **Eight public sources passed with
+  1,535 parsed postings**; evidence retains the earlier 404 and empty-board
+  attempts. Twelve public API GETs total; careers signatures checked locally,
+  application HTML/browser behavior untested. No sends/submissions/model calls.
+- Reviewed and merged pending PRs **#52 and #51**, fixing country/polarity/select
+  blockers in #51 before merge. Their current-head CI passed all six checks.
+
+**Validation:** 711 Python tests, 55 extension tests, Ruff lint/format and
+whitespace checks passed; seven existing SQLModel module-reload warnings.
+Core coverage **94.83%** (baseline 94.46%). Independent final review ran 135
+focused tests and reproduced the repaired scoring/PDF cases. Final Docker build
+passed real screens, encrypted persistence across replacement, nonroot and
+Streamlit health. The local app also starts and answers HTTP health/root requests.
+Installed dependencies pass `uv pip check`. Mypy remains advisory: 27 existing
+errors in eight modules with `--python-version 3.11`; no new module errors.
+
+Design and limits: [ADR 0010](docs/adr/0010-local-cv-builder-and-transparent-readiness.md)
+and [validation/evidence](docs/CV_VALIDATION.md). Local Ollama inference, Gmail,
+real browser forms and commercial ATS scoring remain unverified.
 
 ### 2026-10-17 — Review fixes: country-scoped, conservative eligibility autofill
 

@@ -155,7 +155,7 @@ across replacement containers in addition to probing server health.
 | `core/apply.py` | `resolve_apply_url` (http(s) only; autofill support = the manifest's hosts), `build_answers` (unknown answers are omitted; demographics need consent), `resume_attachment`. |
 | `core/presentation.py` | Pure job-card wording: salary/date formatting, match-quality words, chips, risk notes (tri-state aware). |
 | `core/cv_parser.py` | PDF/text CV → structured `CVProfile` via LLM. Recovers PDF link-annotation URLs so it never has to guess a contact link. |
-| `core/resume/` | `tailor.py` (truthful resume tailoring, `assert_no_fabrication`), `cover_letter.py` (grounded cover letters, same fabrication contract), `ats_linter.py`, `json_resume.py`, `render.py` (Markdown/PDF). |
+| `core/resume/` | `builder.py` (validate explicit facts, no model/network), `assessment.py` (content checklist + exact recognized-skill coverage), `tailor.py` (truthful reordering), `cover_letter.py`, `ats_linter.py`, `json_resume.py`, `render.py` (shared Markdown/PDF content, bundled fonts). |
 | `core/ingestion/` | `ats.py` (company boards: Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable), `aggregators.py` + `boards.py` (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) → canonical `JobPosting`. |
 | `core/fetching/` | `ats_detection.py` (regex ATS signatures), `jsonld.py` (`schema.org/JobPosting` extraction), `polite.py` (robots.txt + rate-limited fetcher; scraping fallback only). |
 | `core/matching/` | `embeddings.py` (pluggable embedder, hashing fallback), `dedup.py` (fuzzy dedup), `scoring.py` (explainable resume↔job score with matched/missing keywords). |
