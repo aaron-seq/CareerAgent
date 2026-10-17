@@ -28,7 +28,9 @@
     <label>Location <input id="location" /></label>
     <details>
       <summary>Import from CareerAgent</summary>
-      <label>Paste the profile JSON from the app's Export screen
+      <label>Paste the profile JSON from the app's Export screen. It may
+        include your screening answers and resume; unanswered questions are
+        left blank and outlined in amber for you.
         <textarea id="importJson" rows="4"
                   placeholder='{"fullName": "...", "email": "..."}'></textarea>
       </label>
@@ -41,6 +43,7 @@
       extension never submits a form for you.
     </div>
     <div id="status"></div>
+    <script src="field_mapping.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

@@ -19,13 +19,29 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **490 Python tests + 18 JS tests pass; `ruff` + `ruff format` clean.**
-Core coverage is **92.78%**. Passing tests do not establish production readiness.
-
-Core coverage is **92.78%** (not re-measured for the 2026-10-16 core fixes).
+Totals: **572 Python tests + 55 JS tests pass; `ruff` + `ruff format` clean.**
+Core coverage is **94.46%**, measured on the combined candidate and core fixes.
 Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-17 — Review fixes: country-scoped, conservative eligibility autofill
+
+Work-authorization exports now preserve the candidate's country. Authorization,
+sponsorship and visa-status questions are filled only when they name the same
+recognized country and match a supported positive wording. Missing/mismatched
+countries, negation and compound questions stay blank and are flagged for the
+human. Completeness requires the authorization country. Real select choices at
+index zero are preserved, just as typed text and existing uploads are.
+
+Verified in an isolated public-source checkout: **52 Python tests** covering
+apply/candidate/migrations and **55 extension tests** passed; focused Ruff lint
+and format checks passed. Country/polarity cases use synthetic profiles; no live
+application or email was submitted.
+
+Independent combined-branch validation after merging the core fixes: **572 Python
+tests and 55 extension tests passed**, with seven existing SQLModel reload
+warnings. Ruff lint/format and whitespace checks passed.
 
 ### 2026-10-16 — Real-user acceptance fixes: tailoring gaps, offer reminders, export
 
@@ -127,6 +143,37 @@ data intact. Postgres SQL inspected offline only (no live Postgres here).
   in the shared global site-packages mid-run, not from this change. Seven
   later runs in the same deterministic order passed, three of them
   concurrently.
+
+### 2026-10-16 — Candidate answers + apply flow salvaged from an unmerged branch
+
+`claude/ui-integration-followup` had four commits pushed after its PR merged.
+Each piece was re-implemented on main's current structure, or dropped:
+
+- **Ported (adapted):** `core/candidate.py` stores application answers (work
+  authorization, sponsorship, compensation, availability, preferences, opt-in
+  demographics) in an encrypted `cv_profile.candidate_payload` column beside
+  the CV, not a second CV copy. Migration `3c90c531157f` follows
+  `3f1c2a9d7e45`; upgrade → downgrade → upgrade verified on a temp SQLite DB and
+  covered by `tests/test_migrations.py`. Completeness meter ranks gaps by how
+  often they block a form.
+- **Ported (adapted):** `core/apply.py` + facade `apply_target`,
+  `mark_applied`, `save/load_candidate_profile`, `profile_completeness`, and
+  an extended `extension_profile(cv, candidate, include_resume)` instead of a
+  second export format. One fixture pins the JSON contract in both test suites.
+- **Ported (adapted):** extension screening-question answering (select, radio,
+  text, textarea), resume attachment to the resume input only, amber flags for
+  unanswered questions. Fixed a yes/no matcher bug from the old branch ("I am
+  not" matched "I am"). Still user-triggered; never submits.
+- **Ported:** pure job-card helpers in `core/presentation.py`.
+- **Dropped:** `freeboards.py` (main's `boards.py` supersedes it), the old
+  theme-aware CSS and app.py changes, stage/empty-state copy (main's stage
+  rail covers it), auto-fill on page load and broader host permissions.
+  `scripts/verify_sources.py` deferred: no live network here to verify it.
+- **Not done here:** app.py wiring (onboarding answers form + completeness,
+  Apply / I applied buttons, export with answers/resume, job-card helpers).
+- **Validation:** 533 Python tests (+81), 50 extension tests (+32), ruff
+  lint/format clean. The extension is not live-browser verified for selects,
+  radios or file attachment; ADR 0009 records the storage and contract choices.
 
 ### 2026-10-16 — Guided workflow, task automation, and independent PR review
 

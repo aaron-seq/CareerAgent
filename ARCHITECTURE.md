@@ -125,6 +125,23 @@ postings can open Draft Studio directly. Source/attribution fields survive card
 serialization. The UI keeps generated material and editor state in per-job
 session workspaces, invalidating them when the active profile changes (ADR 0007).
 
+#### Candidate answers and apply flow (ADR 0009)
+
+These return plain dicts or Pydantic models and are not wired into `app.py`
+yet.
+
+| Function | Returns |
+|---|---|
+| `save_candidate_profile(cv_id, candidate: CandidateProfile \| dict)` | `{"ok": True, "cv_id"}` or `{"ok": False, "error"}`. Validates a form dict before storing it encrypted. |
+| `load_candidate_profile(cv_id)` | `CandidateProfile` (all-unknown if nothing saved yet) or `None` if the CV doesn't exist. |
+| `profile_completeness(cv, candidate=None)` | `{"percent", "items", "missing", "next_best_action"}`; items are `{"key", "label", "done", "weight", "why", "section"}`, with missing items ordered most valuable first. |
+| `extension_profile(cv, candidate=None, include_resume=False)` | The popup's import JSON: seven string identity keys; with a candidate, `location`, website fallback for `portfolio`, and `answers`; optionally a `resume` block (`filename`, `mime`, `data_b64`). |
+| `apply_target(job_id)` | `{"ok", "job_id", "title", "company", "url", "ats", "autofill_supported", "note"}`; `url` is only an http(s) link. |
+| `mark_applied(job_id, cv_profile_id=None)` | `{"ok", "application_id", "status", "changed"}`; tracks the job if needed and moves SAVED to APPLIED once. |
+
+`top_jobs` cards also carry `salary_currency` and ISO `date_posted` for the
+pure card helpers in `core/presentation.py`.
+
 An AI connection is required for parsing and prose generation. Browsing,
 tracking, deterministic resume tailoring, profile review, and exports work
 without one. PR Docker checks execute actual screens and encrypted persistence
@@ -134,6 +151,9 @@ across replacement containers in addition to probing server health.
 
 | Package/module | Description |
 |---|---|
+| `core/candidate.py` | `CandidateProfile`: answers to form questions a CV can't (work authorization, sponsorship, compensation, availability, preferences, opt-in demographics). Tri-state; stored encrypted beside its CV. `compute_completeness` weights gaps by how often they block a form. |
+| `core/apply.py` | `resolve_apply_url` (http(s) only; autofill support = the manifest's hosts), `build_answers` (unknown answers are omitted; demographics need consent), `resume_attachment`. |
+| `core/presentation.py` | Pure job-card wording: salary/date formatting, match-quality words, chips, risk notes (tri-state aware). |
 | `core/cv_parser.py` | PDF/text CV → structured `CVProfile` via LLM. Recovers PDF link-annotation URLs so it never has to guess a contact link. |
 | `core/resume/` | `tailor.py` (truthful resume tailoring, `assert_no_fabrication`), `cover_letter.py` (grounded cover letters, same fabrication contract), `ats_linter.py`, `json_resume.py`, `render.py` (Markdown/PDF). |
 | `core/ingestion/` | `ats.py` (company boards: Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable), `aggregators.py` + `boards.py` (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) → canonical `JobPosting`. |
@@ -148,7 +168,7 @@ across replacement containers in addition to probing server health.
 | `core/contact_finder.py` | Hiring-contact search + email permutation generation. |
 | `core/personalization.py` | Personalized email/WhatsApp draft generation. |
 | `core/validators.py` | Draft quality gates (metric present, link present, CTA, word count, no emojis/bullets). |
-| `extension/` | Manifest V3 human-in-the-loop autofill (Greenhouse/Lever/Ashby) — fills fields, never submits. |
+| `extension/` | Manifest V3 human-in-the-loop autofill (Greenhouse/Lever/Ashby): fills identity fields, answers screening questions the candidate answered, attaches the resume, flags the rest, and never submits. |
 
 ### Integration layer
 
@@ -163,7 +183,7 @@ across replacement containers in addition to probing server health.
 
 | Component | File | Description |
 |-----------|------|-------------|
-| DB models | `core/db/tables.py` | SQLModel schema (Company, jobs, applications, etc.); PII fields use `core/db/crypto.py`'s `EncryptedString`. |
+| DB models | `core/db/tables.py` | SQLModel schema (Company, jobs, applications, etc.); PII fields use `core/db/crypto.py`'s `EncryptedString`, including `cv_profile.candidate_payload` (application answers). |
 | DB session | `core/db/session.py` | Engine/session management; `init_db` for dev/test, Alembic (`alembic/`) for migrations. |
 | Repository | `core/db/repository.py` | Query/persistence layer over the SQLModel tables. |
 | Models | `core/models.py` | Pydantic data models shared across the whole app (`CVProfile`, `JobPosting`, `ContactCandidate`, `EmailDraft`, ...). |
@@ -242,7 +262,10 @@ Ingestion prefers official ATS/aggregator APIs and JSON-LD extraction
 
 ### Human-in-the-loop autofill
 The browser extension (`extension/`) fills form fields; it never submits.
-A human always reviews before applying.
+A human always reviews before applying. It answers a screening question only
+when the candidate's saved answer exists. Unknown questions stay blank and are
+outlined in amber. EEO answers require explicit opt-in on both the export and
+import side.
 
 ### Quality gates
 The UI displays quality checks for metrics, project links, company hooks,
@@ -279,6 +302,9 @@ CareerAgent/
 │   ├── whatsapp.py           # WhatsApp URL generation
 │   ├── storage.py            # Legacy local-JSON persistence + ZIP export
 │   ├── normalize.py          # Shared text/company normalization helpers
+│   ├── candidate.py          # Application answers + completeness meter
+│   ├── apply.py              # Apply URL classification + autofill answers
+│   ├── presentation.py       # Pure job-card formatting helpers
 │   ├── tracking.py           # Kanban application pipeline
 │   ├── analytics.py          # Funnel, A/B tracking, interview prep
 │   ├── db/                   # SQLModel schema, sessions, repository, crypto
@@ -333,4 +359,4 @@ Gmail credentials are optional private mounts; they are excluded from builds.
 | Job data | Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable, Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas | API-first ingestion |
 | Web search | duckduckgo-search | Fallback job/contact discovery |
 | Email | Google Gmail API | Draft creation |
-| Testing | pytest | 377 Python tests and 18 Node extension tests |
+| Testing | pytest | 533 Python tests and 50 Node extension tests |
