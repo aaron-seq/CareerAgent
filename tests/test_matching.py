@@ -221,6 +221,34 @@ def test_dedup_service_flags_rows(session):
     assert len(visible) == 2  # one collapsed
 
 
+def test_score_job_ignores_numbers_and_counts_cv_text_words_as_matched():
+    cv = CVProfile(
+        skills=["Python"],
+        experiences=[
+            Experience(title="Data engineer", company="Acme", duration="2020-2024")
+        ],
+    )
+    job = JobPosting(
+        title="Data Engineer",
+        company="Beta",
+        description=(
+            "Data engineer, $110k-$140k, 3+ years, 401k, 2024 start. Python, Terraform."
+        ),
+    )
+    result = score_job(cv, job, embedder=HashingEmbedder())
+    keywords = set(result.matched_keywords) | set(result.missing_keywords)
+    assert not keywords & {"110k", "140k", "3+", "401k", "2024"}
+    assert {"data", "engineer", "python"} <= set(result.matched_keywords)
+    assert result.missing_keywords == ["terraform"]
+
+
+def test_skill_tokens_containing_digits_survive_number_filter():
+    cv = CVProfile(skills=["Python"])
+    job = JobPosting(title="SRE", company="X", tech_stack=["S3", "EC2", "K8s"])
+    result = score_job(cv, job, embedder=HashingEmbedder())
+    assert {"s3", "ec2", "k8s"} <= set(result.missing_keywords)
+
+
 def test_scoring_service_persists_scores(session):
     jobs = JobRepository(session)
     jobs.upsert(

@@ -109,6 +109,71 @@ def test_due_followups(session):
     assert len(due) == 1 and due[0].id == app.id
 
 
+def _advance(svc, app, *statuses):
+    for status in statuses:
+        svc.transition(app, status)
+
+
+def test_reaching_offer_clears_followup_reminder(session):
+    """Real-user repro: Saved->Applied->Screening->Interview->Offer still
+    showed "due in 6d". An offer is the end of chasing; no reminder."""
+    job = _job(session)
+    svc = TrackingService(session, follow_up_days=7)
+    app = svc.create_application(job)
+    _advance(
+        svc,
+        app,
+        ApplicationStatus.APPLIED,
+        ApplicationStatus.SCREENING,
+        ApplicationStatus.INTERVIEW,
+    )
+    # Mid-process stages keep the reminder: the candidate still chases.
+    assert app.next_follow_up_at is not None
+    svc.transition(app, ApplicationStatus.OFFER)
+    session.commit()
+    assert app.next_follow_up_at is None
+    assert svc.due_followups(as_of=utc_now() + timedelta(days=30)) == []
+
+
+@pytest.mark.parametrize(
+    "terminal", [ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN]
+)
+def test_rejected_or_withdrawn_clear_followup(session, terminal):
+    job = _job(session)
+    svc = TrackingService(session, follow_up_days=7)
+    app = svc.create_application(job)
+    _advance(svc, app, ApplicationStatus.APPLIED, terminal)
+    assert app.next_follow_up_at is None
+
+
+def test_due_followups_never_returns_terminal_rows_with_stale_dates(session):
+    """Rows written before the fix may still carry a date at a terminal stage."""
+    svc = TrackingService(session, follow_up_days=7)
+    for sid, status in enumerate(
+        (
+            ApplicationStatus.OFFER,
+            ApplicationStatus.REJECTED,
+            ApplicationStatus.WITHDRAWN,
+        )
+    ):
+        job = _job(session, title=f"Engineer {sid}", sid=str(sid))
+        app = svc.create_application(job)
+        app.status = status
+        app.next_follow_up_at = utc_now() - timedelta(days=1)
+        session.add(app)
+    session.commit()
+    assert svc.due_followups() == []
+
+
+def test_snooze_does_not_revive_a_terminal_reminder(session):
+    job = _job(session)
+    svc = TrackingService(session)
+    app = svc.create_application(job)
+    _advance(svc, app, ApplicationStatus.APPLIED, ApplicationStatus.WITHDRAWN)
+    svc.snooze_followup(app, days=3)
+    assert app.next_follow_up_at is None
+
+
 def test_snooze_followup(session):
     job = _job(session)
     svc = TrackingService(session)
