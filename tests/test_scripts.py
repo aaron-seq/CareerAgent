@@ -17,7 +17,7 @@ def delivery_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_default_checks_cover_python_format_and_extension(monkeypatch):
+def test_default_checks_cover_types_python_format_and_extension(monkeypatch):
     calls = []
     monkeypatch.setattr(
         check,
@@ -25,13 +25,24 @@ def test_default_checks_cover_python_format_and_extension(monkeypatch):
         lambda command, cwd=check.ROOT: calls.append((command, cwd)) or True,
     )
     assert check.main([]) == 0
-    assert [command[1:3] for command, _ in calls[:3]] == [
+    assert [command[1:3] for command, _ in calls[:4]] == [
         ["-m", "ruff"],
         ["-m", "ruff"],
+        ["-m", "mypy"],
         ["-m", "pytest"],
     ]
     assert calls[-1] == (["node", "--test"], check.ROOT / "extension")
     assert not any("docker" in command for command, _ in calls)
+
+
+def test_type_errors_fail_the_shared_check(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(
+        check, "_run", lambda command, cwd=check.ROOT: calls.append(command) or False
+    )
+    assert check.main(["type"]) == 1
+    assert calls == [[check.sys.executable, "-m", "mypy", "."]]
+    assert "Checks failed: type" in capsys.readouterr().err
 
 
 def test_lint_failure_still_runs_format(monkeypatch, capsys):

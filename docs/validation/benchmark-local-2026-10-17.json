@@ -1,0 +1,42 @@
+{
+  "recorded_at": "2026-10-17T15:26:27.690194+00:00",
+  "python": "3.11.17",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "scope": "Warmed single-process offline synthetic workloads; shared machine; no speedup or hosted-load claim",
+  "method": "perf_counter_ns latency without tracemalloc; nearest-rank p95; separate one-operation Python allocation peak, not process RSS",
+  "candidate_data": "Synthetic only; no saved profiles, credentials or model calls",
+  "results": {
+    "build_cv": {
+      "samples": 30,
+      "median_ms": 0.0146,
+      "p95_ms": 0.0219,
+      "min_ms": 0.0125,
+      "max_ms": 0.0261,
+      "separate_python_allocation_peak_bytes": 3456
+    },
+    "assess_one_job": {
+      "samples": 30,
+      "median_ms": 0.8793,
+      "p95_ms": 1.2982,
+      "min_ms": 0.7232,
+      "max_ms": 1.3008,
+      "separate_python_allocation_peak_bytes": 4896
+    },
+    "render_pdf": {
+      "samples": 30,
+      "median_ms": 85.6146,
+      "p95_ms": 152.0078,
+      "min_ms": 61.7975,
+      "max_ms": 154.0206,
+      "separate_python_allocation_peak_bytes": 10429258
+    },
+    "hash_match_100_jobs": {
+      "samples": 30,
+      "median_ms": 12.6297,
+      "p95_ms": 14.7291,
+      "min_ms": 11.198,
+      "max_ms": 15.6985,
+      "separate_python_allocation_peak_bytes": 76050
+    }
+  }
+}

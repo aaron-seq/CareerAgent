@@ -90,6 +90,8 @@ class ArbeitnowSource(JobSource):
     def fetch(self, client: httpx.Client, page: int = 1, **params) -> list[FetchedJob]:
         url = "https://www.arbeitnow.com/api/job-board-api"
         data = self._get_json(client, url, params={"page": page})
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Arbeitnow response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("data") or []:
             job = JobPosting(
@@ -135,6 +137,8 @@ class JobicySource(JobSource):
         if geo:
             query["geo"] = geo
         data = self._get_json(client, url, params=query)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Jobicy response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("jobs") or []:
             job = JobPosting(
@@ -174,6 +178,8 @@ class RemoteOKSource(JobSource):
 
     def fetch(self, client: httpx.Client, **params) -> list[FetchedJob]:
         data = self._get_json(client, "https://remoteok.com/api")
+        if not isinstance(data, list):
+            raise ValueError("Invalid RemoteOK response: expected a list.")
         jobs: list[FetchedJob] = []
         for item in data:
             if not isinstance(item, dict) or "legal" in item or not item.get("id"):
@@ -228,6 +234,8 @@ class HimalayasSource(JobSource):
         else:
             url = "https://himalayas.app/jobs/api"
         data = self._get_json(client, url, params=query)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Himalayas response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("jobs") or []:
             restrictions = item.get("locationRestrictions") or []

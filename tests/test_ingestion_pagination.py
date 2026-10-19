@@ -10,7 +10,7 @@ from core.ingestion import IngestionService, SmartRecruitersSource
 
 
 def _page(ids: list[str], total: int | None = None) -> dict:
-    data = {
+    data: dict[str, list[dict[str, str]] | int] = {
         "content": [
             {"id": posting_id, "name": f"Role {posting_id}"} for posting_id in ids
         ]

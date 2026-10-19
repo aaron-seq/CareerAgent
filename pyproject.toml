@@ -1,6 +1,6 @@
 [tool.ruff]
 # Match the project's current supported floor (CI still tests 3.9-3.11).
-target-version = "py39"
+target-version = "py311"
 line-length = 88
 # Markdown is prose: its fenced snippets are illustrative fragments, and
 # ruff >=0.16 reformats them (wrongly - it rewrote a kwarg as a tuple in
@@ -25,10 +25,8 @@ ignore = [
 quote-style = "double"
 
 [tool.mypy]
-# Advisory today (run non-blocking in CI); tightened as modules gain types.
-# 3.10 is the lowest target mypy 2.x accepts, and installed pydantic uses
-# `match`, which a 3.9 target rejects. Runtime floor (CI) is still 3.9.
-python_version = "3.10"
+# Check the maintained runtime floor with the same frozen development graph.
+python_version = "3.11"
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true

@@ -1,5 +1,6 @@
 """Tests for LLM client module"""
 
+import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -177,3 +178,50 @@ class TestLocalLLMClient:
         assert len(models) == 2
         assert "llama3.1:8b" in models
         assert "mistral:7b" in models
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Built templates using } and { markers.",
+            'Escaped quote: " and brace: }',
+            "Nested-looking text: {not a nested object}",
+        ],
+    )
+    def test_json_cleaner_preserves_braces_inside_strings(self, text):
+        payload = {"summary": text, "projects": [{"name": "Parser"}]}
+        response = f"Here is the JSON: {json.dumps(payload)}\nDone."
+        client = LocalLLMClient()
+        assert json.loads(client._clean_json_response(response)) == payload
+
+    @pytest.mark.parametrize("retry_budget", [0, -1, True, 1.5])
+    def test_rejects_invalid_retry_budget_before_inference(self, retry_budget):
+        client = LocalLLMClient()
+        with patch.object(client, "generate_text") as generate:
+            with pytest.raises(ValueError, match="positive integer"):
+                client.generate_json("prompt", max_retries=retry_budget)
+        generate.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "invalid", ["no structured response", "{broken}", '[{"name": "wrong root"}]']
+    )
+    @patch("core.llm.time.sleep")
+    def test_retries_unusable_json_and_returns_next_object(self, sleep, invalid):
+        client = LocalLLMClient()
+        with patch.object(
+            client, "generate_text", side_effect=[invalid, '{"name": "Alex"}']
+        ) as generate:
+            assert client.generate_json("prompt") == {"name": "Alex"}
+        assert generate.call_count == 2
+        assert generate.call_args_list[1].kwargs["temperature"] == pytest.approx(0.15)
+        sleep.assert_called_once_with(1)
+
+    @patch("core.llm.time.sleep")
+    def test_invalid_json_exhausts_budget_without_returning_none(self, sleep):
+        client = LocalLLMClient()
+        with patch.object(client, "generate_text", return_value="not JSON") as generate:
+            with pytest.raises(
+                Exception, match="Failed to parse JSON after 2 attempts"
+            ):
+                client.generate_json("prompt")
+        assert generate.call_count == 2
+        sleep.assert_called_once()

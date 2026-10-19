@@ -6,8 +6,8 @@ Thank you for your interest in contributing to CareerAgent! This document provid
 
 ### Prerequisites
 
-- Python 3.9 or higher
-- An LLM provider: Ollama installed and running locally, **or** a free Groq
+- Python 3.11 or higher (CI covers 3.11–3.13)
+- An LLM provider for model-based parsing/generation: Ollama locally, **or** a free Groq
   API key (console.groq.com/keys) set as `GROQ_API_KEY` — see ADR 0005
 - Git for version control
 
@@ -29,8 +29,14 @@ Thank you for your interest in contributing to CareerAgent! This document provid
 4. Install dependencies (test tools included; `pytest` fails at collection
    without them):
    ```bash
-   pip install -r requirements.txt -r requirements-test.txt
+   python -m pip install --require-hashes --only-binary=:all: \
+     -r requirements/locks/test-py311.txt
    ```
+
+   Use `312` or `313` for that interpreter. These locks target Linux x86_64;
+   [dependency instructions](requirements/locks/README.md) cover refresh,
+   advisory checks and other platforms. CV building, browsing, deterministic
+   tailoring and ordinary tests need no model or API key.
 
 5. Pick an LLM provider:
    ```bash
@@ -74,7 +80,7 @@ Example: `feature/add-job-source`
    python -m scripts.check
    ```
 
-   This runs lint, format, Python tests with coverage, and Node extension tests.
+   This runs lint, format, required mypy, Python coverage and Node extension tests.
    Select subsets with `python -m scripts.check lint test`. Run the optional
    container check with `python -m scripts.check docker`; it executes real app
    screens, checks encrypted data across replacement containers, and probes
@@ -177,7 +183,8 @@ If adding unit tests:
 ## Pull Request Process
 
 1. Update README.md if you've added features
-2. Ensure all manual tests pass
+2. Run relevant automated/manual checks; state which external integrations were
+   actually exercised and which remain mocked or unrun.
 3. Update CHANGELOG.md with your changes (if exists)
 4. Push to your fork and create a PR
 

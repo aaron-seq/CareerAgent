@@ -17,13 +17,14 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import JSON, Column, DateTime, TypeDecorator, UniqueConstraint
+from sqlalchemy.engine import Dialect
 from sqlmodel import Field, SQLModel
 
 from ..normalize import ensure_utc, utc_now
 from .crypto import EncryptedString
 
 
-class UTCDateTime(TypeDecorator):
+class UTCDateTime(TypeDecorator[datetime]):
     """``TIMESTAMP WITH TIME ZONE`` that always hands back aware UTC.
 
     Every ``datetime`` column uses this explicitly (via ``sa_type``) instead
@@ -42,10 +43,14 @@ class UTCDateTime(TypeDecorator):
     impl = DateTime(timezone=True)
     cache_ok = True
 
-    def process_bind_param(self, value, dialect):  # type: ignore[override]
+    def process_bind_param(
+        self, value: Optional[datetime], dialect: Dialect
+    ) -> Optional[datetime]:
         return None if value is None else ensure_utc(value)
 
-    def process_result_value(self, value, dialect):  # type: ignore[override]
+    def process_result_value(
+        self, value: Optional[datetime], dialect: Dialect
+    ) -> Optional[datetime]:
         return None if value is None else ensure_utc(value)
 
 

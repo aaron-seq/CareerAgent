@@ -1,5 +1,10 @@
 # CareerAgent engineering and security audit
 
+Current follow-up: [2026-10-19 engineering review](ENGINEERING_REVIEW_2026-10-19.md)
+records patched dependencies, hash-verified installs, required type checks,
+encrypted refresh recovery and actual local inference. The dated baseline
+below remains historical evidence; use PROGRESS.md for current totals and limits.
+
 Date: 2026-10-15. Baseline: `2b33fcb` on `main`; findings below distinguish the
 implemented hardening from remaining work. This is a fresh evidence-based audit,
 not a reconstruction of the missing older document referenced by the progress log.

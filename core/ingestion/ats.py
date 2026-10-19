@@ -61,6 +61,8 @@ class GreenhouseSource(JobSource):
             f"{self.board_token}/jobs?content=true"
         )
         data = self._get_json(client, url)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Greenhouse response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("jobs", []):
             loc = (item.get("location") or {}).get("name")
@@ -94,6 +96,8 @@ class LeverSource(JobSource):
     def fetch(self, client: httpx.Client, **params) -> list[FetchedJob]:
         url = f"https://api.lever.co/v0/postings/{self.company_slug}?mode=json"
         data = self._get_json(client, url)
+        if not isinstance(data, list):
+            raise ValueError("Invalid Lever response: expected a list.")
         jobs: list[FetchedJob] = []
         for item in data:
             categories = item.get("categories") or {}
@@ -135,6 +139,8 @@ class AshbySource(JobSource):
             f"{self.board_name}?includeCompensation=true"
         )
         data = self._get_json(client, url)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Ashby response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("jobs", []):
             comp = item.get("compensation") or {}
@@ -332,6 +338,8 @@ class RecruiteeSource(JobSource):
     def fetch(self, client: httpx.Client, **params) -> list[FetchedJob]:
         url = f"https://{self.company_slug}.recruitee.com/api/offers/"
         data = self._get_json(client, url)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Recruitee response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("offers") or []:
             salary = item.get("salary") or {}
@@ -376,6 +384,8 @@ class WorkableSource(JobSource):
     def fetch(self, client: httpx.Client, **params) -> list[FetchedJob]:
         url = f"https://apply.workable.com/api/v1/widget/accounts/{self.company_slug}"
         data = self._get_json(client, url, params={"details": "true"})
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Workable response: expected an object.")
         company = data.get("name") or self.company_name
         jobs: list[FetchedJob] = []
         for item in data.get("jobs") or []:

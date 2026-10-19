@@ -43,6 +43,7 @@ graph TB
         CF[Contact Finder]
         PE[Personalization Engine]
         DV[Draft Validator]
+        Workspace[Encrypted workspace recovery]
     end
 
     subgraph "Integration Layer"
@@ -75,6 +76,8 @@ graph TB
     Facade --> Enrichment
     Facade --> Analytics
     Facade --> Alerting
+    Facade --> Workspace
+    Workspace --> Storage
     UI --> CV
     UI --> CF
     UI --> PE
@@ -124,6 +127,10 @@ pasted jobs are upserted into the same job repository as API records; persisted
 postings can open Draft Studio directly. Source/attribution fields survive card
 serialization. The UI keeps generated material and editor state in per-job
 session workspaces, invalidating them when the active profile changes (ADR 0007).
+`core/workspace.py` separately persists a narrow encrypted recovery snapshot of
+the active CV row ID, exact selected job row IDs, contacts, preferences and page.
+Fresh sessions resolve source facts from the DB without model/network calls.
+Credentials, clients, unsent drafts and approval state are excluded (ADR 0011).
 
 #### Candidate answers and apply flow (ADR 0009)
 
@@ -330,7 +337,7 @@ CareerAgent/
 
 ### Local development
 ```bash
-pip install -r requirements.txt -r requirements-test.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements/locks/test-py311.txt
 # Either: ollama serve && ollama pull llama3.1:8b
 # Or: set GROQ_API_KEY in .env (free tier, no credit card: console.groq.com/keys)
 streamlit run app.py
@@ -359,4 +366,4 @@ Gmail credentials are optional private mounts; they are excluded from builds.
 | Job data | Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable, Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas | API-first ingestion |
 | Web search | duckduckgo-search | Fallback job/contact discovery |
 | Email | Google Gmail API | Draft creation |
-| Testing | pytest | 533 Python tests and 50 Node extension tests |
+| Testing | pytest, mypy, Ruff, Node | Shared required checks; measured current totals in PROGRESS.md |

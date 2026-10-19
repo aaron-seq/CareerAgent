@@ -779,6 +779,8 @@ def _shift_follow_up(application_id: int, days: int) -> None:
 
     with get_session() as session:
         row = session.get(ApplicationRow, application_id)
+        assert row is not None
+        assert row.next_follow_up_at is not None
         row.next_follow_up_at = row.next_follow_up_at + timedelta(days=days)
         session.add(row)
 

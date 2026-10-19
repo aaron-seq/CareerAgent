@@ -1,18 +1,17 @@
 # Testing dependencies
-pytest==7.4.3
+pytest==9.0.3
 pytest-cov==4.1.0
 pytest-mock==3.12.0
-pytest-asyncio==0.21.1
+pytest-asyncio==1.4.0
 
 # HTTP mocking for API-adapter tests (no live network in CI)
 respx==0.23.1
 
 # Code quality (ruff handles lint + format, replacing black/flake8/isort)
 ruff==0.15.8
-# mypy 2.x and these stubs need Python >=3.10 to install; the 3.9 CI leg never
-# runs mypy, so both are skipped there.
-mypy==2.4.0; python_version >= "3.10"
-types-python-dateutil==2.9.0.20260807; python_version >= "3.10"
+# Type checks run on the supported Python 3.11+ floor.
+mypy==2.4.0
+types-python-dateutil==2.9.0.20260807
 
 # Include base requirements
 -r requirements.txt
