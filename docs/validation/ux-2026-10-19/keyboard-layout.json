@@ -1,0 +1,153 @@
+{
+  "scope": "Focused synthetic keyboard and dark theme checks in Chromium, desktop1440x1080/mobile390x844. No model, external network, application or message operation.",
+  "checks": [
+    "Desktop main title/labels/context visible with sidebar navigation expanded",
+    "Native CV tabs switch with arrow keys and selected ARIA state",
+    "Labeled inputs accept sequential keyboard focus; sidebar button Enter navigates",
+    "Contact provenance visible with popover closed; disabled AI action does not block known-contact path",
+    "Mobile main heading/label measured with sidebar explicitly closed; no horizontal document overflow"
+  ],
+  "desktop_title": {
+    "text": "Onboarding",
+    "fontSize": "33.6px",
+    "color": "rgb(233, 231, 228)",
+    "background": "rgb(11, 12, 14)",
+    "opacity": "1",
+    "outline": "rgb(233, 231, 228) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(233, 231, 228)",
+    "focusVisible": false
+  },
+  "desktop_main_label": {
+    "text": "Full name",
+    "fontSize": "14px",
+    "color": "rgb(233, 231, 228)",
+    "background": "rgb(20, 22, 26)",
+    "opacity": "1",
+    "outline": "rgb(233, 231, 228) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(233, 231, 228)",
+    "focusVisible": false
+  },
+  "desktop_main_caption": {
+    "text": "CV building, downloads, job browsing and tracking work without AI.",
+    "fontSize": "14px",
+    "color": "rgb(233, 231, 228)",
+    "background": "rgb(11, 12, 14)",
+    "opacity": "1",
+    "outline": "rgb(233, 231, 228) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(233, 231, 228)",
+    "focusVisible": false
+  },
+  "desktop_sidebar_status": {
+    "text": "Optional \u00b7 off. Build CVs, browse jobs and track applications now.",
+    "fontSize": "12px",
+    "color": "rgb(135, 141, 151)",
+    "background": "rgb(20, 22, 26)",
+    "opacity": "1",
+    "outline": "rgb(135, 141, 151) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(135, 141, 151)",
+    "focusVisible": false
+  },
+  "desktop_sidebar_inactive_nav": {
+    "text": "Contact Finder",
+    "fontSize": "14px",
+    "color": "rgb(135, 141, 151)",
+    "background": "rgb(20, 22, 26)",
+    "opacity": "1",
+    "outline": "rgb(135, 141, 151) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgba(0, 0, 0, 0)",
+    "focusVisible": false
+  },
+  "tab_keyboard_focus": {
+    "text": "Import PDF or text",
+    "fontSize": "14px",
+    "color": "rgb(255, 111, 0)",
+    "background": "rgb(11, 12, 14)",
+    "opacity": "1",
+    "outline": "rgb(255, 111, 0) none 3px",
+    "boxShadow": "rgba(255, 111, 0, 0.5) 0px 0px 0px 3.2px",
+    "borderColor": "rgb(255, 111, 0)",
+    "focusVisible": true
+  },
+  "input_keyboard_focus": {
+    "text": "CV email",
+    "fontSize": "14.4px",
+    "color": "rgb(233, 231, 228)",
+    "background": "rgb(11, 12, 14)",
+    "opacity": "1",
+    "outline": "rgb(233, 231, 228) none 3px",
+    "boxShadow": "rgba(255, 111, 0, 0.1) 0px 0px 0px 3px",
+    "borderColor": "rgb(255, 111, 0)",
+    "focusVisible": true
+  },
+  "nav_keyboard_focus": {
+    "text": "Job Discovery",
+    "fontSize": "14px",
+    "color": "rgb(135, 141, 151)",
+    "background": "rgb(20, 22, 26)",
+    "opacity": "1",
+    "outline": "rgb(255, 111, 0) solid 2px",
+    "boxShadow": "rgba(255, 111, 0, 0.5) 0px 0px 0px 3.2px",
+    "borderColor": "rgba(0, 0, 0, 0)",
+    "focusVisible": true
+  },
+  "contact_provenance": {
+    "text": "User provided \u00b7 unverified",
+    "fontSize": "14px",
+    "color": "rgb(233, 231, 228)",
+    "background": "rgb(20, 22, 26)",
+    "opacity": "1",
+    "outline": "rgb(233, 231, 228) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(233, 231, 228)",
+    "focusVisible": false
+  },
+  "disabled_contact_search": {
+    "text": "Search Contacts",
+    "fontSize": "14px",
+    "color": "rgba(233, 231, 228, 0.4)",
+    "background": "rgb(20, 22, 26)",
+    "opacity": "1",
+    "outline": "rgba(233, 231, 228, 0.4) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgba(233, 231, 228, 0.2)",
+    "focusVisible": false
+  },
+  "mobile_title": {
+    "text": "Onboarding",
+    "fontSize": "25.6px",
+    "color": "rgb(233, 231, 228)",
+    "background": "rgb(11, 12, 14)",
+    "opacity": "1",
+    "outline": "rgb(233, 231, 228) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(233, 231, 228)",
+    "focusVisible": false
+  },
+  "mobile_first_label": {
+    "text": "Full name",
+    "fontSize": "14px",
+    "color": "rgb(233, 231, 228)",
+    "background": "rgb(20, 22, 26)",
+    "opacity": "1",
+    "outline": "rgb(233, 231, 228) none 3px",
+    "boxShadow": "none",
+    "borderColor": "rgb(233, 231, 228)",
+    "focusVisible": false
+  },
+  "mobile_layout": {
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "nameY": 482.46875,
+    "headingY": 36,
+    "containerWidth": 390
+  },
+  "browser_errors": [],
+  "aborted_external_requests": [],
+  "browser": "154.0.8037.57",
+  "status": "passed"
+}

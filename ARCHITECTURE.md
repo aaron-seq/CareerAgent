@@ -134,13 +134,16 @@ Credentials, clients, unsent drafts and approval state are excluded (ADR 0011).
 
 #### Candidate answers and apply flow (ADR 0009)
 
-These return plain dicts or Pydantic models and are not wired into `app.py`
-yet.
+These return plain dicts or Pydantic models. Onboarding now edits optional
+answers for the active saved CV; Export & Logs previews the saved answers and
+offers the extension JSON with an optional CV PDF. Draft Studio and Pipeline
+use validated application links. See ADR 0013 for draft lifecycle and consent.
 
 | Function | Returns |
 |---|---|
 | `save_candidate_profile(cv_id, candidate: CandidateProfile \| dict)` | `{"ok": True, "cv_id"}` or `{"ok": False, "error"}`. Validates a form dict before storing it encrypted. |
 | `load_candidate_profile(cv_id)` | `CandidateProfile` (all-unknown if nothing saved yet) or `None` if the CV doesn't exist. |
+| `application_details_preview(candidate)` | Exact `answers`, `compensation_source`, `unanswered`, `voluntary_answers_shared` and `eligibility_country`; local validation only, no readiness score. |
 | `profile_completeness(cv, candidate=None)` | `{"percent", "items", "missing", "next_best_action"}`; items are `{"key", "label", "done", "weight", "why", "section"}`, with missing items ordered most valuable first. |
 | `extension_profile(cv, candidate=None, include_resume=False)` | The popup's import JSON: seven string identity keys; with a candidate, `location`, website fallback for `portfolio`, and `answers`; optionally a `resume` block (`filename`, `mime`, `data_b64`). |
 | `apply_target(job_id)` | `{"ok", "job_id", "title", "company", "url", "ats", "autofill_supported", "note"}`; `url` is only an http(s) link. |

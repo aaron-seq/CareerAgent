@@ -1,0 +1,58 @@
+{
+  "scope": "Real Chromium DOM, scripts directly injected into synthetic local document; no employer page, extension service worker or host permission test",
+  "checks": [
+    "City London fills city but country-name remains blank without inferred country",
+    "Hidden phone stays blank while intentionally hidden resume upload remains supported",
+    "Known country boolean true/false correct; mismatched country abstains",
+    "Qualified salary matches; placeholder/ARIA/currency/period/numeric/history restrictions abstain",
+    "Existing email and real first select option preserved",
+    "Voluntary gender excluded without consent; exact answer included after explicit marker",
+    "Resume attached to actual FileList; cover letter untouched",
+    "Submit counter remains zero through delayed pass"
+  ],
+  "browser": "154.0.8037.57",
+  "result": {
+    "filled": 2,
+    "answered": 3,
+    "attached": 1,
+    "needsYou": [
+      "Expected salary",
+      "Are you authorized to work in the US?",
+      "Gender"
+    ]
+  },
+  "values": {
+    "country": "",
+    "city": "London",
+    "first": "Browser",
+    "email": "existing@example.test",
+    "hiddenPhone": "",
+    "salaryMatch": "GBP 90,000 per year",
+    "salaryConflict": "",
+    "salaryNumeric": "",
+    "salaryAria": "",
+    "salaryHistory": "",
+    "auth": "yes",
+    "authUS": "",
+    "authPreserved": "no",
+    "sponsor": "no",
+    "gender": "",
+    "resume": [
+      {
+        "name": "Synthetic.pdf",
+        "type": "application/pdf",
+        "size": 26
+      }
+    ],
+    "coverCount": 0,
+    "submitCount": 0
+  },
+  "consent_key": "share_demographics",
+  "browser_errors": [],
+  "external_requests": [],
+  "status": "passed",
+  "source_sha256": {
+    "/workspace/CareerAgent/extension/src/field_mapping.js": "e01303b4b1aef991aa5aa10257b269c89f7cd9fc3e2d2135edc5bc2bf25f7438",
+    "/workspace/CareerAgent/extension/src/content_script.js": "d996f7c8a897119e806f3f558aa63707e506e5e6ba0c0cc9b7f7ac021f4b9073"
+  }
+}

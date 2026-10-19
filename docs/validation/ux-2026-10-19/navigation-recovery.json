@@ -1,0 +1,30 @@
+{
+  "scope": "Independent Chromium acceptance, isolated synthetic SQLite/storage/key, external requests aborted, no model or outreach",
+  "checks": [
+    "390px fresh session builder visible with collapsed sidebar, no horizontal document overflow",
+    "Model-free CV explicitly saved from supplied facts",
+    "Invalid email blocked, corrected valid email has truthful provenance, no inferred employer domain",
+    "Contact addition, current route and deliberate removal survive real reload",
+    "Selected job opens model-free material preparation without optional contact"
+  ],
+  "browser": "154.0.8037.57",
+  "mobile": {
+    "overflow": false,
+    "h1Size": "16.8px",
+    "labelSize": "14px",
+    "nameY": 482.46875,
+    "sidebarExpanded": null
+  },
+  "name_before_mode_switch": "Acceptance Unsaved Candidate",
+  "builder_name_after_mode_switch": "Acceptance Unsaved Candidate",
+  "builder_name_after_navigation": "Acceptance Unsaved Candidate",
+  "builder_skills_after_navigation": "Python\nSQL",
+  "builder_project_count_after_navigation": "1",
+  "builder_project_name_after_navigation": "Synthetic draft project",
+  "builder_project_description_after_navigation": "Built a synthetic catalogue for a product acceptance test.",
+  "default_contact_domain": "",
+  "materials_mobile_overflow": false,
+  "browser_errors": [],
+  "aborted_external_requests": [],
+  "status": "passed"
+}

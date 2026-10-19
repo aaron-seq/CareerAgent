@@ -1,0 +1,16 @@
+{
+  "scope": "Actual Chromium against synthetic rows, no employer requests sent, popup request intercepted and aborted, no submit",
+  "app_sha256": "97335a692556a265920b6d46a08ddcea97f1ccb0ed34aa78234d486a4b2163e9",
+  "checks": [
+    "Supported host gets validated explicit link and honest review/manual-submit guidance; actual link click intercepted before any remote request; preparation routes to saved autofill handoff",
+    "Unknown host remains a usable posting link with bounded autofill support note",
+    "javascript posting has no actionable link and gives useful invalid-link feedback",
+    "Database re-read after opening/preparing/export navigation keeps all three rows Saved, with no applied timestamp"
+  ],
+  "browser": "154.0.8037.57",
+  "browser_errors": [],
+  "blocked_external_requests": [
+    "https://jobs.lever.co/synthetic-review/role"
+  ],
+  "status": "passed"
+}

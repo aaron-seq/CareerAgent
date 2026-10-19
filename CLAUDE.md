@@ -61,8 +61,10 @@ available as an opt-in alternative (ADR 0005).
 
 ## Testing
 - Every new module ships with pytest tests.
-- **Mock all external APIs** (`respx`/`vcr.py`/`pytest-mock`) — no live network
-  calls in CI. Ollama and job-board APIs must be mocked in tests.
+- **Mock all external APIs** (`respx`/`vcr.py`/`pytest-mock`) in application
+  tests, including Ollama and job-board APIs. The separate dependency-advisory
+  CI jobs intentionally contact the live advisory feed; they do not use
+  candidate data or run application integrations.
 - Run: `python -m scripts.check`. Optional Docker: `python -m scripts.check docker`.
   Types are required: `python -m scripts.check type` checks all repository Python files.
 

@@ -6,8 +6,8 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 ## Current status
 - **Current phase:** Phases 0–10 have implementations; production hardening remains ongoing.
 - **Last updated:** 2026-10-19
-- **Next action:** Continue focused UX/product refinement; owner-led historical PII cleanup #38 and hosted-fetch/metadata-encryption prerequisites #41/#42 remain. Matching/grounding and external integration coverage remain separate follow-ups.
-- **Blockers:** Public-history PII remains unresolved. Gmail OAuth/delivery, Postgres locking and real-browser extension behavior remain unverified. Local model inference and representative Chromium app recovery now work; fresh published-environment restoration remains separate.
+- **Next action:** Owner-led historical PII cleanup #38 and hosted-fetch/metadata-encryption prerequisites #41/#42 remain. Matching/grounding and external integration coverage remain separate follow-ups.
+- **Blockers:** Public-history PII remains unresolved. Gmail OAuth/delivery, Postgres locking and installed-extension/employer-page behavior remain unverified. Local inference, Chromium app recovery and synthetic real-DOM autofill work; fresh published-environment restoration remains separate.
 
 ## Verification level per phase
 - **Genuinely run + tested here:** P1 data layer, P4 dedup/scoring, P5 resume
@@ -16,14 +16,42 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, external boundary mocked:** P2 ingestion adapters
   (respx), P3 JSON-LD/polite fetcher (respx), P7 email verification (stub
   resolver), P9 Telegram/Discord emitters (respx).
-- **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
+- **Built + unit-tested, NOT live-verified:** P8 installed extension on employer forms,
   real email delivery, and deployment (dry-run only).
 
-Totals: **816 Python tests + 55 JS tests pass; Ruff/format and full-repository mypy clean.**
-Core coverage is **95.20%**, up from 94.83%.
+Totals: **922 Python tests + 63 JS tests pass; Ruff/format and full-repository mypy clean.**
+Core coverage is **95.27%**, up from 95.20%.
 Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-19 — Task-first UX and reviewed application details
+
+Simplified first run with native build/import tabs, optional collapsed AI
+settings, readable labels, current Streamlit selectors and mobile navigation.
+RAM-only callbacks preserve unsaved CV facts through fast sidebar navigation;
+save/activate explicitly changes scope. Manual contacts validate locally,
+display truthful provenance and can be removed. Email-pattern domains require
+explicit input rather than inferred ATS/company hosts.
+
+Connected the existing encrypted candidate-answer backend to an optional
+per-saved-CV editor and exact saved-answer export preview. Preserve unknown,
+False and zero; target pay takes precedence over minimum without conversion or
+silent precision changes. Demographics require explicit saved consent. Optional
+PDF errors keep identity/answers-only downloads available. Validated posting
+links and the export path do not mark applications submitted.
+
+Independent browser review caught and fixed native-widget draft loss, first-edit
+editor collapse, ignored secondary salary constraints, hidden-field autofill and
+city-to-country substitution. Real synthetic DOM exercises actual resume
+FileList attachment, eligibility/polarity/consent and zero submits. No employer
+application or message was sent. Keyboard/390px/1440px checks are representative,
+not a full accessibility or live-extension certification.
+
+**Validation:** 922 Python tests, 63 Node tests, 95.27% core coverage, Ruff/format,
+full mypy (124 files), actionlint and functional Docker smoke passed; seven
+intentional SQLModel reload warnings remain. See the [product review](docs/PRODUCT_UX_REVIEW_2026-10-19.md)
+and [ADR 0013](docs/adr/0013-reviewed-application-details-and-task-first-ux.md).
 
 ### 2026-10-19 — Reviewed recovery, dependency security and real local inference
 

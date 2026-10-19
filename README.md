@@ -1,6 +1,8 @@
 # CareerAgent
 
-A local AI-powered career assistant for personalized job outreach. This application automates the process of finding contacts, generating tailored email drafts, and managing your job search workflow using local LLMs.
+A local career workspace for building a truthful CV, finding jobs, preparing
+application materials and tracking follow-ups. AI assistance and contact
+discovery are optional.
 
 ## Features
 
@@ -12,7 +14,9 @@ A local AI-powered career assistant for personalized job outreach. This applicat
   (Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable) and aggregators/job boards
   (Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas) — with DuckDuckGo search as a
   fallback mode.
-- **Contact Finder**: Automated search for hiring managers and contact permutation generation.
+- **Contact Finder**: Search for hiring managers, add known contacts, or
+  generate unverified patterns for an email domain you supply. Provenance
+  labels describe the source; they do not verify a mailbox.
 - **Resume tailoring & cover letters**: Truthfully reorders/emphasizes your
   real CV content per job, and checks cover-letter metrics against it.
   Free-prose checks are heuristic; review generated claims before exporting.
@@ -27,6 +31,9 @@ A local AI-powered career assistant for personalized job outreach. This applicat
   stay with their selected job.
 - **Refresh recovery**: Restore the active CV, deliberately selected jobs,
   contacts, preferences and page from a small encrypted local workspace.
+- **Reviewed autofill**: Save optional application answers with each CV,
+  preview what will be shared, and download an extension profile with an
+  optional CV PDF. Unknown answers stay unanswered and you submit the form.
 
 ## Technical Architecture
 
@@ -44,7 +51,7 @@ The application is built with a modern Python stack:
 ### Prerequisites
 
 - Python 3.11 or newer; CI tests 3.11, 3.12 and 3.13.
-- An LLM provider for new CV parsing and AI drafts — either:
+- Optional for CV parsing and AI drafts, an LLM provider — either:
   - **Ollama** installed and running locally (standard default port 11434), or
   - A free **Groq** API key (no credit card: console.groq.com/keys) — faster
     to get running, but sends prompts off-machine; see ADR 0005.
@@ -68,7 +75,7 @@ The application is built with a modern Python stack:
     install. Other platforms can resolve `requirements-test.txt` and validate
     their own graph. See [lock scope and refresh](requirements/locks/README.md).
 
-3.  Set up an LLM provider — either:
+3.  If you want AI parsing or drafting, set up an LLM provider — either:
     ```bash
     ollama pull llama3.1:8b
     ```
@@ -86,8 +93,8 @@ encrypted data unreadable and changes suppression-list hashes. Deployment
 operators can supply a managed key instead. See `.env.example` for supported
 settings and [the current audit](docs/SECURITY_AUDIT.md) for remaining risks.
 
-Changing the model or provider disconnects the previous client. Initialize
-the selected provider again before parsing a CV. Initialization requires the
+Changing the model or provider disconnects the previous client. Choose
+**Connect AI** in the sidebar's **AI settings** before parsing a CV. Connection requires the
 selected model to exist; parsing failures are reported rather than saved as
 empty profiles.
 
@@ -95,14 +102,16 @@ empty profiles.
 
 1. Browse **Job Discovery** to import a company careers page, query a job board,
    or paste a description. Browsing and saving jobs work without an AI provider.
-2. In **Onboarding**, choose **Build or edit your CV** without connecting AI,
-   connect a model to parse a PDF/text CV, or choose **Use a saved CV**. Your
+2. In **Onboarding**, use the **Build or edit a CV** tab without connecting AI,
+   choose **Import PDF or text** after connecting a model, or choose
+   **Use a saved CV** above the tabs. Your
    matches refresh when you switch profiles; resume checks and downloads work
    offline.
 3. Open **Pipeline**, choose **Prepare application** on a posting, and tailor
    your resume. Connect your chosen model when you want an email or cover letter.
    Switching jobs preserves each job's edits separately.
-4. Review all claims and recipients before exporting. Use the posting link and
+4. Review all claims and recipients before exporting. Contacts are optional;
+   a selected job can go directly to application materials. Use the posting link and
    browser extension to fill the application, then review and submit yourself.
    **Export & Logs** provides a browser ZIP download of your local artifacts.
 
@@ -119,6 +128,10 @@ blank entries are ignored. Save with **Create CV and check readiness**. Edits
 create a new saved profile, keeping the previous version available. A failed
 database save leaves your active CV unchanged.
 
+Unsaved builder edits stay in the current browser session when switching tabs
+or navigating between screens. Save before refreshing or closing the browser.
+Activating a different saved CV starts its editor from that CV's facts.
+
 **Local CV readiness** is a 100-point content checklist: name 10, usable email
 15, skills 15, experience or projects 25, supporting details 15, education 10,
 and complete entries 10. Project-only applicants can satisfy it. The checklist
@@ -133,6 +146,36 @@ project impact. Unsupported glyphs or scripts needing shaping/right-to-left
 layout show a clear message; Markdown and JSON remain available with the
 original text. See [the CV and live-URL validation report](docs/CV_VALIDATION.md)
 for tested behavior and limits.
+
+### Save application answers and prepare autofill
+
+With a saved CV active in **Onboarding**, open **Application details** →
+**Edit application details**. Supply only the answers you want to reuse:
+country-scoped work eligibility, expected pay, availability, relocation or a
+cover note. **Not answered**, **Yes** and **No** are distinct; blank pay/notice
+stays unknown and an explicit zero is preserved. Save the details before
+downloading them. Each saved CV has its own answers; creating a new CV snapshot
+starts with unanswered details, so review them again.
+
+**Export & Logs** previews the saved fields. Expected pay takes precedence over
+minimum pay; if expected pay is blank, the preview explicitly identifies the
+minimum fallback. Currency and period stay as stated, with no conversion.
+Unsupported numeric precision is rejected instead of silently changing pay.
+Voluntary demographic answers are excluded unless you save the sharing choice.
+Unsaved changes remain in the current session and are excluded from downloads.
+
+Choose **Include my CV PDF for resume upload** to embed the active CV. If PDF
+generation or the 2 MB attachment limit fails, an identity/answers-only JSON
+download remains available. The JSON and PDF contain readable personal data.
+Load `extension/` through Chrome's **Load unpacked**, open the downloaded JSON
+and paste it into **Import from CareerAgent** in the extension popup. Open the
+supported form and choose **Autofill this page**, then review every field and
+submit yourself. Unsupported/ambiguous questions need manual answers; hidden
+non-file fields are skipped. Opening a posting or downloading a profile does
+not change its application status.
+
+See the [product review](docs/PRODUCT_UX_REVIEW_2026-10-19.md) for browser evidence,
+state behavior and remaining limits.
 
 ### Refresh safely
 
