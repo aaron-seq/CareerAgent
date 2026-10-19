@@ -1,8 +1,18 @@
 # CareerAgent
 
+**Overview** · [What's new](docs/WHATS_NEW.md) · [Architecture](ARCHITECTURE.md) · [Progress log](PROGRESS.md) · [Security audit](docs/SECURITY_AUDIT.md) · [Roadmap](ROADMAP.md)
+
+---
+
 A local career workspace for building a truthful CV, finding jobs, preparing
 application materials and tracking follow-ups. AI assistance and contact
 discovery are optional.
+
+> **New in October 2026:** build your CV without AI, saved application
+> details with country-scoped autofill, work that survives a browser refresh,
+> cleaner skill-gap matching, and a complete data export. Requires Python 3.11+
+> and `alembic upgrade head`. See **[What's new](docs/WHATS_NEW.md)** for the
+> full list and upgrade steps.
 
 ## Features
 
@@ -113,7 +123,9 @@ empty profiles.
 4. Review all claims and recipients before exporting. Contacts are optional;
    a selected job can go directly to application materials. Use the posting link and
    browser extension to fill the application, then review and submit yourself.
-   **Export & Logs** provides a browser ZIP download of your local artifacts.
+   **Export & Logs** → **Export All Data (ZIP)** downloads everything CareerAgent
+   holds for you in readable form: saved CVs and application details, your
+   application board with notes, contacts, drafts, jobs and your opt-out list.
 
 Each imported job shows its source and original posting link. SmartRecruiters
 imports follow later pages automatically, up to 250 jobs and 20 list pages by
@@ -276,7 +288,7 @@ for decisions.
 | `core/outreach` | Email verification + CAN-SPAM/GDPR compliance (postal address, opt-out, per-campaign LIA), send caps, suppression list, single pre-send gate. |
 | `core/enrichment` | Salary parsing, company signals (Glassdoor/layoffs), visa-sponsor filter, ghost-job detection, filters. |
 | `core/alerting` | Job digests → Markdown/RSS, Telegram/Discord delivery. |
-| `core/analytics` | Application funnel, A/B variant tracking, interview-prep generation. |
+| `core/analytics` | Application funnel and interview-prep generation. A/B resume-variant aggregation exists but nothing records variants yet ([#35](https://github.com/aaron-seq/CareerAgent/issues/35)). |
 | `extension/` | Manifest V3 **human-in-the-loop** autofill for Greenhouse/Lever/Ashby — fills fields, never submits. |
 
 ### Ethics guardrails (enforced in code)
@@ -307,7 +319,7 @@ scripts.check lint test`. For Docker builds behind a trusted TLS proxy, add
 including Docker and strict dependency-advisory checks before merge. Mypy is
 required and checks all repository Python files. Weekly/manual CI also tests
 unconstrained upstream dependencies without modifying committed locks.
-See [the current engineering review](docs/ENGINEERING_REVIEW_2026-10-17.md).
+See [the current engineering review](docs/ENGINEERING_REVIEW_2026-10-19.md).
 
 Public API smoke checks are opt-in and stay outside default tests/CI:
 
@@ -362,7 +374,9 @@ verification can be completed.
 - `extension/`: Manifest V3 autofill extension.
 - `alembic/`: database migrations.
 - `scripts/`: operational scripts (e.g. digest delivery).
-- `docs/`: `RESEARCH.md`, ADRs; `ROADMAP.md` / `PROGRESS.md` at the root.
+- `docs/`: [What's new](docs/WHATS_NEW.md), ADRs (`docs/adr/`), security audit,
+  engineering and product reviews, CV validation evidence and `RESEARCH.md`;
+  `ROADMAP.md` / `PROGRESS.md` / `ARCHITECTURE.md` at the root.
 
 ## License
 
