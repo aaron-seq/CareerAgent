@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 
 from .llm import LocalLLMClient
+from .logging_config import safe_url
 from .models import JobPosting, SearchQuery
 from .prompts import JOB_PARSE_PROMPT
 
@@ -170,5 +171,10 @@ class JobFinder:
             return JobPosting(**job_data)
 
         except Exception as e:
-            logger.warning("Failed to fetch job details from %s", job_url, exc_info=e)
+            # No exc_info: HTTP library errors embed the full URL, query included.
+            logger.warning(
+                "Failed to fetch job details from %s (%s)",
+                safe_url(job_url),
+                type(e).__name__,
+            )
             return None

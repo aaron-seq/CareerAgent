@@ -19,11 +19,33 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 installed extension on employer forms,
   real email delivery, and deployment (dry-run only).
 
-Totals: **922 Python tests + 63 JS tests pass; Ruff/format and full-repository mypy clean.**
+Totals: **922 Python tests + 64 JS tests pass; Ruff/format and full-repository mypy clean.**
 Core coverage is **95.27%**, up from 95.20%.
 Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-19 — Leftover #51 review fixes; "What's new" docs tab
+
+- Two Codex findings on #51 were still open on main. The extension accepted
+  base64 resume data whose length isn't a multiple of 4 (e.g. `JVBER`), which
+  passed validation and then made `atob()` throw mid-fill. Such data is now
+  rejected, and `decodeResume` cannot throw. ADR 0009's rollback target
+  pointed past the timezone migration; it is now the direct parent
+  `3f1c2a9d7e45`.
+- New `docs/WHATS_NEW.md`, linked from a tab-style row at the top of the
+  README, summarises 14–19 October by user outcome, with upgrade steps and
+  open limits. README fixes: a dead link to a never-committed engineering
+  review, a stale export description, and an A/B-tracking claim that #35 shows
+  isn't wired.
+- Real-user re-test of main (2db88ef, Playwright, no model, offline): of the
+  20 first-use findings, 6 are fixed, 5 partial and 9 not fixed. New: the
+  post-refresh "Re-score matches" warning persists on every page. Follow-ups
+  are tracked separately.
+
+**Validation:** `python -m scripts.check` (lint, required mypy, 922 Python
+tests at 95% core coverage, 64 extension tests) passed in a venv built from
+`requirements/locks/test-py311.txt`.
 
 ### 2026-10-19 — Task-first UX and reviewed application details
 

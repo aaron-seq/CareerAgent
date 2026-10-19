@@ -35,8 +35,10 @@ export format beside `facade.extension_profile`.
 One additive, nullable column; existing CVs read as "no answers yet". Saving a
 newly parsed CV creates a new row, so the UI must copy answers forward
 explicitly when it replaces a CV. Embedded resumes are capped at 2 MB to stay
-within `chrome.storage.local`. Roll back with `alembic downgrade cbb284f817e8`
-(drops only the answers column) and revert the feature commits; the seven-key
+within `chrome.storage.local`. Roll back with `alembic downgrade 3f1c2a9d7e45`
+(the migration's direct parent: drops only the answers column; going further,
+to `cbb284f817e8`, would also undo ADR 0008's timezone migration) and revert
+the feature commits; the seven-key
 export without a candidate profile is unchanged, so older extension builds keep
 working.
 

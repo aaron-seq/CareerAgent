@@ -458,6 +458,9 @@ function validateResume(resume) {
   if (mime !== 'application/pdf') return null;
   if (typeof data !== 'string' || data.length === 0 || data.length > MAX_RESUME_B64) return null;
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return null;
+  // Padded base64 (what core/apply.py exports) is always a whole number of
+  // 4-char groups; anything else makes atob() throw during the fill.
+  if (data.length % 4 !== 0) return null;
   if (!data.startsWith('JVBER')) return null; // base64 of "%PDF"
   const name = typeof filename === 'string' ? filename.replace(/[^\w.-]/g, '') : '';
   return {
@@ -471,7 +474,12 @@ function validateResume(resume) {
 function decodeResume(resume) {
   const clean = validateResume(resume);
   if (!clean) return null;
-  const binary = atob(clean.data_b64);
+  let binary;
+  try {
+    binary = atob(clean.data_b64);
+  } catch (_err) {
+    return null; // a bad attachment is dropped, never allowed to abort the fill
+  }
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
   return { filename: clean.filename, mime: clean.mime, bytes };
