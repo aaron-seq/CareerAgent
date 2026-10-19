@@ -52,3 +52,15 @@ test('decodeResume yields the original bytes', () => {
   assert.equal(decoded.mime, 'application/pdf');
   assert.equal(decodeResume({ mime: 'application/pdf' }), null);
 });
+
+test('undecodable base64 is rejected up front, never thrown mid-fill', () => {
+  // Codex review on #51: 'JVBER' passes the alphabet and %PDF-prefix checks,
+  // but its length isn't a multiple of 4, so atob() threw inside the fill
+  // request instead of the bad import being dropped.
+  for (const data of ['JVBER', 'JVBERi0', 'JVBERi0xLjQ=x', 'JVBER===']) {
+    const resume = { ...RESUME, data_b64: data };
+    assert.equal(validateResume(resume), null, data);
+    assert.doesNotThrow(() => decodeResume(resume), data);
+    assert.equal(decodeResume(resume), null, data);
+  }
+});
