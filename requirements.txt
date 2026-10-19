@@ -41,7 +41,7 @@ cryptography>=42.0.0
 httpx>=0.27.0,<1.0.0
 rapidfuzz>=3.6.0,<4.0.0
 numpy>=1.26.0,<3.0.0
-python-dateutil>=2.8.2,<3.0.0
+python-dateutil>=2.9.0.post0,<3.0.0
 fpdf2>=2.7.0,<3.0.0
 
 # Optional, heavy: semantic embeddings. The app falls back to a no-download
