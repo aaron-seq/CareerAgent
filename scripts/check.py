@@ -1,9 +1,10 @@
 """Run the repository's checks with one command, without installing a task runner.
 
-``python -m scripts.check`` runs lint/format, Python tests and extension tests.
+``python -m scripts.check`` runs lint/format, mypy, Python and extension tests.
 Select individual checks with ``python -m scripts.check lint test``. Docker is
 opt-in: ``python -m scripts.check docker`` builds and starts the real image.
-Install ``requirements-test.txt`` and Node.js first. No LLM or API keys are needed.
+Install the development lock for your Python version and Node.js first.
+No LLM or API keys are needed.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CHECKS = ("lint", "test", "extension")
+DEFAULT_CHECKS = ("lint", "type", "test", "extension")
 
 
 def _run(command: list[str], cwd: Path = ROOT) -> bool:
@@ -37,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     checks = list(dict.fromkeys(args.checks or DEFAULT_CHECKS))
     if any(check not in (*DEFAULT_CHECKS, "docker") for check in checks):
-        parser.error("checks must be lint, test, extension, or docker")
+        parser.error("checks must be lint, type, test, extension, or docker")
     if args.docker_ca_bundle and not args.docker_ca_bundle.is_file():
         parser.error("--docker-ca-bundle must point to an existing file")
 
@@ -46,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
             ([sys.executable, "-m", "ruff", "check", "."], ROOT),
             ([sys.executable, "-m", "ruff", "format", "--check", "."], ROOT),
         ],
+        "type": [([sys.executable, "-m", "mypy", "."], ROOT)],
         "test": [
             (
                 [

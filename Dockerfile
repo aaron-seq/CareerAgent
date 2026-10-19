@@ -11,12 +11,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY requirements/locks/runtime-py311.txt ./requirements/locks/runtime-py311.txt
 
 # Install Python dependencies
 RUN --mount=type=secret,id=pip_ca_bundle \
     if [ -f /run/secrets/pip_ca_bundle ]; then export PIP_CERT=/run/secrets/pip_ca_bundle; fi; \
-    pip install --no-cache-dir -r requirements.txt
+    python -m pip install --no-cache-dir --require-hashes --only-binary=:all: \
+        -r requirements/locks/runtime-py311.txt
 
 RUN useradd --create-home --uid 1000 careeragent
 

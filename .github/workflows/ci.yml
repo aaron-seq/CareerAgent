@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1" # Weekly: frozen audit plus unconstrained upstream drift.
 
 permissions:
   contents: read
@@ -31,15 +33,14 @@ jobs:
       
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install ruff==0.15.8 mypy
+          python -m pip install --require-hashes --only-binary=:all: \
+            -r requirements/locks/test-py311.txt
 
       - name: Run lint and format checks
         run: python -m scripts.check lint
 
-      - name: Run mypy (advisory)
-        run: mypy .
-        continue-on-error: true
+      - name: Run required type check
+        run: python -m scripts.check type
 
   test:
     name: Run Tests
@@ -47,7 +48,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.11', '3.12', '3.13']
     
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,13 +61,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
-            requirements.txt
-            requirements-test.txt
+            requirements/locks/test-py*.txt
       
-      - name: Install dependencies
+      - name: Install frozen dependencies
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-test.txt
+          LOCK="requirements/locks/test-py${PYTHON_VERSION//./}.txt"
+          python -m pip install --require-hashes --only-binary=:all: -r "$LOCK"
       
       - name: Run pytest
         run: python -m scripts.check test
@@ -79,6 +81,85 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
           disable_telem: true
+
+  dependencies:
+    name: Dependency audit (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ['311', '312', '313']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Audit tooling has its own graph, separate from the application graph.
+      # Target files already encode each supported interpreter's resolution.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements/locks/audit-py311.txt
+
+      - name: Install frozen audit tool
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: \
+            -r requirements/locks/audit-py311.txt
+
+      - name: Audit resolved application and test graph against PyPI
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          python -m pip_audit --strict --vulnerability-service pypi \
+            --disable-pip --require-hashes \
+            -r "requirements/locks/test-py${TARGET}.txt" \
+            --format json --output "dependency-audit-py${TARGET}.json"
+
+      - name: Preserve advisory report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-audit-py${{ matrix.target }}
+          path: dependency-audit-py${{ matrix.target }}.json
+          if-no-files-found: warn
+
+  drift:
+    name: Upstream drift (${{ matrix.python-version }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Intentionally resolve manifest ranges; never update committed locks here.
+      - name: Resolve current upstream versions
+        run: python -m pip install -r requirements-test.txt
+
+      - name: Record resolved upstream graph
+        if: always()
+        run: python -m pip freeze > upstream-resolved.txt
+
+      - name: Test upstream compatibility
+        run: python -m scripts.check test
+
+      - name: Preserve resolved graph
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: upstream-resolved-py${{ matrix.python-version }}
+          path: upstream-resolved.txt
 
   extension:
     name: Extension Tests
@@ -102,7 +183,7 @@ jobs:
     name: Docker Build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    needs: [lint, test]
+    needs: [lint, test, dependencies]
     
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
