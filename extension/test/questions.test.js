@@ -188,3 +188,110 @@ test('negated and compound questions are recognized but left for the human', () 
   }
   assert.equal(answerFor({ label: 'Do you not require sponsorship in the US?', name: 'work_authorized' }, PROFILE), null);
 });
+
+test('clear expected-pay text prompts preserve the complete supplied amount and units', () => {
+  for (const label of [
+    'Salary expectations',
+    'What are your salary expectations?',
+    'Please provide your expected salary',
+    'Desired compensation',
+    'Expected salary in GBP per year',
+    'Expected annual salary GBP',
+    'Salary expectation (GBP annually)',
+  ]) {
+    assert.equal(answerFor({ label }, PROFILE).value, 'GBP 90,000 per year', label);
+  }
+  for (const [label, salary] of [
+    ['Expected hourly rate (USD)', 'USD 42.75 per hour'],
+    ['Expected salary EUR per month', 'EUR 4,250.25 per month'],
+    ['Expected daily rate INR', 'INR 1,000 per day'],
+    ['Expected salary', 'USD 0 per year'],
+  ]) {
+    assert.equal(answerFor({ label }, { answers: { salary_expectation: salary } }).value, salary, label);
+  }
+});
+
+test('salary answers abstain on currency and pay-period mismatch instead of converting', () => {
+  const hourly = { answers: { salary_expectation: 'USD 42.75 per hour' } };
+  for (const label of [
+    'Expected salary in EUR per year',
+    'Expected salary USD per year',
+    'Expected annual salary USD',
+    'Expected salary CAD per hour',
+    'Expected salary USD per month',
+    'Expected salary GBP or USD per hour',
+    'Expected salary USD per hour and year',
+    'Expected salary USD per week',
+    'Expected salary (weekly)',
+    'Expected salary in US dollars per hour',
+    'Expected salary ($ per hour)',
+    'Expected salary (CA$ per hour)',
+    'Expected salary (USD $ per hour)',
+    'Expected salary in local currency',
+  ]) {
+    assert.ok(mapFieldToQuestion({ label }), label);
+    assert.equal(answerFor({ label }, hourly), null, label);
+    assert.equal(classifyField({ label }, hourly).answer, null, label);
+  }
+});
+
+test('numeric, historical, minimum and inverted salary questions stay for human review', () => {
+  for (const field of [
+    { label: 'Expected salary', type: 'number' },
+    { label: 'Expected salary (numbers only)' },
+    { label: 'Expected salary (without currency or units)' },
+    { label: 'Expected salary', placeholder: 'e.g. 90000' },
+    { label: 'Expected salary', placeholder: '100000' },
+    { label: 'Current salary expectations' },
+    { label: 'Previous expected salary' },
+    { label: 'Last drawn salary', name: 'expected_salary' },
+    { label: 'Minimum acceptable salary expectations' },
+    { label: 'Do you not have salary expectations?' },
+    { label: 'What are your salary expectations and current salary?' },
+    { label: 'Expected salary excluding benefits' },
+    { label: 'Expected salary net GBP per year' },
+    { label: 'Expected salary after tax GBP per year' },
+  ]) {
+    assert.ok(mapFieldToQuestion(field), JSON.stringify(field));
+    assert.equal(answerFor(field, PROFILE), null, JSON.stringify(field));
+  }
+});
+
+test('ambiguous or malformed salary answer strings cannot fill a real form', () => {
+  for (const salary of [
+    '90000',
+    '$90,000 annually',
+    'USD inf per year',
+    'USD -1 per year',
+    'USD 1,00 per year',
+    'USD 4e4 per year',
+    'USD 90,000 per week',
+    'USD 90,000 per year or EUR 80,000 per year',
+  ]) {
+    assert.equal(answerFor({ label: 'Salary expectations' }, { answers: { salary_expectation: salary } }), null, salary);
+  }
+});
+
+test('secondary salary descriptions cannot hide conflicting units or numeric-only constraints', () => {
+  const hourly = { answers: { salary_expectation: 'USD 42.75 per hour' } };
+  for (const extra of [
+    { placeholder: 'EUR per year' },
+    { ariaLabel: 'Expected annual salary EUR' },
+    { placeholder: '€ per year' },
+    { placeholder: 'Numbers only' },
+    { placeholder: 'USD per year' },
+    { ariaLabel: 'Expected salary USD per hour', placeholder: 'EUR per hour' },
+    { inputMode: 'numeric' },
+    { inputMode: 'decimal' },
+  ]) {
+    const field = { label: 'Expected salary', ...extra };
+    assert.equal(answerFor(field, hourly), null, JSON.stringify(field));
+  }
+  for (const extra of [
+    { placeholder: 'USD per hour' },
+    { ariaLabel: 'Expected hourly rate USD' },
+    { ariaLabel: 'Expected salary USD', placeholder: 'per hour' },
+  ]) {
+    assert.equal(answerFor({ label: 'Expected salary', ...extra }, hourly).value, 'USD 42.75 per hour');
+  }
+});

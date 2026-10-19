@@ -28,6 +28,7 @@ class FakeEl {
     this.events = [];
     this.labels = extra.label ? [{ textContent: extra.label }] : [];
     this.fieldset = extra.fieldset || null;
+    this.parentElement = extra.parent || null;
     Object.assign(this, extra.props || {});
   }
   getAttribute(name) {
@@ -36,6 +37,9 @@ class FakeEl {
   dispatchEvent(event) {
     this.events.push(event.type);
     return true;
+  }
+  getClientRects() {
+    return [{ width: 200, height: 24 }]; // normal controls have real layout boxes
   }
   closest(selector) {
     return selector === 'fieldset' ? this.fieldset : null;
@@ -78,6 +82,7 @@ function load(elements) {
       }
     },
     atob: (s) => Buffer.from(s, 'base64').toString('binary'),
+    getComputedStyle: (el) => ({ display: 'block', visibility: 'visible', opacity: '1', ...el.style }),
     setTimeout: () => 0, // skip the delayed re-pass
     document: {
       querySelectorAll: (sel) =>
@@ -179,6 +184,53 @@ test('never overwrites a value the candidate already entered', () => {
   const f = form();
   load(elementsOf(f))(PROFILE);
   assert.equal(f.salary.value, '100k');
+});
+
+test('salary context and numeric input hints stay visible to the real field mapper', () => {
+  const fields = [
+    new FakeEl('input', { type: 'text', inputmode: 'numeric' }, { label: 'Expected salary' }),
+    new FakeEl('input', { type: 'text', inputmode: 'decimal' }, { label: 'Expected salary' }),
+    new FakeEl('input', { type: 'text', placeholder: 'EUR per year' }, { label: 'Expected salary' }),
+    new FakeEl('input', { type: 'text', 'aria-label': 'Expected salary GBP per month' }, { label: 'Expected salary' }),
+    new FakeEl('input', { type: 'text', placeholder: 'GBP per year' }, { label: 'Expected salary' }),
+  ];
+  const res = load(fields)(PROFILE);
+  for (const field of fields.slice(0, 4)) {
+    assert.equal(field.value, '');
+    assert.match(field.style.outline, /#f59e0b/);
+  }
+  assert.equal(fields[4].value, 'GBP 90,000 per year');
+  assert.equal(res.answered, 1);
+  assert.ok(res.needsYou.includes('Expected salary'));
+});
+
+test('hidden ancestors prevent text, select and radio fill while visible controls and resume remain usable', () => {
+  const cssHidden = new FakeEl('div', {}, { props: { style: { display: 'none' } } });
+  const htmlHidden = new FakeEl('div', { hidden: '' });
+  const invisible = new FakeEl('div', {}, { props: { style: { visibility: 'hidden' } } });
+  const hiddenPhone = new FakeEl('input', { type: 'tel' }, { parent: cssHidden });
+  const hiddenText = new FakeEl('textarea', {}, { label: 'Why do you want to work here?', parent: htmlHidden });
+  const hiddenSelect = new FakeEl('select', {}, {
+    label: 'Are you authorized to work in the UK?', parent: invisible,
+    props: { options: [{ textContent: 'Select...', value: '' }, { textContent: 'Yes', value: 'yes' }], selectedIndex: 0 },
+  });
+  const hiddenRadio = new FakeEl('input', { type: 'radio', name: 'sponsor', value: 'No' }, {
+    label: 'No', fieldset: fieldset('Will you require sponsorship in the UK?'), parent: cssHidden, props: { checked: false },
+  });
+  const visibleEmail = new FakeEl('input', { type: 'email' });
+  const hiddenResume = new FakeEl('input', { type: 'file', id: 'resume' }, { parent: cssHidden, props: { files: [] } });
+  const result = load([hiddenPhone, hiddenText, hiddenSelect, hiddenRadio, visibleEmail, hiddenResume])(PROFILE);
+  assert.equal(hiddenPhone.value, '');
+  assert.equal(hiddenText.value, '');
+  assert.equal(hiddenSelect.selectedIndex, 0);
+  assert.equal(hiddenRadio.checked, false);
+  for (const el of [hiddenPhone, hiddenText, hiddenSelect, hiddenRadio]) assert.equal(el.events.length, 0);
+  assert.equal(visibleEmail.value, 'ada@example.com');
+  assert.equal(result.filled, 1);
+  assert.equal(result.answered, 0);
+  assert.equal(result.needsYou.length, 0);
+  assert.equal(result.attached, 1);
+  assert.equal(hiddenResume.files[0].name, 'Ada.pdf');
 });
 
 test('attaches the resume to the resume input only', () => {

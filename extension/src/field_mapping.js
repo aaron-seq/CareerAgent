@@ -39,7 +39,8 @@ const AUTOCOMPLETE_MAP = {
   'tel-national': 'phone',
   url: 'portfolio',
   'address-level2': 'location',
-  'country-name': 'location',
+  // location is the candidate's city/region, not a stated country of residence.
+  'country-name': null,
 };
 
 // Ordered keyword rules for the fuzzy layers. First match wins, so more
@@ -215,6 +216,11 @@ const QUESTION_RULES = [
       'salary expectation',
       'salary expectations',
       'expected salary',
+      'expected annual salary',
+      'expected monthly salary',
+      'expected hourly salary',
+      'expected hourly rate',
+      'expected daily rate',
       'desired salary',
       'salary requirement',
       'salary requirements',
@@ -297,10 +303,58 @@ const ELIGIBILITY_QUESTION_PATTERNS = {
   visa_status: /^(?:current )?(?:visa|immigration) status (?:in|for) (?:the )?(.+)$/,
 };
 
+/**
+ * A salary answer has its own currency and period. It is safe as qualified
+ * text for a clear expectations prompt, never as a conversion or a numeric
+ * amount for a question with different/ambiguous units.
+ */
+function salaryQuestionCanUseAnswer(field, answers) {
+  const value = answers.salary_expectation;
+  if (typeof value !== 'string') return false;
+  const canonical = /^([A-Z]{3}) ((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?) per (year|month|day|hour)$/.exec(value);
+  if (!canonical || !Number.isFinite(Number(canonical[2].replace(/,/g, '')))) return false;
+  if (normalize(field.type) === 'number' || ['numeric', 'decimal'].includes(normalize(field.inputMode || field.inputmode))) return false;
+  const signals = [field.label, field.ariaLabel, field.placeholder].filter((text) => text && text.trim());
+  const expectedPattern = /^(?:what (?:are|is) (?:your )?|please (?:state|provide|enter) (?:your )?|your )?(?:(?:salary|compensation) (?:expectations?|requirements?)|(?:expected|desired) (?:(annual|yearly|monthly|daily|hourly) )?(?:salary|compensation|pay|rate))(?: (.*))?$/;
+  // An anchored positive expectations question deliberately excludes current,
+  // historical, minimum, negated and compound questions.
+  if (!signals.length || !expectedPattern.test(normalizeForFuzzy(signals[0]))) return false;
+  const periods = {
+    year: 'year', yearly: 'year', annual: 'year', annually: 'year', annum: 'year',
+    month: 'month', monthly: 'month',
+    day: 'day', daily: 'day',
+    hour: 'hour', hourly: 'hour', hr: 'hour',
+  };
+  const currencies = new Set();
+  const units = new Set();
+  for (const raw of signals) {
+    // Any descriptor may add restrictions: a generic visible label must not
+    // hide a conflicting ARIA label or a numeric/currency/unit placeholder.
+    if (/\p{Sc}/u.test(raw)) return false;
+    const question = normalizeForFuzzy(raw);
+    const expected = expectedPattern.exec(question);
+    const context = expected ? [expected[1], expected[2]].filter(Boolean).join(' ') : question;
+    for (const token of context.split(' ').filter(Boolean)) {
+      if (['in', 'per', 'a', 'an', 'currency'].includes(token)) continue;
+      if (Object.prototype.hasOwnProperty.call(periods, token)) {
+        units.add(periods[token]);
+      } else if (/^[a-z]{3}$/.test(token) && !['not', 'net', 'tax', 'min', 'max', 'and', 'all', 'any', 'for', 'the', 'you', 'our', 'pay', 'ote'].includes(token)) {
+        currencies.add(token.toUpperCase());
+      } else {
+        return false;
+      }
+    }
+  }
+  return currencies.size <= 1 && units.size <= 1 &&
+    (!currencies.size || currencies.has(canonical[1])) &&
+    (!units.size || units.has(canonical[3]));
+}
+
 function questionCanUseAnswer(field, key, answers) {
   // Use the actual question, not a name/id such as "work_authorized" that
   // omits its country or reverses the visible question's polarity.
   const question = normalizeForFuzzy(field.label || field.ariaLabel || field.placeholder);
+  if (key === 'salary_expectation') return salaryQuestionCanUseAnswer(field, answers);
   if (key === 'willing_to_relocate') {
     return /^(?:are you )?(?:willing to relocate|open to relocation|able to relocate|open to relocating)$/.test(question);
   }

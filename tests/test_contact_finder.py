@@ -51,12 +51,10 @@ class TestGenerateEmailPermutations:
         scores = [c.confidence_score for c in candidates]
         assert scores == sorted(scores, reverse=True)
 
-    def test_strips_at_prefix_from_domain(self):
+    def test_rejects_email_address_instead_of_known_employer_domain(self):
         finder, _ = _finder()
-        candidates = finder.generate_email_permutations(
-            "Jane", "Smith", "user@acme.com"
-        )
-        assert candidates[0].email == "jane.smith@acme.com"
+        with pytest.raises(ValueError, match="known email domain"):
+            finder.generate_email_permutations("Jane", "Smith", "user@acme.com")
 
     def test_lowercases_and_strips_names(self):
         finder, _ = _finder()
@@ -64,7 +62,7 @@ class TestGenerateEmailPermutations:
             "  Jane ", " SMITH ", "ACME.com"
         )
         assert candidates[0].email == "jane.smith@acme.com"
-        assert candidates[0].name == "  Jane   SMITH "
+        assert candidates[0].name == "Jane SMITH"
 
 
 class TestExtractNameFromTitle:

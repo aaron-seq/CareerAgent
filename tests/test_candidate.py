@@ -90,6 +90,108 @@ def test_invalid_answers_are_rejected(bad):
         CandidateProfile.model_validate(bad)
 
 
+@pytest.mark.parametrize("amount", [float("inf"), float("-inf"), float("nan")])
+@pytest.mark.parametrize("field", ["minimum", "target"])
+def test_pay_must_be_finite(field, amount):
+    with pytest.raises(ValidationError, match="finite"):
+        CandidateProfile.model_validate({"compensation": {field: amount}})
+
+
+def test_expected_pay_must_not_be_below_saved_minimum():
+    with pytest.raises(ValidationError, match="at least the minimum"):
+        Compensation(minimum=42.75, target=40)
+    assert Compensation(minimum=42.75, target=42.75).target == 42.75
+    assert Compensation(target=0).is_complete()
+
+
+@pytest.mark.parametrize(
+    "amount",
+    ["42.12345678901234567", "123456789012345678.90", 123456789012345678, True],
+)
+def test_stated_pay_is_rejected_when_float_storage_would_change_its_value(amount):
+    with pytest.raises(ValidationError, match="precision|yes/no"):
+        CandidateProfile.model_validate({"compensation": {"target": amount}})
+
+
+@pytest.mark.parametrize(
+    "amount,expected",
+    [("42.75", 42.75), ("0.0000001", 0.0000001), ("1234567.25", 1234567.25), ("0", 0)],
+)
+def test_ordinary_decimal_text_is_accepted_without_changing_its_stated_value(
+    amount, expected
+):
+    candidate = CandidateProfile.model_validate({"compensation": {"target": amount}})
+    assert candidate.compensation.target == expected
+
+
+def test_blank_editor_fields_are_unknown_and_explicit_false_and_zero_survive():
+    candidate = CandidateProfile.model_validate(
+        {
+            "location": "  ",
+            "websites": [
+                " ",
+                " https://example.test/work ",
+                "https://example.test/work",
+            ],
+            "work_authorization": {
+                "country": " United Kingdom ",
+                "authorized": False,
+                "requires_sponsorship": "",
+                "visa_status": "  ",
+            },
+            "compensation": {"minimum": "", "target": "0"},
+            "availability": {"notice_period_weeks": "0", "earliest_start_date": " "},
+            "preferences": {"desired_titles": [" Engineer ", "", "Engineer"]},
+            "demographics": {"pronouns": " ", "share_on_applications": False},
+            "default_cover_note": " A note I wrote. ",
+        }
+    )
+    assert candidate.location is None
+    assert candidate.websites == ["https://example.test/work"]
+    assert candidate.work_authorization.country == "United Kingdom"
+    assert candidate.work_authorization.authorized is False
+    assert candidate.work_authorization.requires_sponsorship is None
+    assert candidate.work_authorization.visa_status is None
+    assert candidate.compensation.minimum is None
+    assert candidate.compensation.target == 0
+    assert candidate.availability.notice_period_weeks == 0
+    assert candidate.availability.earliest_start_date is None
+    assert candidate.preferences.desired_titles == ["Engineer"]
+    assert candidate.demographics.pronouns is None
+    assert candidate.default_cover_note == "A note I wrote."
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "not a website",
+        "javascript:alert(1)",
+        "https://[invalid",
+        "https://example.test:abc/work",
+        "https://user:pass@example.test/work",
+        "https://example.test/work\nsecond-line",
+        "https://example.test/work\x00",
+        "https://example.test\\other.test/work",
+    ],
+)
+def test_candidate_websites_reject_malformed_links_locally(url):
+    with pytest.raises(ValidationError, match="complete HTTP"):
+        CandidateProfile(websites=[url])
+
+
+def test_extension_text_limits_reject_instead_of_silently_truncating():
+    with pytest.raises(ValidationError, match="5000"):
+        CandidateProfile(default_cover_note="x" * 5001)
+    with pytest.raises(ValidationError, match="100"):
+        WorkAuthorization(country="x" * 101)
+
+
+@pytest.mark.parametrize("weeks", [-1, 1.5, 105])
+def test_notice_period_does_not_round_or_exceed_bounds(weeks):
+    with pytest.raises(ValidationError):
+        CandidateProfile(availability={"notice_period_weeks": weeks})
+
+
 def test_completeness_is_100_for_a_complete_profile():
     result = compute_completeness(_full_cv(), _full_candidate())
     assert result.percent == 100
