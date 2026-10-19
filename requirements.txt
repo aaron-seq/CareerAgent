@@ -6,7 +6,7 @@ python-dotenv>=1.0.0,<2.0.0
 
 # LLM integration
 ollama>=0.6.3,<1.0.0
-requests>=2.31.0,<3.0.0
+requests>=2.34.2,<3.0.0
 
 # PDF processing (pypdf is the maintained successor to the deprecated PyPDF2;
 # floor set to the release tested here, which carries the recent security fixes)
