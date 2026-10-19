@@ -1,11 +1,11 @@
 # Python 3.11+; reviewed Linux runtime/test graphs live in requirements/locks/.
 # Core dependencies
-streamlit>=1.29.0,<2.0.0
-pydantic>=2.5.0,<3.0.0
+streamlit>=1.66.0,<2.0.0
+pydantic>=2.14.1,<3.0.0
 python-dotenv>=1.0.0,<2.0.0
 
 # LLM integration
-ollama>=0.1.6,<1.0.0
+ollama>=0.6.3,<1.0.0
 requests>=2.31.0,<3.0.0
 
 # PDF processing (pypdf is the maintained successor to the deprecated PyPDF2;
@@ -33,15 +33,15 @@ pillow>=12.3.0,<13.0.0
 # ADR 0008), so behaviour no longer depends on sqlmodel's inferred type, which
 # changed in 0.0.45. Full suite verified on 0.0.14, 0.0.44 and 0.0.48.
 sqlmodel>=0.0.14,<1.0.0
-SQLAlchemy>=2.0.0,<3.0.0
+SQLAlchemy>=2.1.4,<3.0.0
 alembic>=1.13.0,<2.0.0
 cryptography>=42.0.0
 
 # Job ingestion + matching (Phases 2-5)
-httpx>=0.27.0,<1.0.0
+httpx>=0.28.1,<1.0.0
 rapidfuzz>=3.6.0,<4.0.0
 numpy>=1.26.0,<3.0.0
-python-dateutil>=2.8.2,<3.0.0
+python-dateutil>=2.9.0.post0,<3.0.0
 fpdf2>=2.7.0,<3.0.0
 
 # Optional, heavy: semantic embeddings. The app falls back to a no-download
