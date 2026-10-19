@@ -25,6 +25,8 @@ A local AI-powered career assistant for personalized job outreach. This applicat
 - **Guided workflow**: Reopen a saved CV, browse jobs before connecting AI,
   and open saved postings directly in Draft Studio. Drafts and resume variants
   stay with their selected job.
+- **Refresh recovery**: Restore the active CV, deliberately selected jobs,
+  contacts, preferences and page from a small encrypted local workspace.
 
 ## Technical Architecture
 
@@ -41,7 +43,7 @@ The application is built with a modern Python stack:
 
 ### Prerequisites
 
-- Python 3.11 recommended (CI matrix-tests 3.9–3.11).
+- Python 3.11 or newer; CI tests 3.11, 3.12 and 3.13.
 - An LLM provider for new CV parsing and AI drafts — either:
   - **Ollama** installed and running locally (standard default port 11434), or
   - A free **Groq** API key (no credit card: console.groq.com/keys) — faster
@@ -57,8 +59,14 @@ The application is built with a modern Python stack:
 
 2.  Install dependencies:
     ```bash
-    pip install -r requirements.txt -r requirements-test.txt
+    python -m pip install --require-hashes --only-binary=:all: \
+      -r requirements/locks/test-py311.txt
     ```
+
+    This reproduces the reviewed Linux x86_64 development graph. Select `312`
+    or `313` for that interpreter minor; use `runtime-py311.txt` for an app-only
+    install. Other platforms can resolve `requirements-test.txt` and validate
+    their own graph. See [lock scope and refresh](requirements/locks/README.md).
 
 3.  Set up an LLM provider — either:
     ```bash
@@ -125,6 +133,32 @@ project impact. Unsupported glyphs or scripts needing shaping/right-to-left
 layout show a clear message; Markdown and JSON remain available with the
 original text. See [the CV and live-URL validation report](docs/CV_VALIDATION.md)
 for tested behavior and limits.
+
+### Refresh safely
+
+Committed choices recover automatically after a browser refresh: the active
+saved CV, selected DB-backed jobs, contacts, preferences and last page. AI/OAuth
+clients, credentials, unsent drafts and approval state do not recover. Reconnect
+your chosen model when needed, and use **Re-score matches** after restoring a
+CV because stored discovery scores have no CV provenance. Draft Studio resume
+checks still use the active profile.
+
+The recovery file is encrypted beside your local artifacts. If it cannot be
+read, the app explains the failure and preserves it. Fix the key/storage first,
+or explicitly choose **Start a new saved workspace**; this retains a private
+ciphertext backup and does not remove saved CVs/jobs. Explicit ZIP exports are
+readable and include workspace contacts/preferences. This is recovery for one
+trusted local user, not multi-user isolation or synchronization between tabs.
+
+### Upgrading from Python 3.9 or 3.10
+
+These runtimes are no longer supported. Security-fixed dependencies require a
+newer interpreter, and both runtimes are past end of life. Back up the database,
+artifact directory and matching encryption key together; create a new Python
+3.11–3.13 virtual environment, install its reviewed lock, and run
+`alembic upgrade head` against the existing database. Keep the same data paths
+and key. This release adds no database migration or key-format change; do not
+replace a populated database or generate a replacement key during an upgrade.
 
 ## Deployment
 
@@ -217,9 +251,9 @@ for decisions.
 ### Running the platform pieces
 
 ```bash
-pip install -r requirements-test.txt   # includes runtime + test deps
+python -m pip install --require-hashes --only-binary=:all: -r requirements/locks/test-py311.txt
 alembic upgrade head                    # create the schema (SQLite by default)
-python -m scripts.check                 # lint, format, Python coverage + extension tests
+python -m scripts.check                 # lint, format, types, Python coverage + extension
 python -m scripts.check docker          # build + functional app/persistence/health smoke
 python -m scripts.send_digest --dry-run # build a job digest
 ```
@@ -227,8 +261,10 @@ python -m scripts.send_digest --dry-run # build a job digest
 Node.js is required for extension tests. Select checks with `python -m
 scripts.check lint test`. For Docker builds behind a trusted TLS proxy, add
 `--docker-ca-bundle /path/to/trusted-ca-bundle.pem`. CI runs the same checks,
-including Docker validation on pull requests before merge. Mypy remains advisory
-with existing errors; see [workflow validation](docs/WORKFLOW_AUDIT.md).
+including Docker and strict dependency-advisory checks before merge. Mypy is
+required and checks all repository Python files. Weekly/manual CI also tests
+unconstrained upstream dependencies without modifying committed locks.
+See [the current engineering review](docs/ENGINEERING_REVIEW_2026-10-17.md).
 
 Public API smoke checks are opt-in and stay outside default tests/CI:
 

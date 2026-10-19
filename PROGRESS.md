@@ -5,9 +5,9 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 
 ## Current status
 - **Current phase:** Phases 0–10 have implementations; production hardening remains ongoing.
-- **Last updated:** 2026-10-17
-- **Next action:** Owner decision on historical PII [#38](https://github.com/aaron-seq/CareerAgent/issues/38), then the hosted-fetch and metadata-encryption prerequisites in `docs/SECURITY_AUDIT.md`. Continue matching quality, dependency reproducibility, and advisory typing work. Source attribution, bounded pagination, and functional PR Docker checks are implemented.
-- **Blockers:** Public-history PII remains unresolved. Actual model inference, Gmail OAuth/delivery, Postgres locking, and real-browser extension behavior remain unverified in this environment. Local job-board access works; some model/log download destinations remain blocked.
+- **Last updated:** 2026-10-19
+- **Next action:** Continue focused UX/product refinement; owner-led historical PII cleanup #38 and hosted-fetch/metadata-encryption prerequisites #41/#42 remain. Matching/grounding and external integration coverage remain separate follow-ups.
+- **Blockers:** Public-history PII remains unresolved. Gmail OAuth/delivery, Postgres locking and real-browser extension behavior remain unverified. Local model inference and representative Chromium app recovery now work; fresh published-environment restoration remains separate.
 
 ## Verification level per phase
 - **Genuinely run + tested here:** P1 data layer, P4 dedup/scoring, P5 resume
@@ -19,11 +19,38 @@ Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARC
 - **Built + unit-tested, NOT live-verified:** P8 extension in a real browser,
   real email delivery, and deployment (dry-run only).
 
-Totals: **711 Python tests + 55 JS tests pass; `ruff` + `ruff format` clean.**
-Core coverage is **94.83%**, up from the combined-PR baseline of 94.46%.
+Totals: **816 Python tests + 55 JS tests pass; Ruff/format and full-repository mypy clean.**
+Core coverage is **95.20%**, up from 94.83%.
 Passing tests do not establish production readiness.
 
 ## Log
+
+### 2026-10-19 — Reviewed recovery, dependency security and real local inference
+
+Implemented encrypted refresh recovery with exact job row identity, bounded
+schema, atomic writes, wrong-key/corrupt guards and explicit retained-backup
+reset. Real Chromium caught a fast preference-edit/navigation loss; stable
+callbacks and four single-event regressions fixed all preference fields.
+Desktop/mobile browser recovery now passes without page errors or horizontal
+document overflow. Generated drafts, clients, credentials and approval state
+are never restored.
+
+Patched the two affected dependency packages found by the actual feed, migrated
+the supported floor to Python 3.11 (CI 3.11–3.13), added hash-verified runtime/test
+graphs, strict advisory CI, weekly/manual upstream drift and Dependabot. Corrected
+JSON extraction, retry budget, contact prompt/envelope and provider/text validation
+defects while removing the advisory type debt. Full-repository mypy is required.
+
+**Validation:** 816 Python tests, 55 JS tests, 95.20% core coverage, lint/format,
+required mypy, dependency consistency and final functional Docker pass. Three
+frozen graphs and the isolated scanner graph reported no known PyPI advisories
+when measured; no clean-product/OS claim. Seven intentional SQLModel schema-reload
+warnings remain visible. Actionlint and a negative hash-install check passed.
+Measured offline benchmark and synthetic real Ollama text/PDF/restart results
+are documented in the [engineering review](docs/ENGINEERING_REVIEW_2026-10-19.md).
+
+No application or message was submitted. Existing security/hosted prerequisites
+remain explicit; this does not make the app a hosted multi-user product.
 
 ### 2026-10-17 — Model-free CV builder, transparent readiness, live public APIs
 

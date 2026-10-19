@@ -1,0 +1,85 @@
+{
+  "started_at": "2026-10-17T15:23:33.478733+00:00",
+  "endpoint": "http://127.0.0.1:11434",
+  "runtime_version": "0.40.4",
+  "model": "llama3.2:3b",
+  "quantization": "Q4_K_M",
+  "model_parameters": "3.2B",
+  "cpu_limit": 2,
+  "model_threads": 2,
+  "memory_limit_gib": 8,
+  "context_tokens": 4096,
+  "parallel_requests": 1,
+  "runtime_sha256": "15f31e9576d15a481e099b4145dba6e9f8c1f295927d6b8895300ae30ed3740a",
+  "official_manifest_sha256": "a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72",
+  "synthetic_data_only": true,
+  "requests": [
+    {
+      "http_status": 200,
+      "elapsed_seconds": 75.099,
+      "total_duration": 75077598955,
+      "load_duration": 9615346,
+      "prompt_eval_count": 624,
+      "prompt_eval_duration": 23034982000,
+      "eval_count": 240,
+      "eval_duration": 51968732000,
+      "done_reason": "stop"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Synthetic generated PDF through core.cv_parser.CVParser.parse_pdf_bytes",
+      "passed": true,
+      "elapsed_seconds": 75.347,
+      "assertions": [
+        "Names and supplied contact URLs exact",
+        "Missing phone and portfolio absent",
+        "Declared skills retained",
+        "One employer/title/date range retained",
+        "Only supplied 20% metric retained",
+        "One supplied project and URL retained",
+        "Education retained",
+        "Raw source retained"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "core/llm.py": "ad1a0819afa5000cccea27b83657c491e86234b78291701279975c49bc41cbbf",
+    "core/cv_parser.py": "403e38c9b40a43c6346f9970219e452a359a0bf52844983543b60a1b43cfce0b",
+    "core/prompts.py": "fbc54904d17940e91fd83b1f620e29f234078267dbf7d01239203ac079ba8493"
+  },
+  "updated_at": "2026-10-17T15:24:48.875867+00:00",
+  "source_sha256_after": {
+    "core/llm.py": "ad1a0819afa5000cccea27b83657c491e86234b78291701279975c49bc41cbbf",
+    "core/cv_parser.py": "403e38c9b40a43c6346f9970219e452a359a0bf52844983543b60a1b43cfce0b",
+    "core/prompts.py": "fbc54904d17940e91fd83b1f620e29f234078267dbf7d01239203ac079ba8493"
+  },
+  "dependency_versions": {
+    "requests": "2.34.2",
+    "pypdf": "6.21.0",
+    "pdfplumber": "0.11.9",
+    "Pillow": "12.3.0",
+    "pydantic": "2.14.1",
+    "fpdf2": "2.8.9"
+  },
+  "completed_at": "2026-10-17T15:24:48.875850+00:00",
+  "status": "passed",
+  "source_delta_reconciliation": {
+    "earlier_llm_sha256": "440e372c78e25233bc8475fe8ccc4aa43bf6dc17890406b59d8e504c173b3110",
+    "final_llm_sha256": "ad1a0819afa5000cccea27b83657c491e86234b78291701279975c49bc41cbbf",
+    "difference": "Only Ruff wrapped an existing single-line retry guard in parentheses; the condition and behavior are identical.",
+    "exact_reconstruction_verified": true
+  },
+  "server_base_image_at_final_pdf_validation": "sha256:11e7d18df2ad34ad023719905b166a66158d029121ec4b83e3a7c2b7420f82e1",
+  "local_model_import_digest": "56bef32d006e3e08db8f95508a9d7d840edf827ac76efe65446bd328e4e607d6",
+  "dependency_lock_sha256": {
+    "requirements/locks/runtime-py311.txt": "3c2b10e01754aa8c6ddf0215acd4bfafd5b337beac12796c59bd4fd85a5a2218",
+    "requirements/locks/test-py311.txt": "d02af4cbb480db306397b2d02a8939175cc09f4f67a6769782208908d1db92ef"
+  },
+  "limitations": [
+    "Small synthetic CV only; does not establish factual accuracy for arbitrary candidates.",
+    "CPU-only inference; longer inputs may exceed the unchanged 120-second client timeout.",
+    "No scanned/OCR PDF, cloud inference, external ATS scoring or fresh published-environment validation performed.",
+    "Explicitly selects llama3.2:3b; repository default llama3.1:8b was not installed."
+  ]
+}

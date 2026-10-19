@@ -32,7 +32,8 @@ available as an opt-in alternative (ADR 0005).
   encrypted JSON under `careeragent_data/` for artifacts and readable exports.
   Compliant Gmail creation is routed through the facade.
 - **Tests:** `tests/` (pytest); `python -m scripts.check` runs lint/format,
-  Python coverage and extension tests. CI includes functional PR Docker checks.
+  required mypy, Python coverage and extension tests. CI includes functional PR
+  Docker checks and strict known-advisory scans against frozen dependency graphs.
 
 ## Tech stack & direction
 - **Language:** Python (target 3.11+). Stay in Python.
@@ -63,7 +64,7 @@ available as an opt-in alternative (ADR 0005).
 - **Mock all external APIs** (`respx`/`vcr.py`/`pytest-mock`) — no live network
   calls in CI. Ollama and job-board APIs must be mocked in tests.
 - Run: `python -m scripts.check`. Optional Docker: `python -m scripts.check docker`.
-  Types remain advisory: `mypy .`; current limitations are documented in the audits.
+  Types are required: `python -m scripts.check type` checks all repository Python files.
 
 ## Secrets & PII
 - Never commit secrets. Read config from env (`.env`, already gitignored;
@@ -97,32 +98,22 @@ Code + tests green + docs updated + `PROGRESS.md` updated + an ADR in
 ## How to run
 ```bash
 ollama serve                 # start local LLM runtime (separate terminal)
-pip install -r requirements.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements/locks/test-py311.txt
 streamlit run app.py         # launch the UI
 pytest                       # run tests
 ruff check .                 # lint
 ```
 
-## Environment quirks (verified 2026-07-26)
-- No repo-local venv. Global interpreter here is Python 3.13.7 — ruff,
-  mypy, pytest, and streamlit all ran clean against it directly, but CI
-  matrix-tests only 3.9-3.11; don't rely on 3.13-only syntax.
-- `pytest` needs `requirements-test.txt` installed, not just
-  `requirements.txt` (`sqlmodel` etc. live there). Skipping it fails
-  collection at `tests/conftest.py` with `ModuleNotFoundError: sqlmodel`.
-  Run `pip install -r requirements.txt -r requirements-test.txt` first.
+## Environment and validation (2026-10-17)
+- Supported floor is Python 3.11; CI covers 3.11–3.13. Do not rely on syntax
+  newer than the floor. Python 3.9/3.10 were retired with the security-driven
+  dependency update; see ADR 0012 and README upgrade guidance.
+- Install the matching Linux x86_64 test lock for development, not the runtime
+  lock alone. Other platforms resolve source manifests and validate separately.
+  `requirements/locks/README.md` records generation and security-audit commands.
+- `mypy==2.4.0` and relevant stubs are frozen with development dependencies.
+  Both Ruff and mypy target Python 3.11; full-repository mypy is a required gate.
 - `extension/` is a separate Node/Chrome-extension subproject (own
   `package.json`; tests via `node --test`, run from inside `extension/`).
   It's outside the Python package and untouched by root `pytest`/`ruff`/
   `mypy`.
-- `mypy .` runs to completion (verified 2026-10-16, issue #22).
-  `requirements-test.txt` pins `mypy==2.4.0` behind a
-  `python_version >= "3.10"` marker (mypy 2.x won't install on 3.9; the 3.9
-  CI test leg never runs mypy). The old 1.7.1 pin aborted on numpy's PEP 695
-  stubs. `pyproject.toml` targets mypy at 3.10, not the 3.9 runtime floor:
-  mypy 2.x rejects a 3.9 target, and installed pydantic uses `match`, which a
-  3.9 target can't parse — so mypy won't flag 3.10-only syntax; ruff's
-  `py39` target is the guard there. Result: 29 errors across 10 files
-  (`mypy .`; 25 across 7 for the configured `files`), mostly
-  `dict | list` JSON unions in `core/ingestion/` and loose typing in
-  `contact_finder.py`. Still advisory (CI `continue-on-error: true`).

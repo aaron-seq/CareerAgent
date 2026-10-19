@@ -1,0 +1,1545 @@
+{
+  "recorded_at_utc": "2026-10-17T15:19:48.343440+00:00",
+  "scanner": "pip-audit 2.10.1",
+  "service": "PyPI JSON vulnerability feed",
+  "scope": "Exact resolved Python application + test distributions; Linux x86_64 CPython 3.11, 3.12, 3.13. This is not an application, OS or container vulnerability attestation.",
+  "before": {
+    "packages_examined": 95,
+    "advisory_entries_including_duplicates": 37,
+    "affected_packages": [
+      {
+        "name": "pillow",
+        "version": "11.3.0",
+        "advisory_ids": [
+          "PYSEC-2026-165",
+          "PYSEC-2026-2249",
+          "PYSEC-2026-2250",
+          "PYSEC-2026-2251",
+          "PYSEC-2026-2252",
+          "PYSEC-2026-2253",
+          "PYSEC-2026-2254",
+          "PYSEC-2026-2255",
+          "PYSEC-2026-2256",
+          "PYSEC-2026-2257",
+          "PYSEC-2026-2874",
+          "PYSEC-2026-3451",
+          "PYSEC-2026-3453",
+          "PYSEC-2026-3454",
+          "PYSEC-2026-3493",
+          "PYSEC-2026-3494",
+          "PYSEC-2026-3495",
+          "PYSEC-2026-3496"
+        ],
+        "advisory_entries_including_duplicates": 35,
+        "fix_versions": [
+          "12.1.1",
+          "12.2.0",
+          "12.3.0"
+        ]
+      },
+      {
+        "name": "pytest",
+        "version": "7.4.3",
+        "advisory_ids": [
+          "PYSEC-2026-1845"
+        ],
+        "advisory_entries_including_duplicates": 2,
+        "fix_versions": [
+          "9.0.3"
+        ]
+      }
+    ]
+  },
+  "after": [
+    {
+      "target": "CPython 3.11 Linux x86_64",
+      "lock_file": "requirements/locks/test-py311.txt",
+      "lock_sha256": "d02af4cbb480db306397b2d02a8939175cc09f4f67a6769782208908d1db92ef",
+      "command": "python -m pip_audit --strict --vulnerability-service pypi --disable-pip --require-hashes -r requirements/locks/test-py311.txt --format json",
+      "exit_code": 0,
+      "packages_examined": 97,
+      "known_advisory_entries": 0,
+      "dependencies": [
+        {
+          "name": "alembic",
+          "version": "1.20.0",
+          "vulns": []
+        },
+        {
+          "name": "altair",
+          "version": "6.3.0",
+          "vulns": []
+        },
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "vulns": []
+        },
+        {
+          "name": "anyio",
+          "version": "4.15.1",
+          "vulns": []
+        },
+        {
+          "name": "ast-serialize",
+          "version": "0.13.1",
+          "vulns": []
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0",
+          "vulns": []
+        },
+        {
+          "name": "beautifulsoup4",
+          "version": "4.15.0",
+          "vulns": []
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "vulns": []
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "vulns": []
+        },
+        {
+          "name": "charset-normalizer",
+          "version": "3.5.2",
+          "vulns": []
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "vulns": []
+        },
+        {
+          "name": "coverage",
+          "version": "7.16.2",
+          "vulns": []
+        },
+        {
+          "name": "cryptography",
+          "version": "50.0.2",
+          "vulns": []
+        },
+        {
+          "name": "curl-cffi",
+          "version": "0.16.3",
+          "vulns": []
+        },
+        {
+          "name": "defusedxml",
+          "version": "0.7.1",
+          "vulns": []
+        },
+        {
+          "name": "dnspython",
+          "version": "2.9.0",
+          "vulns": []
+        },
+        {
+          "name": "duckduckgo-search",
+          "version": "5.3.1",
+          "vulns": []
+        },
+        {
+          "name": "fonttools",
+          "version": "4.67.0",
+          "vulns": []
+        },
+        {
+          "name": "fpdf2",
+          "version": "2.8.9",
+          "vulns": []
+        },
+        {
+          "name": "google-api-core",
+          "version": "2.42.0",
+          "vulns": []
+        },
+        {
+          "name": "google-api-python-client",
+          "version": "2.201.0",
+          "vulns": []
+        },
+        {
+          "name": "google-auth",
+          "version": "2.62.0",
+          "vulns": []
+        },
+        {
+          "name": "google-auth-httplib2",
+          "version": "0.4.4",
+          "vulns": []
+        },
+        {
+          "name": "google-auth-oauthlib",
+          "version": "1.5.0",
+          "vulns": []
+        },
+        {
+          "name": "googleapis-common-protos",
+          "version": "1.75.5",
+          "vulns": []
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "vulns": []
+        },
+        {
+          "name": "httplib2",
+          "version": "0.32.0",
+          "vulns": []
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "vulns": []
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "vulns": []
+        },
+        {
+          "name": "iniconfig",
+          "version": "2.3.1",
+          "vulns": []
+        },
+        {
+          "name": "itsdangerous",
+          "version": "2.2.0",
+          "vulns": []
+        },
+        {
+          "name": "jinja2",
+          "version": "3.1.6",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1",
+          "vulns": []
+        },
+        {
+          "name": "librt",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "mako",
+          "version": "1.4.3",
+          "vulns": []
+        },
+        {
+          "name": "markupsafe",
+          "version": "3.0.4",
+          "vulns": []
+        },
+        {
+          "name": "mypy",
+          "version": "2.4.0",
+          "vulns": []
+        },
+        {
+          "name": "mypy-extensions",
+          "version": "1.1.0",
+          "vulns": []
+        },
+        {
+          "name": "narwhals",
+          "version": "2.27.1",
+          "vulns": []
+        },
+        {
+          "name": "numpy",
+          "version": "2.4.6",
+          "vulns": []
+        },
+        {
+          "name": "oauthlib",
+          "version": "4.0.0",
+          "vulns": []
+        },
+        {
+          "name": "ollama",
+          "version": "0.6.3",
+          "vulns": []
+        },
+        {
+          "name": "opentelemetry-api",
+          "version": "1.45.1",
+          "vulns": []
+        },
+        {
+          "name": "orjson",
+          "version": "3.13.0",
+          "vulns": []
+        },
+        {
+          "name": "packaging",
+          "version": "26.3",
+          "vulns": []
+        },
+        {
+          "name": "pandas",
+          "version": "2.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pathspec",
+          "version": "1.1.1",
+          "vulns": []
+        },
+        {
+          "name": "pdfminer-six",
+          "version": "20251230",
+          "vulns": []
+        },
+        {
+          "name": "pdfplumber",
+          "version": "0.11.9",
+          "vulns": []
+        },
+        {
+          "name": "pillow",
+          "version": "12.3.0",
+          "vulns": []
+        },
+        {
+          "name": "pluggy",
+          "version": "1.7.0",
+          "vulns": []
+        },
+        {
+          "name": "proto-plus",
+          "version": "1.29.0",
+          "vulns": []
+        },
+        {
+          "name": "protobuf",
+          "version": "7.36.2",
+          "vulns": []
+        },
+        {
+          "name": "pyarrow",
+          "version": "26.0.0",
+          "vulns": []
+        },
+        {
+          "name": "pyasn1",
+          "version": "0.6.4",
+          "vulns": []
+        },
+        {
+          "name": "pyasn1-modules",
+          "version": "0.4.2",
+          "vulns": []
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "vulns": []
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.1",
+          "vulns": []
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.1",
+          "vulns": []
+        },
+        {
+          "name": "pydeck",
+          "version": "0.9.3",
+          "vulns": []
+        },
+        {
+          "name": "pygments",
+          "version": "2.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pyparsing",
+          "version": "3.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pypdf",
+          "version": "6.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pypdfium2",
+          "version": "5.14.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest",
+          "version": "9.0.3",
+          "vulns": []
+        },
+        {
+          "name": "pytest-asyncio",
+          "version": "1.4.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-cov",
+          "version": "4.1.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-mock",
+          "version": "3.12.0",
+          "vulns": []
+        },
+        {
+          "name": "python-dateutil",
+          "version": "2.9.0.post0",
+          "vulns": []
+        },
+        {
+          "name": "python-dotenv",
+          "version": "1.2.4",
+          "vulns": []
+        },
+        {
+          "name": "python-multipart",
+          "version": "0.0.32",
+          "vulns": []
+        },
+        {
+          "name": "pytz",
+          "version": "2026.5",
+          "vulns": []
+        },
+        {
+          "name": "rapidfuzz",
+          "version": "3.14.6",
+          "vulns": []
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0",
+          "vulns": []
+        },
+        {
+          "name": "requests",
+          "version": "2.34.2",
+          "vulns": []
+        },
+        {
+          "name": "requests-oauthlib",
+          "version": "2.0.0",
+          "vulns": []
+        },
+        {
+          "name": "respx",
+          "version": "0.23.1",
+          "vulns": []
+        },
+        {
+          "name": "rpds-py",
+          "version": "2026.9.1",
+          "vulns": []
+        },
+        {
+          "name": "ruff",
+          "version": "0.15.8",
+          "vulns": []
+        },
+        {
+          "name": "six",
+          "version": "1.17.0",
+          "vulns": []
+        },
+        {
+          "name": "soupsieve",
+          "version": "2.10",
+          "vulns": []
+        },
+        {
+          "name": "sqlalchemy",
+          "version": "2.1.5",
+          "vulns": []
+        },
+        {
+          "name": "sqlmodel",
+          "version": "0.0.48",
+          "vulns": []
+        },
+        {
+          "name": "starlette",
+          "version": "1.8.0",
+          "vulns": []
+        },
+        {
+          "name": "streamlit",
+          "version": "1.66.0",
+          "vulns": []
+        },
+        {
+          "name": "tomli",
+          "version": "2.5.0",
+          "vulns": []
+        },
+        {
+          "name": "types-python-dateutil",
+          "version": "2.9.0.20260807",
+          "vulns": []
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "vulns": []
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.4",
+          "vulns": []
+        },
+        {
+          "name": "tzdata",
+          "version": "2026.5",
+          "vulns": []
+        },
+        {
+          "name": "uritemplate",
+          "version": "4.2.0",
+          "vulns": []
+        },
+        {
+          "name": "urllib3",
+          "version": "2.8.0",
+          "vulns": []
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0",
+          "vulns": []
+        },
+        {
+          "name": "watchdog",
+          "version": "6.0.0",
+          "vulns": []
+        },
+        {
+          "name": "websockets",
+          "version": "17.2",
+          "vulns": []
+        }
+      ]
+    },
+    {
+      "target": "CPython 3.12 Linux x86_64",
+      "lock_file": "requirements/locks/test-py312.txt",
+      "lock_sha256": "77bf7f27abe67cf2634e62bc410ac84ff6e4bb53c59c56cd6810193cedb5395a",
+      "command": "python -m pip_audit --strict --vulnerability-service pypi --disable-pip --require-hashes -r requirements/locks/test-py312.txt --format json",
+      "exit_code": 0,
+      "packages_examined": 96,
+      "known_advisory_entries": 0,
+      "dependencies": [
+        {
+          "name": "alembic",
+          "version": "1.20.0",
+          "vulns": []
+        },
+        {
+          "name": "altair",
+          "version": "6.3.0",
+          "vulns": []
+        },
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "vulns": []
+        },
+        {
+          "name": "anyio",
+          "version": "4.15.1",
+          "vulns": []
+        },
+        {
+          "name": "ast-serialize",
+          "version": "0.13.1",
+          "vulns": []
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0",
+          "vulns": []
+        },
+        {
+          "name": "beautifulsoup4",
+          "version": "4.15.0",
+          "vulns": []
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "vulns": []
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "vulns": []
+        },
+        {
+          "name": "charset-normalizer",
+          "version": "3.5.2",
+          "vulns": []
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "vulns": []
+        },
+        {
+          "name": "coverage",
+          "version": "7.16.2",
+          "vulns": []
+        },
+        {
+          "name": "cryptography",
+          "version": "50.0.2",
+          "vulns": []
+        },
+        {
+          "name": "curl-cffi",
+          "version": "0.16.3",
+          "vulns": []
+        },
+        {
+          "name": "defusedxml",
+          "version": "0.7.1",
+          "vulns": []
+        },
+        {
+          "name": "dnspython",
+          "version": "2.9.0",
+          "vulns": []
+        },
+        {
+          "name": "duckduckgo-search",
+          "version": "5.3.1",
+          "vulns": []
+        },
+        {
+          "name": "fonttools",
+          "version": "4.67.0",
+          "vulns": []
+        },
+        {
+          "name": "fpdf2",
+          "version": "2.8.9",
+          "vulns": []
+        },
+        {
+          "name": "google-api-core",
+          "version": "2.42.0",
+          "vulns": []
+        },
+        {
+          "name": "google-api-python-client",
+          "version": "2.201.0",
+          "vulns": []
+        },
+        {
+          "name": "google-auth",
+          "version": "2.62.0",
+          "vulns": []
+        },
+        {
+          "name": "google-auth-httplib2",
+          "version": "0.4.4",
+          "vulns": []
+        },
+        {
+          "name": "google-auth-oauthlib",
+          "version": "1.5.0",
+          "vulns": []
+        },
+        {
+          "name": "googleapis-common-protos",
+          "version": "1.75.5",
+          "vulns": []
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "vulns": []
+        },
+        {
+          "name": "httplib2",
+          "version": "0.32.0",
+          "vulns": []
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "vulns": []
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "vulns": []
+        },
+        {
+          "name": "iniconfig",
+          "version": "2.3.1",
+          "vulns": []
+        },
+        {
+          "name": "itsdangerous",
+          "version": "2.2.0",
+          "vulns": []
+        },
+        {
+          "name": "jinja2",
+          "version": "3.1.6",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1",
+          "vulns": []
+        },
+        {
+          "name": "librt",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "mako",
+          "version": "1.4.3",
+          "vulns": []
+        },
+        {
+          "name": "markupsafe",
+          "version": "3.0.4",
+          "vulns": []
+        },
+        {
+          "name": "mypy",
+          "version": "2.4.0",
+          "vulns": []
+        },
+        {
+          "name": "mypy-extensions",
+          "version": "1.1.0",
+          "vulns": []
+        },
+        {
+          "name": "narwhals",
+          "version": "2.27.1",
+          "vulns": []
+        },
+        {
+          "name": "numpy",
+          "version": "2.4.6",
+          "vulns": []
+        },
+        {
+          "name": "oauthlib",
+          "version": "4.0.0",
+          "vulns": []
+        },
+        {
+          "name": "ollama",
+          "version": "0.6.3",
+          "vulns": []
+        },
+        {
+          "name": "opentelemetry-api",
+          "version": "1.45.1",
+          "vulns": []
+        },
+        {
+          "name": "orjson",
+          "version": "3.13.0",
+          "vulns": []
+        },
+        {
+          "name": "packaging",
+          "version": "26.3",
+          "vulns": []
+        },
+        {
+          "name": "pandas",
+          "version": "2.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pathspec",
+          "version": "1.1.1",
+          "vulns": []
+        },
+        {
+          "name": "pdfminer-six",
+          "version": "20251230",
+          "vulns": []
+        },
+        {
+          "name": "pdfplumber",
+          "version": "0.11.9",
+          "vulns": []
+        },
+        {
+          "name": "pillow",
+          "version": "12.3.0",
+          "vulns": []
+        },
+        {
+          "name": "pluggy",
+          "version": "1.7.0",
+          "vulns": []
+        },
+        {
+          "name": "proto-plus",
+          "version": "1.29.0",
+          "vulns": []
+        },
+        {
+          "name": "protobuf",
+          "version": "7.36.2",
+          "vulns": []
+        },
+        {
+          "name": "pyarrow",
+          "version": "26.0.0",
+          "vulns": []
+        },
+        {
+          "name": "pyasn1",
+          "version": "0.6.4",
+          "vulns": []
+        },
+        {
+          "name": "pyasn1-modules",
+          "version": "0.4.2",
+          "vulns": []
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "vulns": []
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.1",
+          "vulns": []
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.1",
+          "vulns": []
+        },
+        {
+          "name": "pydeck",
+          "version": "0.9.3",
+          "vulns": []
+        },
+        {
+          "name": "pygments",
+          "version": "2.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pyparsing",
+          "version": "3.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pypdf",
+          "version": "6.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pypdfium2",
+          "version": "5.14.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest",
+          "version": "9.0.3",
+          "vulns": []
+        },
+        {
+          "name": "pytest-asyncio",
+          "version": "1.4.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-cov",
+          "version": "4.1.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-mock",
+          "version": "3.12.0",
+          "vulns": []
+        },
+        {
+          "name": "python-dateutil",
+          "version": "2.9.0.post0",
+          "vulns": []
+        },
+        {
+          "name": "python-dotenv",
+          "version": "1.2.4",
+          "vulns": []
+        },
+        {
+          "name": "python-multipart",
+          "version": "0.0.32",
+          "vulns": []
+        },
+        {
+          "name": "pytz",
+          "version": "2026.5",
+          "vulns": []
+        },
+        {
+          "name": "rapidfuzz",
+          "version": "3.14.6",
+          "vulns": []
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0",
+          "vulns": []
+        },
+        {
+          "name": "requests",
+          "version": "2.34.2",
+          "vulns": []
+        },
+        {
+          "name": "requests-oauthlib",
+          "version": "2.0.0",
+          "vulns": []
+        },
+        {
+          "name": "respx",
+          "version": "0.23.1",
+          "vulns": []
+        },
+        {
+          "name": "rpds-py",
+          "version": "2026.9.1",
+          "vulns": []
+        },
+        {
+          "name": "ruff",
+          "version": "0.15.8",
+          "vulns": []
+        },
+        {
+          "name": "six",
+          "version": "1.17.0",
+          "vulns": []
+        },
+        {
+          "name": "soupsieve",
+          "version": "3.0.3",
+          "vulns": []
+        },
+        {
+          "name": "sqlalchemy",
+          "version": "2.1.5",
+          "vulns": []
+        },
+        {
+          "name": "sqlmodel",
+          "version": "0.0.48",
+          "vulns": []
+        },
+        {
+          "name": "starlette",
+          "version": "1.8.0",
+          "vulns": []
+        },
+        {
+          "name": "streamlit",
+          "version": "1.66.0",
+          "vulns": []
+        },
+        {
+          "name": "types-python-dateutil",
+          "version": "2.9.0.20260807",
+          "vulns": []
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "vulns": []
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.4",
+          "vulns": []
+        },
+        {
+          "name": "tzdata",
+          "version": "2026.5",
+          "vulns": []
+        },
+        {
+          "name": "uritemplate",
+          "version": "4.2.0",
+          "vulns": []
+        },
+        {
+          "name": "urllib3",
+          "version": "2.8.0",
+          "vulns": []
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0",
+          "vulns": []
+        },
+        {
+          "name": "watchdog",
+          "version": "6.0.0",
+          "vulns": []
+        },
+        {
+          "name": "websockets",
+          "version": "17.2",
+          "vulns": []
+        }
+      ]
+    },
+    {
+      "target": "CPython 3.13 Linux x86_64",
+      "lock_file": "requirements/locks/test-py313.txt",
+      "lock_sha256": "f5c88074715c1d773b433f7817c07324fd0ac48dc9559592e2c748764c86d82c",
+      "command": "python -m pip_audit --strict --vulnerability-service pypi --disable-pip --require-hashes -r requirements/locks/test-py313.txt --format json",
+      "exit_code": 0,
+      "packages_examined": 96,
+      "known_advisory_entries": 0,
+      "dependencies": [
+        {
+          "name": "alembic",
+          "version": "1.20.0",
+          "vulns": []
+        },
+        {
+          "name": "altair",
+          "version": "6.3.0",
+          "vulns": []
+        },
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "vulns": []
+        },
+        {
+          "name": "anyio",
+          "version": "4.15.1",
+          "vulns": []
+        },
+        {
+          "name": "ast-serialize",
+          "version": "0.13.1",
+          "vulns": []
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0",
+          "vulns": []
+        },
+        {
+          "name": "beautifulsoup4",
+          "version": "4.15.0",
+          "vulns": []
+        },
+        {
+          "name": "certifi",
+          "version": "2026.7.22",
+          "vulns": []
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "vulns": []
+        },
+        {
+          "name": "charset-normalizer",
+          "version": "3.5.2",
+          "vulns": []
+        },
+        {
+          "name": "click",
+          "version": "8.5.0",
+          "vulns": []
+        },
+        {
+          "name": "coverage",
+          "version": "7.16.2",
+          "vulns": []
+        },
+        {
+          "name": "cryptography",
+          "version": "50.0.2",
+          "vulns": []
+        },
+        {
+          "name": "curl-cffi",
+          "version": "0.16.3",
+          "vulns": []
+        },
+        {
+          "name": "defusedxml",
+          "version": "0.7.1",
+          "vulns": []
+        },
+        {
+          "name": "dnspython",
+          "version": "2.9.0",
+          "vulns": []
+        },
+        {
+          "name": "duckduckgo-search",
+          "version": "5.3.1",
+          "vulns": []
+        },
+        {
+          "name": "fonttools",
+          "version": "4.67.0",
+          "vulns": []
+        },
+        {
+          "name": "fpdf2",
+          "version": "2.8.9",
+          "vulns": []
+        },
+        {
+          "name": "google-api-core",
+          "version": "2.42.0",
+          "vulns": []
+        },
+        {
+          "name": "google-api-python-client",
+          "version": "2.201.0",
+          "vulns": []
+        },
+        {
+          "name": "google-auth",
+          "version": "2.62.0",
+          "vulns": []
+        },
+        {
+          "name": "google-auth-httplib2",
+          "version": "0.4.4",
+          "vulns": []
+        },
+        {
+          "name": "google-auth-oauthlib",
+          "version": "1.5.0",
+          "vulns": []
+        },
+        {
+          "name": "googleapis-common-protos",
+          "version": "1.75.5",
+          "vulns": []
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "vulns": []
+        },
+        {
+          "name": "httplib2",
+          "version": "0.32.0",
+          "vulns": []
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "vulns": []
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "vulns": []
+        },
+        {
+          "name": "iniconfig",
+          "version": "2.3.1",
+          "vulns": []
+        },
+        {
+          "name": "itsdangerous",
+          "version": "2.2.0",
+          "vulns": []
+        },
+        {
+          "name": "jinja2",
+          "version": "3.1.6",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1",
+          "vulns": []
+        },
+        {
+          "name": "librt",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "mako",
+          "version": "1.4.3",
+          "vulns": []
+        },
+        {
+          "name": "markupsafe",
+          "version": "3.0.4",
+          "vulns": []
+        },
+        {
+          "name": "mypy",
+          "version": "2.4.0",
+          "vulns": []
+        },
+        {
+          "name": "mypy-extensions",
+          "version": "1.1.0",
+          "vulns": []
+        },
+        {
+          "name": "narwhals",
+          "version": "2.27.1",
+          "vulns": []
+        },
+        {
+          "name": "numpy",
+          "version": "2.4.6",
+          "vulns": []
+        },
+        {
+          "name": "oauthlib",
+          "version": "4.0.0",
+          "vulns": []
+        },
+        {
+          "name": "ollama",
+          "version": "0.6.3",
+          "vulns": []
+        },
+        {
+          "name": "opentelemetry-api",
+          "version": "1.45.1",
+          "vulns": []
+        },
+        {
+          "name": "orjson",
+          "version": "3.13.0",
+          "vulns": []
+        },
+        {
+          "name": "packaging",
+          "version": "26.3",
+          "vulns": []
+        },
+        {
+          "name": "pandas",
+          "version": "2.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pathspec",
+          "version": "1.1.1",
+          "vulns": []
+        },
+        {
+          "name": "pdfminer-six",
+          "version": "20251230",
+          "vulns": []
+        },
+        {
+          "name": "pdfplumber",
+          "version": "0.11.9",
+          "vulns": []
+        },
+        {
+          "name": "pillow",
+          "version": "12.3.0",
+          "vulns": []
+        },
+        {
+          "name": "pluggy",
+          "version": "1.7.0",
+          "vulns": []
+        },
+        {
+          "name": "proto-plus",
+          "version": "1.29.0",
+          "vulns": []
+        },
+        {
+          "name": "protobuf",
+          "version": "7.36.2",
+          "vulns": []
+        },
+        {
+          "name": "pyarrow",
+          "version": "26.0.0",
+          "vulns": []
+        },
+        {
+          "name": "pyasn1",
+          "version": "0.6.4",
+          "vulns": []
+        },
+        {
+          "name": "pyasn1-modules",
+          "version": "0.4.2",
+          "vulns": []
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "vulns": []
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.1",
+          "vulns": []
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.1",
+          "vulns": []
+        },
+        {
+          "name": "pydeck",
+          "version": "0.9.3",
+          "vulns": []
+        },
+        {
+          "name": "pygments",
+          "version": "2.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pyparsing",
+          "version": "3.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pypdf",
+          "version": "6.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pypdfium2",
+          "version": "5.14.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest",
+          "version": "9.0.3",
+          "vulns": []
+        },
+        {
+          "name": "pytest-asyncio",
+          "version": "1.4.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-cov",
+          "version": "4.1.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-mock",
+          "version": "3.12.0",
+          "vulns": []
+        },
+        {
+          "name": "python-dateutil",
+          "version": "2.9.0.post0",
+          "vulns": []
+        },
+        {
+          "name": "python-dotenv",
+          "version": "1.2.4",
+          "vulns": []
+        },
+        {
+          "name": "python-multipart",
+          "version": "0.0.32",
+          "vulns": []
+        },
+        {
+          "name": "pytz",
+          "version": "2026.5",
+          "vulns": []
+        },
+        {
+          "name": "rapidfuzz",
+          "version": "3.14.6",
+          "vulns": []
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0",
+          "vulns": []
+        },
+        {
+          "name": "requests",
+          "version": "2.34.2",
+          "vulns": []
+        },
+        {
+          "name": "requests-oauthlib",
+          "version": "2.0.0",
+          "vulns": []
+        },
+        {
+          "name": "respx",
+          "version": "0.23.1",
+          "vulns": []
+        },
+        {
+          "name": "rpds-py",
+          "version": "2026.9.1",
+          "vulns": []
+        },
+        {
+          "name": "ruff",
+          "version": "0.15.8",
+          "vulns": []
+        },
+        {
+          "name": "six",
+          "version": "1.17.0",
+          "vulns": []
+        },
+        {
+          "name": "soupsieve",
+          "version": "3.0.3",
+          "vulns": []
+        },
+        {
+          "name": "sqlalchemy",
+          "version": "2.1.5",
+          "vulns": []
+        },
+        {
+          "name": "sqlmodel",
+          "version": "0.0.48",
+          "vulns": []
+        },
+        {
+          "name": "starlette",
+          "version": "1.8.0",
+          "vulns": []
+        },
+        {
+          "name": "streamlit",
+          "version": "1.66.0",
+          "vulns": []
+        },
+        {
+          "name": "types-python-dateutil",
+          "version": "2.9.0.20260807",
+          "vulns": []
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "vulns": []
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.4",
+          "vulns": []
+        },
+        {
+          "name": "tzdata",
+          "version": "2026.5",
+          "vulns": []
+        },
+        {
+          "name": "uritemplate",
+          "version": "4.2.0",
+          "vulns": []
+        },
+        {
+          "name": "urllib3",
+          "version": "2.8.0",
+          "vulns": []
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0",
+          "vulns": []
+        },
+        {
+          "name": "watchdog",
+          "version": "6.0.0",
+          "vulns": []
+        },
+        {
+          "name": "websockets",
+          "version": "17.2",
+          "vulns": []
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Known-advisory feed coverage only; zero findings is time-dependent and does not prove absence of vulnerabilities.",
+    "Hashes protect reviewed distribution integrity; they do not establish publisher trust.",
+    "Docker base image and OS packages were not audited by pip-audit.",
+    "Rendered documentation domains returned proxy 403; official upstream documentation sources were consulted."
+  ],
+  "audit_tool_graph": {
+    "lock_file": "requirements/locks/audit-py311.txt",
+    "packages_examined": 29,
+    "known_advisory_entries": 0,
+    "exit_code": 0
+  }
+}

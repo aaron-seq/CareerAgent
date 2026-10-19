@@ -1,5 +1,10 @@
 # Workflow audit and improvements — 2026-10-16
 
+This is the historical workflow baseline. The
+[2026-10-19 follow-up](ENGINEERING_REVIEW_2026-10-19.md) records encrypted browser
+recovery, real Chromium preference regressions, maintained runtimes, required
+type checks, security-fixed frozen graphs and actual local inference.
+
 CareerAgent helps a local user discover jobs, prepare truthful materials,
 track applications, and review outreach. The review used the latest main,
 existing issues, independent subagent review, synthetic Streamlit journeys,

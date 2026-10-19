@@ -1,0 +1,13 @@
+{
+  "scope": "Synthetic isolated browser refresh, no model, no external network",
+  "checks": [
+    "model-free CV created with 100-point completeness from supplied project facts",
+    "selected pasted job and deliberate contact saved",
+    "page, selected job and contact restored after real browser reload",
+    "active CV, original readiness and preferences restored"
+  ],
+  "browser": "154.0.8037.57",
+  "mobile_document_horizontal_overflow": false,
+  "browser_errors": [],
+  "status": "passed"
+}
