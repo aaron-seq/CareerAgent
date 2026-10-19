@@ -38,6 +38,7 @@ function describeField(el) {
     ariaLabel: el.getAttribute('aria-label') || '',
     placeholder: el.getAttribute('placeholder') || '',
     type: el.getAttribute('type') || '',
+    inputMode: el.getAttribute('inputmode') || '',
   };
 }
 
@@ -80,6 +81,15 @@ function flagForHuman(el, field, result) {
   el.style.outline = NEEDS_YOU_OUTLINE;
   const label = (field.label || field.ariaLabel || field.name || 'question').trim().slice(0, 120);
   if (!result.needsYou.includes(label)) result.needsYou.push(label);
+}
+
+function isVisibleControl(el) {
+  for (let node = el; node; node = node.parentElement) {
+    if (node.hidden || node.getAttribute('hidden') !== null || node.getAttribute('aria-hidden') === 'true') return false;
+    const style = typeof getComputedStyle === 'function' ? getComputedStyle(node) : null;
+    if (style && (style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility) || style.opacity === '0')) return false;
+  }
+  return typeof el.getClientRects !== 'function' || el.getClientRects().length > 0;
 }
 
 function fillTextLike(el, result) {
@@ -196,12 +206,12 @@ function fillOnce(profile) {
       'input[type=text], input[type=email], input[type=tel], input[type=url], input:not([type]), textarea'
     )
     .forEach((el) => {
-      if (el.disabled || el.readOnly || el.value) return; // don't clobber
+      if (el.disabled || el.readOnly || el.value || !isVisibleControl(el)) return; // don't clobber
       fillTextLike(el, result);
     });
 
   document.querySelectorAll('select').forEach((el) => {
-    if (el.disabled) return;
+    if (el.disabled || !isVisibleControl(el)) return;
     const selected = (el.options || [])[el.selectedIndex];
     // A real first option is still an answer. Fill only an absent selection
     // or an explicit non-answer placeholder, never an existing choice.
@@ -222,7 +232,8 @@ function fillOnce(profile) {
   });
   groups.forEach((radios) => {
     if (radios.some((r) => r.checked)) return; // already answered
-    fillRadioGroup(radios, result);
+    const visible = radios.filter(isVisibleControl);
+    if (visible.length) fillRadioGroup(visible, result);
   });
 
   attachResume(profileRef.resume, result);

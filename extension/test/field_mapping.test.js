@@ -16,6 +16,14 @@ test('input type is a strong signal', () => {
   assert.equal(mapFieldToProfileKey({ type: 'tel' }), 'phone');
 });
 
+test('city or region is never substituted for country of residence', () => {
+  const profile = { location: 'London', answers: { work_authorization_country: 'UK' } };
+  const country = { autocomplete: 'country-name', label: 'Country', name: 'location' };
+  assert.equal(mapFieldToProfileKey(country), null);
+  assert.equal(fillValueFor(country, profile), null);
+  assert.equal(fillValueFor({ autocomplete: 'address-level2', label: 'City' }, profile), 'London');
+});
+
 test('label / aria-label fuzzy matching', () => {
   assert.equal(mapFieldToProfileKey({ label: 'First Name' }), 'firstName');
   assert.equal(mapFieldToProfileKey({ ariaLabel: 'Last name' }), 'lastName');

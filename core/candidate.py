@@ -25,10 +25,12 @@ Two rules run through this module:
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any, List, Literal, Optional
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models import CVProfile
 
@@ -40,19 +42,32 @@ class RemotePreference(str, Enum):
     FLEXIBLE = "flexible"
 
 
-class WorkAuthorization(BaseModel):
+class _AnswerModel(BaseModel):
+    """Normalize empty editor fields without converting unknown into false."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def empty_to_unknown(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+
+class WorkAuthorization(_AnswerModel):
     """The two questions almost every US/UK form asks.
 
     Both are tri-state: ``None`` means the candidate hasn't said, and the form
     question is left for the human rather than answered on their behalf.
     """
 
-    country: Optional[str] = None
+    country: Optional[str] = Field(default=None, max_length=100)
     #: "Are you legally authorized to work in {country}?"
     authorized: Optional[bool] = None
     #: "Will you now or in the future require sponsorship?"
     requires_sponsorship: Optional[bool] = None
-    visa_status: Optional[str] = None  # free text, e.g. "H-1B", "Skilled Worker"
+    visa_status: Optional[str] = Field(default=None, max_length=5000)
 
     def is_complete(self) -> bool:
         return (
@@ -62,52 +77,86 @@ class WorkAuthorization(BaseModel):
         )
 
 
-class Compensation(BaseModel):
-    minimum: Optional[float] = Field(default=None, ge=0)
-    target: Optional[float] = Field(default=None, ge=0)
+class Compensation(_AnswerModel):
+    minimum: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    target: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
     period: Literal["year", "month", "day", "hour"] = "year"
 
+    @field_validator("minimum", "target", mode="before")
+    @classmethod
+    def preserve_stated_precision(cls, value: Any) -> Any:
+        """Reject editor numbers the existing float storage would silently alter."""
+        if isinstance(value, bool):
+            raise ValueError("Pay must be an amount, not a yes/no answer.")
+        if isinstance(value, (str, int)) and str(value).strip():
+            try:
+                exact = Decimal(str(value).strip())
+                represented = Decimal(str(float(value)))
+            except (InvalidOperation, ValueError, OverflowError):
+                return value  # Pydantic reports invalid/non-finite numeric input.
+            if exact.is_finite() and exact != represented:
+                raise ValueError(
+                    "This pay amount exceeds supported precision. Use a shorter "
+                    "amount that preserves your intended pay."
+                )
+        return value
+
+    @model_validator(mode="after")
+    def target_not_below_minimum(self) -> Compensation:
+        if (
+            self.minimum is not None
+            and self.target is not None
+            and self.target < self.minimum
+        ):
+            raise ValueError("Expected pay must be at least the minimum pay.")
+        return self
+
     def is_complete(self) -> bool:
-        return self.minimum is not None
+        return self.minimum is not None or self.target is not None
 
 
-class Availability(BaseModel):
+class Availability(_AnswerModel):
     notice_period_weeks: Optional[int] = Field(default=None, ge=0, le=104)
-    earliest_start_date: Optional[str] = None  # ISO date preferred; free text ok
+    earliest_start_date: Optional[str] = Field(default=None, max_length=5000)
     open_to_contract: Optional[bool] = None
 
     def is_complete(self) -> bool:
         return self.notice_period_weeks is not None or bool(self.earliest_start_date)
 
 
-class JobPreferences(BaseModel):
+class JobPreferences(_AnswerModel):
     desired_titles: List[str] = Field(default_factory=list)
     remote_preference: Optional[RemotePreference] = None
     locations: List[str] = Field(default_factory=list)
     open_to_relocation: Optional[bool] = None
 
+    @field_validator("desired_titles", "locations")
+    @classmethod
+    def nonempty_entries(cls, values: List[str]) -> List[str]:
+        return list(dict.fromkeys(value for value in values if value))
+
     def is_complete(self) -> bool:
         return bool(self.desired_titles) and self.remote_preference is not None
 
 
-class Demographics(BaseModel):
+class Demographics(_AnswerModel):
     """Optional EEO answers.
 
     Never inferred (not from a name, photo, or anything else) and only used
     when the candidate typed them in and set ``share_on_applications``.
     """
 
-    pronouns: Optional[str] = None
-    gender: Optional[str] = None
-    ethnicity: Optional[str] = None
-    veteran_status: Optional[str] = None
-    disability_status: Optional[str] = None
+    pronouns: Optional[str] = Field(default=None, max_length=5000)
+    gender: Optional[str] = Field(default=None, max_length=5000)
+    ethnicity: Optional[str] = Field(default=None, max_length=5000)
+    veteran_status: Optional[str] = Field(default=None, max_length=5000)
+    disability_status: Optional[str] = Field(default=None, max_length=5000)
     #: Explicit consent to put these answers on application forms.
     share_on_applications: bool = False
 
 
-class CandidateProfile(BaseModel):
+class CandidateProfile(_AnswerModel):
     """Application answers that accompany one saved CV."""
 
     #: City/region for the "Location" field. Not in CVProfile, never guessed.
@@ -119,7 +168,38 @@ class CandidateProfile(BaseModel):
     preferences: JobPreferences = Field(default_factory=JobPreferences)
     demographics: Demographics = Field(default_factory=Demographics)
     #: Candidate-written text reused for "Why do you want to work here?".
-    default_cover_note: Optional[str] = None
+    default_cover_note: Optional[str] = Field(default=None, max_length=5000)
+
+    @field_validator("websites", mode="before")
+    @classmethod
+    def websites_from_editor(cls, value: Any) -> Any:
+        return value.splitlines() if isinstance(value, str) else value
+
+    @field_validator("websites")
+    @classmethod
+    def valid_websites(cls, values: List[str]) -> List[str]:
+        websites = list(dict.fromkeys(value for value in values if value))
+        for value in websites:
+            try:
+                parsed = urlsplit(value)
+                valid = (
+                    parsed.scheme in {"http", "https"}
+                    and bool(parsed.hostname)
+                    and parsed.username is None
+                    and parsed.password is None
+                    and "\\" not in value
+                    and not any(
+                        ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in value
+                    )
+                )
+                parsed.port
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError(
+                    "Websites must be complete HTTP or HTTPS URLs without credentials."
+                )
+        return websites
 
 
 # --------------------------------------------------------------------------- #
@@ -246,7 +326,7 @@ def compute_completeness(
             "Target roles",
             bool(c.preferences.desired_titles),
             8,
-            "Used to rank jobs and seed searches.",
+            "Your stated target roles, saved with this CV for reference.",
             "Preferences",
         ),
         ChecklistItem(
@@ -254,7 +334,7 @@ def compute_completeness(
             "Remote preference",
             c.preferences.remote_preference is not None,
             6,
-            "Filters out roles you would decline anyway.",
+            "Your stated work-location preference, saved for reference.",
             "Preferences",
         ),
         ChecklistItem(
@@ -262,7 +342,7 @@ def compute_completeness(
             "Salary expectations",
             c.compensation.is_complete(),
             7,
-            "Forms ask for it, and it screens out roles below your floor.",
+            "An optional answer for pay questions; it does not filter job matches.",
             "Preferences",
         ),
         ChecklistItem(

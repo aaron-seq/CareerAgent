@@ -12,9 +12,97 @@ from duckduckgo_search import DDGS
 
 from .llm import LocalLLMClient
 from .models import ContactCandidate
+from .outreach.verification import verify_email
 from .prompts import CONTACT_SEARCH_QUERIES_PROMPT
 
 logger = logging.getLogger(__name__)
+
+
+def _valid_contact_email(email: str) -> bool:
+    local = email.partition("@")[0]
+    return (
+        verify_email(email, resolver=lambda _: None, require_mx=False).syntax_ok
+        and not local.startswith(".")
+        and not local.endswith(".")
+        and ".." not in local
+        and len(local) <= 64
+    )
+
+
+def create_manual_contact(name: str, email: str, role: str = "") -> ContactCandidate:
+    """Validate supplied facts locally; syntax never verifies a mailbox."""
+    name, email, role = name.strip(), email.strip(), role.strip()
+    if not name:
+        raise ValueError("Enter the contact's name.")
+    if not _valid_contact_email(email):
+        raise ValueError("Enter a valid email address, such as name@company.com.")
+    return ContactCandidate(
+        name=name,
+        email=email,
+        role=role or None,
+        email_confidence="unknown",
+        source="manual",
+    )
+
+
+def generate_contact_patterns(
+    first_name: str, last_name: str, domain: str
+) -> list[ContactCandidate]:
+    """Generate unverified patterns only for an explicitly supplied domain."""
+    first_name, last_name, domain = (
+        first_name.strip(),
+        last_name.strip(),
+        domain.strip().lower(),
+    )
+    if not first_name or not last_name:
+        raise ValueError("Enter both a first name and a last name.")
+    if not verify_email(
+        f"contact@{domain}", resolver=lambda _: None, require_mx=False
+    ).syntax_ok:
+        raise ValueError(
+            "Enter the employer's known email domain, such as company.com, "
+            "without an email address, URL, path or port."
+        )
+    first, last = first_name.lower(), last_name.lower()
+    addresses = [
+        f"{first}.{last}@{domain}",
+        f"{first}@{domain}",
+        f"{first}{last}@{domain}",
+    ]
+    if any(not _valid_contact_email(address) for address in addresses):
+        raise ValueError(
+            "These names do not form a supported email pattern. Add a known "
+            "email address as a manual contact instead."
+        )
+    return [
+        ContactCandidate(
+            name=f"{first_name} {last_name}",
+            email=address,
+            email_confidence="guessed",
+            source="email_permutation",
+            confidence_score=0.7 - index * 0.1,
+        )
+        for index, address in enumerate(addresses)
+    ]
+
+
+def merge_contacts(
+    existing: list[ContactCandidate], incoming: list[ContactCandidate]
+) -> list[ContactCandidate]:
+    """Keep existing reviewed records and append only new contact identities."""
+    contacts = list(existing)
+    identities = {
+        (contact.email or contact.linkedin or contact.name).strip().casefold()
+        for contact in existing
+    }
+    for contact in incoming:
+        identity = (
+            (contact.email or contact.linkedin or contact.name).strip().casefold()
+        )
+        if identity not in identities:
+            contacts.append(contact)
+            identities.add(identity)
+    return contacts
 
 
 class ContactFinder:
@@ -99,38 +187,8 @@ class ContactFinder:
     def generate_email_permutations(
         self, first_name: str, last_name: str, domain: str
     ) -> List[ContactCandidate]:
-        """Generate likely email permutations"""
-
-        first = first_name.lower().strip()
-        last = last_name.lower().strip()
-        domain = domain.lower().strip()
-
-        # Remove domain prefix if included
-        if "@" in domain:
-            domain = domain.split("@")[1]
-
-        # Common email patterns
-        patterns = [
-            f"{first}.{last}@{domain}",
-            f"{first}@{domain}",
-            f"{first}{last}@{domain}",
-            f"{first[0]}{last}@{domain}",
-            f"{first}_{last}@{domain}",
-        ]
-
-        candidates = []
-        for i, email in enumerate(patterns[:3]):  # Top 3 patterns
-            candidates.append(
-                ContactCandidate(
-                    name=f"{first_name} {last_name}",
-                    email=email,
-                    email_confidence="guessed",
-                    source="email_permutation",
-                    confidence_score=0.7 - (i * 0.1),  # Decreasing confidence
-                )
-            )
-
-        return candidates
+        """Compatibility entry point for locally validated, unverified patterns."""
+        return generate_contact_patterns(first_name, last_name, domain)
 
     def _extract_role_keyword(self, job_title: str) -> str:
         """Extract key role keyword from job title"""

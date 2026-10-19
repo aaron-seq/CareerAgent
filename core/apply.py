@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import asdict, dataclass
+from decimal import Decimal
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -82,14 +83,28 @@ def resolve_apply_url(url: Optional[str]) -> ApplyTarget:
     """
     if not url or not url.strip():
         return ApplyTarget(url=None, note="This posting has no application link.")
+    original = url
     url = url.strip()
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+    try:
+        parsed = urlparse(url)
+        valid = (
+            parsed.scheme in ("http", "https")
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and "\\" not in url
+            and not any(ch.isspace() for ch in url)
+            and not any(ord(ch) < 32 or ord(ch) == 127 for ch in original)
+        )
+        parsed.port  # Validate without making a network request.
+    except ValueError:
+        valid = False
+    if not valid:
         return ApplyTarget(
             url=None, note="The recorded application link is not a web address."
         )
 
-    host = parsed.hostname.lower()
+    host = (parsed.hostname or "").lower()
     match = detect(url=url)
     ats = match.ats_type if match else None
     if host in AUTOFILL_HOSTS and parsed.scheme == "https":
@@ -137,10 +152,15 @@ def build_answers(candidate: CandidateProfile) -> dict[str, Any]:
         answers[AUTHORIZATION_COUNTRY_KEY] = auth.country.strip()
 
     comp = candidate.compensation
-    if comp.minimum is not None:
-        answers["salary_expectation"] = (
-            f"{comp.currency} {comp.minimum:,.0f} per {comp.period}"
-        )
+    amount = comp.target if comp.target is not None else comp.minimum
+    if amount is not None:
+        # str(float) preserves its accepted decimal value; whole-unit formatting
+        # used to turn an hourly rate such as 42.75 into a different answer.
+        decimal = Decimal(str(amount))
+        if not decimal.is_finite() or decimal < 0:
+            raise ValueError("Pay must be a finite nonnegative amount.")
+        formatted = format(decimal.normalize() if decimal else Decimal(0), ",f")
+        answers["salary_expectation"] = f"{comp.currency} {formatted} per {comp.period}"
 
     avail = candidate.availability
     if avail.notice_period_weeks is not None:
@@ -163,6 +183,27 @@ def build_answers(candidate: CandidateProfile) -> dict[str, Any]:
             answers.update(shared)
             answers[CONSENT_KEY] = True
     return answers
+
+
+def answer_preview(candidate: CandidateProfile) -> dict[str, Any]:
+    """Exact export values plus the pay source, without another readiness score."""
+    answers = build_answers(candidate)
+    comp = candidate.compensation
+    source = (
+        "target"
+        if comp.target is not None
+        else "minimum"
+        if comp.minimum is not None
+        else None
+    )
+    ordinary_keys = (*BOOLEAN_ANSWER_KEYS, *TEXT_ANSWER_KEYS)
+    return {
+        "answers": answers,
+        "compensation_source": source,
+        "unanswered": [key for key in ordinary_keys if key not in answers],
+        "voluntary_answers_shared": answers.get(CONSENT_KEY) is True,
+        "eligibility_country": answers.get(AUTHORIZATION_COUNTRY_KEY),
+    }
 
 
 def resume_attachment(pdf: bytes, candidate_name: Optional[str]) -> dict[str, str]:

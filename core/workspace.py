@@ -42,7 +42,9 @@ class WorkspacePreferences(BaseModel):
     target_roles: list[ShortText] = Field(default_factory=list, max_length=50)
     target_locations: list[ShortText] = Field(default_factory=list, max_length=50)
     industries: list[Industry] = Field(default_factory=list, max_length=6)
-    seniority: Literal["Junior", "Mid-level", "Senior", "Staff", "Principal"] = "Senior"
+    seniority: Literal["Any", "Junior", "Mid-level", "Senior", "Staff", "Principal"] = (
+        "Any"
+    )
 
 
 class WorkspaceContact(ContactCandidate):

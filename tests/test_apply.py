@@ -110,6 +110,31 @@ def test_missing_or_non_web_links_are_never_returned(url):
     assert target.note
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://[invalid",
+        "https://jobs.lever.co:abc/acme/1",
+        "https://jobs.lever.co:65536/acme/1",
+        "https://user:pass@jobs.lever.co/acme/1",
+        "https://jobs.lever.co/acme/1\nInjected text",
+        "https://jobs.lever.co/acme/1\x00",
+        "https://jobs.lever.co/acme/1\x7f",
+        "https://jobs.lever.co\\evil.example/acme/1",
+    ],
+)
+def test_malformed_application_links_never_raise_or_offer_autofill(url):
+    target = resolve_apply_url(url)
+    assert target.url is None
+    assert target.autofill_supported is False
+
+
+def test_pasted_web_link_can_have_outer_spaces():
+    target = resolve_apply_url("  https://jobs.lever.co/acme/1  ")
+    assert target.url == "https://jobs.lever.co/acme/1"
+    assert target.autofill_supported
+
+
 def test_autofill_hosts_match_the_extension_manifest():
     manifest = json.loads((EXTENSION / "manifest.json").read_text())
     hosts = {
@@ -144,6 +169,31 @@ def test_answers_cover_the_blocking_questions():
     assert answers["notice_period"] == "4 weeks"
     assert answers["start_date"] == "2026-12-01"
     assert answers["willing_to_relocate"] is False
+
+
+@pytest.mark.parametrize(
+    "pay,expected",
+    [
+        ({"minimum": 42.75, "period": "hour"}, "USD 42.75 per hour"),
+        ({"minimum": 0}, "USD 0 per year"),
+        ({"minimum": 42.7501, "period": "day"}, "USD 42.7501 per day"),
+        ({"minimum": 60000, "target": 80000}, "USD 80,000 per year"),
+        ({"target": 0}, "USD 0 per year"),
+        ({"target": 1234567.25, "currency": "EUR"}, "EUR 1,234,567.25 per year"),
+    ],
+)
+def test_salary_export_selects_explicit_target_or_minimum_without_rounding(
+    pay, expected
+):
+    candidate = CandidateProfile.model_validate({"compensation": pay})
+    assert build_answers(candidate)["salary_expectation"] == expected
+
+
+def test_invalid_mutated_pay_cannot_be_exported():
+    candidate = CandidateProfile()
+    candidate.compensation.target = float("inf")
+    with pytest.raises(ValueError, match="finite"):
+        build_answers(candidate)
 
 
 def test_demographics_need_explicit_consent():
@@ -273,6 +323,49 @@ def test_facade_profile_completeness_is_a_plain_dict():
     json.dumps(data)  # UI-ready: serializable, no dataclasses/models
     assert 0 < data["percent"] <= 100
     assert data["next_best_action"]["key"] in {m["key"] for m in data["missing"]}
+
+
+def test_answer_preview_names_pay_source_and_preserves_unknown_and_false():
+    candidate = CandidateProfile.model_validate(
+        {
+            "work_authorization": {"country": "GB", "authorized": False},
+            "compensation": {"minimum": 42.75, "period": "hour"},
+            "demographics": {
+                "gender": "A supplied answer",
+                "share_on_applications": False,
+            },
+        }
+    )
+    preview = facade.application_details_preview(candidate)
+    assert preview["answers"] == build_answers(candidate)
+    assert preview["compensation_source"] == "minimum"
+    assert preview["answers"]["work_authorized"] is False
+    assert preview["eligibility_country"] == "GB"
+    assert "requires_sponsorship" in preview["unanswered"]
+    assert preview["voluntary_answers_shared"] is False
+    assert "gender" not in preview["answers"]
+    candidate.compensation.target = 50.25
+    preview = facade.application_details_preview(candidate.model_dump())
+    assert preview["compensation_source"] == "target"
+    assert preview["answers"]["salary_expectation"] == "USD 50.25 per hour"
+    assert (
+        facade.application_details_preview(CandidateProfile())["compensation_source"]
+        is None
+    )
+    json.dumps(preview)
+
+
+def test_saving_answers_preserves_other_cv_rows_and_revalidates_mutated_models(temp_db):
+    first_id = facade.persist_cv(CV)
+    second_id = facade.persist_cv(CV)
+    assert facade.save_candidate_profile(first_id, CANDIDATE)["ok"]
+    assert facade.load_candidate_profile(second_id) == CandidateProfile()
+    changed = CANDIDATE.model_copy(deep=True)
+    changed.compensation.target = float("inf")
+    assert facade.save_candidate_profile(first_id, changed)["ok"] is False
+    assert facade.load_candidate_profile(first_id) == CANDIDATE
+    assert facade.save_candidate_profile(first_id, CandidateProfile())["ok"]
+    assert facade.load_candidate_profile(first_id) == CandidateProfile()
 
 
 # --------------------------------------------------------------------------- #

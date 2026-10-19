@@ -18,8 +18,11 @@ from sqlmodel import col, select
 
 from .alerting import build_digest
 from .analytics import compute_funnel, generate_interview_questions
-from .apply import build_answers, resolve_apply_url, resume_attachment
+from .apply import answer_preview, build_answers, resolve_apply_url, resume_attachment
 from .candidate import CandidateProfile, compute_completeness
+from .contact_finder import create_manual_contact as _create_manual_contact
+from .contact_finder import generate_contact_patterns as _generate_contact_patterns
+from .contact_finder import merge_contacts as _merge_contacts
 from .db import get_session, init_db
 from .db.repository import (
     ApplicationRepository,
@@ -82,6 +85,26 @@ from .tracking import (
     TrackingService,
     follow_up_applies,
 )
+
+
+def create_manual_contact(name: str, email: str, role: str = "") -> ContactCandidate:
+    """Validate a supplied contact without a DNS or search request."""
+    return _create_manual_contact(name, email, role)
+
+
+def generate_contact_patterns(
+    first_name: str, last_name: str, domain: str
+) -> list[ContactCandidate]:
+    """Generate unverified guesses for a domain explicitly supplied by the user."""
+    return _generate_contact_patterns(first_name, last_name, domain)
+
+
+def merge_contacts(
+    existing: list[ContactCandidate], incoming: list[ContactCandidate]
+) -> list[ContactCandidate]:
+    """Append new identities without replacing the user's existing contacts."""
+    return _merge_contacts(existing, incoming)
+
 
 _ATS_SOURCES: dict[str, Callable[[str, str], JobSource]] = {
     "greenhouse": GreenhouseSource,
@@ -281,7 +304,11 @@ def save_candidate_profile(
     validated first, so a bad value is reported rather than stored.
     """
     try:
-        profile = CandidateProfile.model_validate(candidate)
+        profile = CandidateProfile.model_validate(
+            candidate.model_dump()
+            if isinstance(candidate, CandidateProfile)
+            else candidate
+        )
     except ValidationError as exc:
         return {"ok": False, "error": _validation_message(exc)}
     init_persistence()
@@ -296,6 +323,20 @@ def load_candidate_profile(cv_id: int) -> Optional[CandidateProfile]:
     init_persistence()
     with get_session() as session:
         return CVRepository(session).get_candidate(cv_id)
+
+
+def application_details_preview(
+    candidate: CandidateProfile | dict[str, Any],
+) -> dict[str, Any]:
+    """Validate editor data and show the exact answers a download will contain.
+
+    The source distinguishes an explicit expected-pay target from the saved
+    minimum fallback. No value is inferred, rounded or converted.
+    """
+    profile = CandidateProfile.model_validate(
+        candidate.model_dump() if isinstance(candidate, CandidateProfile) else candidate
+    )
+    return answer_preview(profile)
 
 
 def profile_completeness(
@@ -1094,10 +1135,11 @@ def extension_profile(
     flagged by the extension). With ``include_resume`` a ``resume`` block
     embeds the ATS-clean PDF for the extension to attach to the resume input.
 
-    Deliberately not an HTTP endpoint: the candidate pastes this into the
-    popup, so the extension needs no host permission and the PII never
-    crosses a socket. ``extension/src/popup.js`` ``parseImport`` whitelists
-    every key and type on the way in.
+    The app generates readable JSON for the candidate to import into the
+    popup; this handoff needs no app API server or app-origin permission.
+    The extension has separate permissions for supported employer forms,
+    which the human reviews and submits. ``extension/src/popup.js``
+    ``parseImport`` whitelists every key and type on the way in.
     """
     profile: dict[str, Any] = {
         "fullName": cv.name or "",

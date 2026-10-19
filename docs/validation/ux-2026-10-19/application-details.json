@@ -1,0 +1,154 @@
+{
+  "scope": "Independent actual Chromium, isolated synthetic SQLite/key/storage, external requests blocked, no model/send/submit",
+  "app_sha256": "97335a692556a265920b6d46a08ddcea97f1ccb0ed34aa78234d486a4b2163e9",
+  "checks": [
+    "Unknown answers default unanswered; unsaved focused edit survives navigation but download uses last saved identity-only answers with warning",
+    "Saved False and zero preserved exactly; UK context retained; nonconsented gender excluded",
+    "Optional actual PDF embedded in downloaded JSON; disabled by default",
+    "Explicit consent shares only stated gender; saved revocation removes gender and consent marker from subsequent actual download",
+    "Invalid target below minimum gives error, retains user edits, does not alter saved download; explicit reset restores saved values",
+    "Switching saved CV rows loads independent answers; Beta does not inherit Alpha and Alpha remains saved",
+    "New saved CV snapshot deliberately starts with unanswered eligibility/pay/demographics; no previous-row answer leakage",
+    "Unsupported complex-script PDF fails visibly and gracefully; usable JSON download preserves original identity text without PDF"
+  ],
+  "01-unsaved-identity-only": {
+    "fullName": "Review Alpha",
+    "email": "alpha@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": ""
+  },
+  "02-saved-zero-false": {
+    "fullName": "Review Alpha",
+    "email": "alpha@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": "Synthetic City",
+    "answers": {
+      "work_authorized": false,
+      "requires_sponsorship": false,
+      "work_authorization_country": "UK",
+      "salary_expectation": "GBP 0 per hour",
+      "notice_period": "0 weeks",
+      "willing_to_relocate": false,
+      "cover_note": "Synthetic factual note"
+    }
+  },
+  "03-optional-pdf": {
+    "fullName": "Review Alpha",
+    "email": "alpha@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": "Synthetic City",
+    "answers": {
+      "work_authorized": false,
+      "requires_sponsorship": false,
+      "work_authorization_country": "UK",
+      "salary_expectation": "GBP 0 per hour",
+      "notice_period": "0 weeks",
+      "willing_to_relocate": false,
+      "cover_note": "Synthetic factual note"
+    },
+    "resume": {
+      "filename": "Review_Alpha.pdf",
+      "mime": "application/pdf",
+      "bytes": 14426,
+      "sha256": "88b2f9aa4890b573160677ea01f5a11de4d227d6902eef469aef1acdc0decdca"
+    }
+  },
+  "04-consented": {
+    "fullName": "Review Alpha",
+    "email": "alpha@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": "Synthetic City",
+    "answers": {
+      "work_authorized": false,
+      "requires_sponsorship": false,
+      "work_authorization_country": "UK",
+      "salary_expectation": "GBP 0 per hour",
+      "notice_period": "0 weeks",
+      "willing_to_relocate": false,
+      "cover_note": "Synthetic factual note",
+      "gender": "Woman",
+      "share_demographics": true
+    }
+  },
+  "05-revoked": {
+    "fullName": "Review Alpha",
+    "email": "alpha@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": "Synthetic City",
+    "answers": {
+      "work_authorized": false,
+      "requires_sponsorship": false,
+      "work_authorization_country": "UK",
+      "salary_expectation": "GBP 0 per hour",
+      "notice_period": "0 weeks",
+      "willing_to_relocate": false,
+      "cover_note": "Synthetic factual note"
+    }
+  },
+  "06-invalid-draft-keeps-saved": {
+    "fullName": "Review Alpha",
+    "email": "alpha@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": "Synthetic City",
+    "answers": {
+      "work_authorized": false,
+      "requires_sponsorship": false,
+      "work_authorization_country": "UK",
+      "salary_expectation": "GBP 0 per hour",
+      "notice_period": "0 weeks",
+      "willing_to_relocate": false,
+      "cover_note": "Synthetic factual note"
+    }
+  },
+  "07-beta-no-leak": {
+    "fullName": "Review Beta",
+    "email": "beta@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": ""
+  },
+  "08-new-cv-no-leak": {
+    "fullName": "Review New Snapshot",
+    "email": "alpha@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": ""
+  },
+  "09-unsupported-pdf-fallback": {
+    "fullName": "\u0938\u092e\u0940\u0915\u094d\u0937\u093e",
+    "email": "unicode@example.test",
+    "phone": "",
+    "linkedin": "",
+    "github": "",
+    "portfolio": "",
+    "location": ""
+  },
+  "mobile_overflow": false,
+  "browser": "154.0.8037.57",
+  "browser_errors": [],
+  "external_requests": [],
+  "status": "passed",
+  "note": "PDF bytes are summarized by size and SHA256; full original downloaded JSON remains in the isolated run evidence."
+}

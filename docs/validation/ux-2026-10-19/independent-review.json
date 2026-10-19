@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Asia/Calcutta",
+  "scope": "Independent real Chromium acceptance with disposable synthetic SQLite/storage/key. No real candidate data, model, message send, remote application request or submission.",
+  "journeys": {
+    "candidate": {
+      "status": "passed",
+      "browser": "154.0.8037.57",
+      "checks": [
+        "Unknown answers default unanswered; unsaved focused edit survives navigation but download uses last saved identity-only answers with warning",
+        "Saved False and zero preserved exactly; UK context retained; nonconsented gender excluded",
+        "Optional actual PDF embedded in downloaded JSON; disabled by default",
+        "Explicit consent shares only stated gender; saved revocation removes gender and consent marker from subsequent actual download",
+        "Invalid target below minimum gives error, retains user edits, does not alter saved download; explicit reset restores saved values",
+        "Switching saved CV rows loads independent answers; Beta does not inherit Alpha and Alpha remains saved",
+        "New saved CV snapshot deliberately starts with unanswered eligibility/pay/demographics; no previous-row answer leakage",
+        "Unsupported complex-script PDF fails visibly and gracefully; usable JSON download preserves original identity text without PDF"
+      ],
+      "app_sha256": "97335a692556a265920b6d46a08ddcea97f1ccb0ed34aa78234d486a4b2163e9",
+      "browser_errors": [],
+      "external_requests": [],
+      "mobile_overflow": false,
+      "full_report": "/workspace/.careeragent/final-candidate-acceptance-ikrpz5bv/report.json",
+      "full_report_sha256": "7b614ad839a9dd9719820c271ad3b6b76766b34d214329f4b5248cee864fc63d"
+    },
+    "application_links": {
+      "status": "passed",
+      "browser": "154.0.8037.57",
+      "checks": [
+        "Supported host gets validated explicit link and honest review/manual-submit guidance; actual link click intercepted before any remote request; preparation routes to saved autofill handoff",
+        "Unknown host remains a usable posting link with bounded autofill support note",
+        "javascript posting has no actionable link and gives useful invalid-link feedback",
+        "Database re-read after opening/preparing/export navigation keeps all three rows Saved, with no applied timestamp"
+      ],
+      "app_sha256": "97335a692556a265920b6d46a08ddcea97f1ccb0ed34aa78234d486a4b2163e9",
+      "browser_errors": [],
+      "blocked_external_requests": [
+        "https://jobs.lever.co/synthetic-review/role"
+      ],
+      "full_report": "/workspace/.careeragent/application-links-acceptance-txuy7y5k/report.json",
+      "full_report_sha256": "0674e0e7382e3a993e2722d5e3d383eba4670b4160590f93355bf1b62e276eaf"
+    },
+    "extension_dom": {
+      "status": "passed",
+      "browser": "154.0.8037.57",
+      "checks": [
+        "City London fills city but country-name remains blank without inferred country",
+        "Hidden phone stays blank while intentionally hidden resume upload remains supported",
+        "Known country boolean true/false correct; mismatched country abstains",
+        "Qualified salary matches; placeholder/ARIA/currency/period/numeric/history restrictions abstain",
+        "Existing email and real first select option preserved",
+        "Voluntary gender excluded without consent; exact answer included after explicit marker",
+        "Resume attached to actual FileList; cover letter untouched",
+        "Submit counter remains zero through delayed pass"
+      ],
+      "source_sha256": {
+        "/workspace/CareerAgent/extension/src/field_mapping.js": "e01303b4b1aef991aa5aa10257b269c89f7cd9fc3e2d2135edc5bc2bf25f7438",
+        "/workspace/CareerAgent/extension/src/content_script.js": "d996f7c8a897119e806f3f558aa63707e506e5e6ba0c0cc9b7f7ac021f4b9073"
+      },
+      "browser_errors": [],
+      "external_requests": [],
+      "full_report": "/workspace/.careeragent/extension-final-acceptance-08m48au4/report.json",
+      "full_report_sha256": "b0ffed3e0b7e75ea32804ef0f3672d2a883daa46fe5709eaaa71f4bc33a1038e"
+    }
+  },
+  "screenshots": {
+    "candidate_mobile_export": "/workspace/.careeragent/final-candidate-acceptance-ikrpz5bv/mobile-export.png",
+    "application_board": "/workspace/.careeragent/application-links-acceptance-txuy7y5k/application-board.png",
+    "synthetic_extension_dom": "/workspace/.careeragent/extension-final-acceptance-08m48au4/synthetic-form.png"
+  }
+}

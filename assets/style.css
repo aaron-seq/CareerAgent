@@ -1,5 +1,5 @@
 /* ============================================================
-   CareerAgent - instrument panel for a gated job-search pipeline
+   CareerAgent - local-first career workspace
 
    Design notes for whoever touches this next:
    - This file is DARK-NATIVE. It must stay in step with
@@ -47,8 +47,8 @@ html, body, [class*="css"] {
     font-family: var(--font-body);
 }
 
-.main .block-container {
-    padding-top: 2.5rem;
+[data-testid="stMain"] [data-testid="stMainBlockContainer"] {
+    padding-top: 2rem;
     padding-bottom: 4rem;
     max-width: 1180px;
 }
@@ -57,7 +57,7 @@ html, body, [class*="css"] {
    Tight display headings, wide-tracked mono eyebrows. The contrast
    between the two is the type system's whole idea. */
 
-h1 {
+[data-testid="stMain"] [data-testid="stHeading"] h1 {
     font-family: var(--font-display);
     color: var(--text);
     font-weight: 650;
@@ -67,7 +67,7 @@ h1 {
     margin-bottom: 0.35rem;
 }
 
-h2 {
+[data-testid="stMain"] [data-testid="stHeading"] h2 {
     font-family: var(--font-display);
     color: var(--text);
     font-weight: 600;
@@ -77,13 +77,13 @@ h2 {
     margin-bottom: 0.75rem;
 }
 
-h3 {
-    font-family: var(--font-mono);
-    color: var(--muted);
-    font-weight: 500;
-    font-size: 0.72rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+[data-testid="stMain"] [data-testid="stHeading"] h3 {
+    font-family: var(--font-body);
+    color: var(--text);
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: normal;
+    text-transform: none;
     margin-top: 1.5rem;
     margin-bottom: 0.6rem;
 }
@@ -94,95 +94,6 @@ h1 + p {
     color: var(--muted);
     font-size: 0.95rem;
 }
-
-/* ---------- Stage rail (signature element) ----------
-   The six screens are genuinely gated - Discovery refuses to run before
-   Onboarding completes. The numbering encodes that real dependency
-   rather than decorating the page. */
-
-.stage-rail {
-    display: flex;
-    align-items: flex-start;
-    gap: 0;
-    margin: 0 0 2.5rem 0;
-    padding: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.stage-rail::-webkit-scrollbar { display: none; }
-
-.stage {
-    position: relative;
-    flex: 1 1 0;
-    min-width: 96px;
-    padding: 0 0 0 0;
-    text-align: left;
-}
-
-/* Connecting rail between lamps */
-.stage:not(:last-child)::after {
-    content: "";
-    position: absolute;
-    top: 5px;
-    left: 16px;
-    right: 0;
-    height: 1px;
-    background: var(--line);
-}
-
-.stage-lamp {
-    position: relative;
-    z-index: 1;
-    display: block;
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    border: 1px solid var(--line-bright);
-    background: var(--ink);
-    margin-bottom: 0.7rem;
-}
-
-.stage-num {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    color: var(--faint);
-    margin-bottom: 0.15rem;
-}
-
-.stage-name {
-    display: block;
-    font-family: var(--font-body);
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: var(--faint);
-    padding-right: 0.75rem;
-    line-height: 1.3;
-}
-
-/* Locked is the default (styles above). Then: */
-
-.stage.is-ready .stage-lamp { border-color: var(--muted); }
-.stage.is-ready .stage-num  { color: var(--muted); }
-.stage.is-ready .stage-name { color: var(--muted); }
-
-.stage.is-done .stage-lamp {
-    border-color: var(--verify);
-    background: var(--verify);
-}
-.stage.is-done .stage-num  { color: var(--faint); }
-.stage.is-done .stage-name { color: var(--muted); }
-.stage.is-done:not(:last-child)::after { background: var(--verify); opacity: 0.35; }
-
-.stage.is-active .stage-lamp {
-    border-color: var(--signal);
-    background: var(--signal);
-    box-shadow: 0 0 0 4px var(--signal-wash);
-}
-.stage.is-active .stage-num  { color: var(--signal); }
-.stage.is-active .stage-name { color: var(--text); font-weight: 650; }
 
 /* ---------- Chrome ---------- */
 
@@ -346,16 +257,14 @@ h1 + p {
     box-shadow: 0 0 0 3px var(--signal-wash) !important;
 }
 
-/* Field labels share the mono utility voice with h3 eyebrows.
-   Scoped to stWidgetLabel - the widget's own caption - because a blanket
-   `.stRadio label` also catches each radio OPTION, which shouted
-   "OLLAMA (LOCAL)" in uppercase mono. Options are content, not chrome. */
+/* Field labels are instructions, so use readable body text. Scope to the
+   native widget label without changing choice or input text. */
 [data-testid="stWidgetLabel"] p {
-    font-family: var(--font-mono) !important;
-    font-size: 0.68rem !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-    color: var(--muted) !important;
+    font-family: var(--font-body) !important;
+    font-size: 0.875rem !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    color: var(--text) !important;
     font-weight: 500 !important;
 }
 
@@ -448,13 +357,13 @@ h1 + p {
 }
 
 .stTabs [data-baseweb="tab"] {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    letter-spacing: normal;
+    text-transform: none;
     color: var(--muted);
     border-radius: 0;
-    padding: 0.6rem 1rem;
+    padding: 0.6rem 0.75rem;
 }
 
 .stTabs [aria-selected="true"] {
@@ -519,12 +428,11 @@ a:hover { color: #FF8524; }
 /* ---------- Quality floor ---------- */
 
 @media (max-width: 768px) {
-    .main .block-container { padding-left: 1rem; padding-right: 1rem; }
-    h1 { font-size: 1.6rem; }
-    h2 { font-size: 1.15rem; }
-    .stage-rail { gap: 0; }
-    .stage { min-width: 84px; }
-    .stage-name { font-size: 0.72rem; }
+    [data-testid="stMain"] [data-testid="stMainBlockContainer"] {
+        padding: 1.25rem 1rem 3rem;
+    }
+    [data-testid="stMain"] [data-testid="stHeading"] h1 { font-size: 1.6rem; }
+    [data-testid="stMain"] [data-testid="stHeading"] h2 { font-size: 1.15rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

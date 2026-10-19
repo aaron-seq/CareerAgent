@@ -92,9 +92,7 @@ def test_initialize_does_not_connect_an_uninstalled_model(temp_db, monkeypatch):
     at = AppTest.from_file(
         str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=30
     ).run()
-    next(
-        button for button in at.button if button.label == "Initialize LLM"
-    ).click().run()
+    next(button for button in at.button if button.label == "Connect AI").click().run()
     assert not at.exception
     assert at.session_state["llm_client"] is None
     assert any("model" in error.value.lower() for error in at.error)
