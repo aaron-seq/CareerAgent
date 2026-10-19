@@ -1,5 +1,5 @@
 [tool.ruff]
-# Match the project's current supported floor (CI still tests 3.9-3.11).
+# Match the project's supported floor (CI tests 3.11-3.13).
 target-version = "py311"
 line-length = 88
 # Markdown is prose: its fenced snippets are illustrative fragments, and
@@ -36,3 +36,8 @@ files = ["core", "app.py"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+
+[tool.coverage.run]
+# pytest-cov 7 delegates child-process measurement to coverage.py. Keep the
+# existing key-persistence restart test's subprocesses measured.
+patch = ["subprocess"]

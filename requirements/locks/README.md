@@ -63,6 +63,14 @@ three resolved graphs before committing. The offline dependency-lock tests
 reject missing hashes, source requirements that a lock no longer satisfies, or
 runtime/test version differences.
 
+## Coverage tooling
+
+The test graphs include pytest-cov 7.1.0. Its 7.x migration delegates child-process
+measurement to coverage.py; `pyproject.toml` enables the supported `subprocess`
+patch so process-restart persistence tests keep contributing coverage. Refresh
+the source pin and all three test locks together. Keep the runtime graphs
+unchanged for a test-tool-only upgrade and compare coverage after migration.
+
 ## Advisory and upstream checks
 
 CI audits each resolved test graph against the real PyPI advisory feed, with the
