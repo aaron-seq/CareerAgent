@@ -22,7 +22,7 @@ from core.contact_finder import ContactFinder
 from core.cv_parser import CVParser
 from core.gmail_drafts import GmailDraftClient
 from core.job_finder import JobFinder
-from core.logging_config import LOG_LEVEL_ENV, configure_logging
+from core.logging_config import LOG_LEVEL_ENV, configure_logging, safe_url
 from core.models import SearchQuery
 
 CANDIDATE_NAME = "Jane Privateperson"
@@ -158,7 +158,30 @@ class TestJobFinderLogging:
         records = _warnings(caplog, "core.job_finder")
         assert len(records) == 1
         assert url in records[0].getMessage()
-        assert records[0].exc_info
+        assert "RuntimeError" in records[0].getMessage()
+
+    def test_failed_job_fetch_never_logs_url_secrets(self, caplog):
+        """Codex review on #76: a pasted signed/referral link can carry an
+        email or token in its query or userinfo. Neither the message nor the
+        exception (HTTP libraries embed the full URL in theirs) may log it."""
+        caplog.set_level(logging.DEBUG, logger="core.job_finder")
+        url = (
+            "https://user:pa55@jobs.example.com/apply/123"
+            "?email=jordan%40example.com&token=s3cr3t#ref=abc"
+        )
+        with patch(
+            "core.job_finder.requests.get",
+            side_effect=ConnectionError(f"Max retries exceeded with url: {url}"),
+        ):
+            assert JobFinder(Mock()).fetch_job_details(url) is None
+
+        records = _warnings(caplog, "core.job_finder")
+        assert len(records) == 1
+        assert "https://jobs.example.com/apply/123" in records[0].getMessage()
+        assert not records[0].exc_info
+        rendered = _rendered(caplog)
+        for secret in ("jordan", "s3cr3t", "pa55", "user:", "ref=abc"):
+            assert secret not in rendered
 
 
 class TestGmailDraftsLogging:
@@ -298,3 +321,21 @@ class TestConfigureLogging:
             if getattr(h, "_careeragent", False)
         ]
         assert len(owned) == 1
+
+
+class TestSafeUrl:
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            (
+                "https://jobs.example.com/a/1?email=x%40y.z#frag",
+                "https://jobs.example.com/a/1",
+            ),
+            ("https://u:p@host.example:8443/p?t=1", "https://host.example:8443/p"),
+            ("http://example.com", "http://example.com"),
+            ("not a url", "<unparseable url>"),
+            ("", "<unparseable url>"),
+        ],
+    )
+    def test_keeps_only_scheme_host_and_path(self, raw, expected):
+        assert safe_url(raw) == expected

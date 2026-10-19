@@ -13,6 +13,7 @@ exception types instead.
 import logging
 import os
 from typing import Optional
+from urllib.parse import urlsplit
 
 LOG_LEVEL_ENV = "CAREERAGENT_LOG_LEVEL"
 DEFAULT_LEVEL = "INFO"
@@ -44,3 +45,21 @@ def configure_logging(level: Optional[str] = None) -> int:
         handler._careeragent = True  # type: ignore[attr-defined]
         core_logger.addHandler(handler)
     return numeric
+
+
+def safe_url(url: Optional[str]) -> str:
+    """A URL reduced to scheme, host[:port] and path, for log messages.
+
+    Pasted links are user input: signed, referral and tracking links carry
+    emails and tokens in the query, fragment or userinfo. Those parts never
+    reach a log.
+    """
+    try:
+        parts = urlsplit(url or "")
+        host = parts.hostname
+        if not parts.scheme or not host:
+            return "<unparseable url>"
+        port = f":{parts.port}" if parts.port else ""
+    except ValueError:
+        return "<unparseable url>"
+    return f"{parts.scheme}://{host}{port}{parts.path}"
