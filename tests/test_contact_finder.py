@@ -214,3 +214,50 @@ class TestFindContacts:
         # Both dict values were used as queries (order-independent).
         called = {c[0][0] for c in finder.ddgs.text.call_args_list}
         assert called == {"query one", "query two"}
+
+    @patch("core.contact_finder.time.sleep")
+    def test_query_envelope_searches_only_nonempty_text(self, _sleep):
+        finder, llm = _finder()
+        llm.generate_json.return_value = {
+            "queries": [
+                "  Acme recruiter  ",
+                {"nested": "query"},
+                None,
+                "",
+                "Acme lead",
+            ]
+        }
+        finder.ddgs.text.return_value = []
+        assert finder.find_contacts("Acme", "Engineer") == []
+        called = [call.args[0] for call in finder.ddgs.text.call_args_list]
+        assert called == ["Acme recruiter", "Acme lead"]
+
+    @pytest.mark.parametrize("payload", [{"queries": []}, {"queries": 42}, None])
+    @patch("core.contact_finder.time.sleep")
+    def test_unusable_query_payload_falls_back_to_company_search(self, _sleep, payload):
+        finder, llm = _finder()
+        llm.generate_json.return_value = payload
+        finder.ddgs.text.return_value = []
+        assert finder.find_contacts("Acme", "Engineer") == []
+        called = [call.args[0] for call in finder.ddgs.text.call_args_list]
+        assert len(called) == 3
+        assert all(isinstance(query, str) and "Acme" in query for query in called)
+
+    @patch("core.contact_finder.time.sleep")
+    def test_real_json_client_can_generate_contact_query_envelope(self, _sleep):
+        from core.llm import LocalLLMClient
+
+        client = LocalLLMClient()
+        with patch("core.contact_finder.DDGS"):
+            finder = ContactFinder(client)
+        finder.ddgs = Mock()
+        finder.ddgs.text.return_value = []
+        with patch.object(
+            client,
+            "generate_text",
+            return_value='{"queries": ["Acme engineering lead"]}',
+        ) as generate:
+            finder.find_contacts("Acme", "Engineer")
+        prompt = generate.call_args.args[0]
+        assert '{"queries": [' in prompt
+        finder.ddgs.text.assert_called_once_with("Acme engineering lead", max_results=5)

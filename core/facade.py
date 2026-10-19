@@ -10,7 +10,7 @@ session or the schema directly.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from pydantic import ValidationError
 from sqlalchemy import text
@@ -52,6 +52,7 @@ from .ingestion import (
     IngestionResult,
     IngestionService,
     JobicySource,
+    JobSource,
     LeverSource,
     RecruiteeSource,
     RemoteOKSource,
@@ -61,7 +62,7 @@ from .ingestion import (
     WorkableSource,
 )
 from .matching import DedupService, ScoringService, get_embedder
-from .models import CVProfile, EmailDraft, JobPosting
+from .models import ContactCandidate, CVProfile, EmailDraft, JobPosting
 from .normalize import (
     compute_dedup_key,
     ensure_utc,
@@ -82,7 +83,7 @@ from .tracking import (
     follow_up_applies,
 )
 
-_ATS_SOURCES = {
+_ATS_SOURCES: dict[str, Callable[[str, str], JobSource]] = {
     "greenhouse": GreenhouseSource,
     "lever": LeverSource,
     "ashby": AshbySource,
@@ -92,7 +93,7 @@ _ATS_SOURCES = {
 }
 
 #: Aggregator/board providers that need no credentials at all.
-_KEYLESS_AGGREGATORS = {
+_KEYLESS_AGGREGATORS: dict[str, Callable[[], JobSource]] = {
     "remotive": RemotiveSource,
     "arbeitnow": ArbeitnowSource,
     "jobicy": JobicySource,
@@ -107,6 +108,129 @@ def init_persistence() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Deliberate local workspace recovery
+# --------------------------------------------------------------------------- #
+
+
+def workspace_job_key(job: JobPosting) -> str:
+    from .workspace import job_reference_key
+
+    return job_reference_key(job)
+
+
+def save_workspace(storage: LocalStorage, state: dict[str, Any]) -> None:
+    """Persist references to existing source jobs and bounded encrypted UI choices."""
+    from .workspace import WorkspaceSnapshot
+    from .workspace import save_workspace as save_snapshot
+
+    jobs = state.get("selected_jobs", [])
+    if len(jobs) > 200:
+        raise ValueError("Too many selected jobs to save in one workspace.")
+    references = state.get("selected_job_refs", {})
+    selected_ids: list[int] = []
+    if jobs:
+        with get_session() as session:
+            repository = JobRepository(session)
+            rows = None
+            for job in jobs:
+                job_id = references.get(workspace_job_key(job))
+                if job_id is not None:
+                    if (
+                        type(job_id) is not int
+                        or job_id <= 0
+                        or repository.get(job_id) is None
+                    ):
+                        raise ValueError("A selected job reference is no longer valid.")
+                else:
+                    # Compatibility with pre-recovery sessions: never substitute a
+                    # similarly titled posting or a stale duplicate's source facts.
+                    if rows is None:
+                        rows = repository.list(include_duplicates=True)
+                    matches = [row for row in rows if row_to_job(row) == job]
+                    if not matches:
+                        raise ValueError(
+                            "A selected job must be saved in the database first."
+                        )
+                    job_id = matches[0].id
+                    assert job_id is not None
+                if job_id not in selected_ids:
+                    selected_ids.append(job_id)
+    contacts = {
+        company: [contact.model_dump() for contact in values]
+        for company, values in state.get("found_contacts", {}).items()
+    }
+    snapshot = WorkspaceSnapshot.model_validate(
+        {
+            "cv_id": state.get("cv_id"),
+            "selected_job_ids": selected_ids,
+            "found_contacts": contacts,
+            "preferences": state.get("preferences"),
+            "page": state.get("page", "onboarding"),
+        }
+    )
+    save_snapshot(storage, snapshot)
+
+
+def restore_workspace(storage: LocalStorage) -> dict[str, Any] | None:
+    """Rebuild narrow UI state once; never invoke models, matching or network."""
+    from .workspace import load_workspace
+
+    snapshot = load_workspace(storage)
+    if snapshot is None:
+        return None
+    notices = []
+    jobs = []
+    references = {}
+    cv = None
+    cv_id = snapshot.cv_id
+    with get_session() as session:
+        job_repo = JobRepository(session)
+        for job_id in snapshot.selected_job_ids:
+            row = job_repo.get(job_id)
+            if row is None:
+                notices.append("A saved selected job is no longer in the database.")
+            else:
+                job = row_to_job(row)
+                jobs.append(job)
+                references[workspace_job_key(job)] = job_id
+        if cv_id is not None:
+            cv = CVRepository(session).get(cv_id)
+            if cv is None:
+                notices.append(
+                    "The last active CV is no longer in the database. Choose a saved CV or create one."
+                )
+                cv_id = None
+    state: dict[str, Any] = {
+        "cv_id": cv_id,
+        "cv_profile": cv,
+        "selected_jobs": jobs,
+        "selected_job_refs": references,
+        "found_contacts": {
+            company: [
+                ContactCandidate.model_validate(contact.model_dump())
+                for contact in contacts
+            ]
+            for company, contacts in snapshot.found_contacts.items()
+        },
+        "page": snapshot.page,
+    }
+    if cv is not None:
+        state["match_refresh_warning"] = (
+            "Your saved CV is restored. Choose Re-score matches in Pipeline before relying "
+            "on scores; saved job scores may have been calculated for another CV."
+        )
+    if snapshot.preferences is not None:
+        state["preferences"] = snapshot.preferences.model_dump()
+    return {"state": state, "notices": list(dict.fromkeys(notices))}
+
+
+def reset_workspace(storage: LocalStorage) -> str | None:
+    from .workspace import reset_workspace as reset_snapshot
+
+    return reset_snapshot(storage)
+
+
+# --------------------------------------------------------------------------- #
 # CV
 # --------------------------------------------------------------------------- #
 
@@ -115,6 +239,7 @@ def persist_cv(profile: CVProfile) -> int:
     init_persistence()
     with get_session() as session:
         row = CVRepository(session).save(profile)
+        assert row.id is not None  # save flushes the inserted row
         return row.id
 
 

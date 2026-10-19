@@ -16,7 +16,7 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal, NotRequired, TypedDict
 from urllib.parse import urlsplit
 
 import httpx
@@ -88,6 +88,41 @@ class SmokeBudgetError(RuntimeError):
     """The requested live operation exceeded the smoke-test budget."""
 
 
+class RequestObservation(TypedDict):
+    url: str
+    started_at: str
+    http_status: int | None
+    decoded_bytes: int
+    finished_at: NotRequired[str]
+    duration_seconds: NotRequired[float]
+    error_type: NotRequired[str]
+
+
+class CareersURLCheck(TypedDict):
+    method: str
+    expected_source: str
+    expected_slug: str | None
+    detected_source: str | None
+    detected_slug: str | None
+    passed: bool
+
+
+class SmokeResult(TypedDict):
+    source: str
+    started_at: str
+    status: Literal["passed", "failed", "empty", "blocked"]
+    parsed_count: int
+    checks: dict[str, dict[str, int]]
+    requests: list[RequestObservation]
+    careers_url: str | None
+    careers_url_detection: CareersURLCheck | None
+    warnings: NotRequired[list[str]]
+    error_type: NotRequired[str]
+    error: NotRequired[str]
+    finished_at: NotRequired[str]
+    duration_seconds: NotRequired[float]
+
+
 class RecordingClient(httpx.Client):
     """Record and bound the existing adapters' GET requests.
 
@@ -97,11 +132,11 @@ class RecordingClient(httpx.Client):
     returned application links are checked as strings, never followed.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(follow_redirects=False, **kwargs)
-        self.observations: list[dict] = []
+        self.observations: list[RequestObservation] = []
 
-    def get(self, url: str, **kwargs) -> httpx.Response:
+    def get(self, url: httpx.URL | str, **kwargs) -> httpx.Response:
         if len(self.observations) >= MAX_REQUESTS:
             raise SmokeBudgetError("Source exceeded the three-request budget")
         kwargs["timeout"] = REQUEST_TIMEOUT
@@ -113,7 +148,7 @@ class RecordingClient(httpx.Client):
                 key: value for key, value in kwargs.items() if key != "follow_redirects"
             },
         )
-        observation = {
+        observation: RequestObservation = {
             "url": str(request.url),
             "started_at": _utc_now(),
             "http_status": None,
@@ -183,7 +218,7 @@ def validate_jobs(jobs: list[FetchedJob], source: str) -> dict[str, dict[str, in
     return checks
 
 
-def careers_url_check(case: SmokeCase) -> dict | None:
+def careers_url_check(case: SmokeCase) -> CareersURLCheck | None:
     """Check local routing only; this never fetches a careers/application page."""
     if case.careers_url is None:
         return None
@@ -200,9 +235,9 @@ def careers_url_check(case: SmokeCase) -> dict | None:
     }
 
 
-def run_case(case: SmokeCase, client: RecordingClient) -> dict:
+def run_case(case: SmokeCase, client: RecordingClient) -> SmokeResult:
     """Run one provider, preserving partial HTTP evidence even on failure."""
-    result = {
+    result: SmokeResult = {
         "source": case.source,
         "started_at": _utc_now(),
         "status": "failed",
@@ -214,18 +249,17 @@ def run_case(case: SmokeCase, client: RecordingClient) -> dict:
     }
     started = time.monotonic()
     try:
-        result["careers_url_detection"] = careers_url_check(case)
-        if (
-            result["careers_url_detection"] is not None
-            and not result["careers_url_detection"]["passed"]
-        ):
+        detection = careers_url_check(case)
+        result["careers_url_detection"] = detection
+        if detection is not None and not detection["passed"]:
             raise ValueError("Careers URL does not match the configured source/board")
         adapter = case.factory()
         jobs = adapter.fetch(client, **case.params)
         result["parsed_count"] = len(jobs)
-        result["checks"] = validate_jobs(jobs, case.source)
+        checks = validate_jobs(jobs, case.source)
+        result["checks"] = checks
         result["warnings"] = getattr(adapter, "warnings", [])
-        failed_checks = any(item["failed"] for item in result["checks"].values())
+        failed_checks = any(item["failed"] for item in checks.values())
         result["status"] = (
             "empty" if not jobs else "failed" if failed_checks else "passed"
         )

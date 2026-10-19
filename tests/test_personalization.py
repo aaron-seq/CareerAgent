@@ -199,6 +199,32 @@ class TestRegenerateEmailWithAngle:
         assert second.personalization_plan == first.personalization_plan
         assert second.recipient_name == "Jordan"
 
+    @pytest.mark.parametrize(
+        "payload, missing_field",
+        [
+            ({"body": "Body"}, "subject"),
+            ({"subject": None, "body": "Body"}, "subject"),
+            ({"subject": "   ", "body": "Body"}, "subject"),
+            ({"subject": "Subject"}, "body"),
+            ({"subject": "Subject", "body": 123}, "body"),
+            ({"subject": "Subject", "body": "\n "}, "body"),
+        ],
+    )
+    def test_refuses_incomplete_regenerated_email(self, payload, missing_field):
+        from core.models import EmailDraft, PersonalizationPlan
+
+        llm = Mock()
+        llm.generate_json.return_value = payload
+        existing = EmailDraft(
+            subject="Existing subject",
+            body="Existing body",
+            personalization_plan=PersonalizationPlan(**_plan_json()),
+        )
+        with pytest.raises(ValueError, match=f"must contain a {missing_field}"):
+            PersonalizationEngine(llm).regenerate_email_with_angle(existing, "impact")
+        assert existing.subject == "Existing subject"
+        assert existing.body == "Existing body"
+
 
 class TestFormattingHelpers:
     def test_format_projects_empty(self):

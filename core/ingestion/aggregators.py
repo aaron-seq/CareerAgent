@@ -45,6 +45,8 @@ class AdzunaSource(JobSource):
             "results_per_page": params.get("results_per_page", 50),
         }
         data = self._get_json(client, url, params=query)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Adzuna response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("results", []):
             company = (item.get("company") or {}).get("display_name", "")
@@ -84,12 +86,14 @@ class TheMuseSource(JobSource):
         self, client: httpx.Client, category: str = "", page: int = 0, **params
     ) -> list[FetchedJob]:
         url = "https://www.themuse.com/api/public/v2/jobs"
-        query = {"page": page}
+        query: dict[str, int | str] = {"page": page}
         if category:
             query["category"] = category
         if self.api_key:
             query["api_key"] = self.api_key
         data = self._get_json(client, url, params=query)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid The Muse response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("results", []):
             company = (item.get("company") or {}).get("name", "")
@@ -130,6 +134,8 @@ class RemotiveSource(JobSource):
         if search:
             query["search"] = search
         data = self._get_json(client, url, params=query)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Remotive response: expected an object.")
         jobs: list[FetchedJob] = []
         for item in data.get("jobs", []):
             job = JobPosting(

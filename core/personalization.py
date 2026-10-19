@@ -177,10 +177,16 @@ class PersonalizationEngine:
         )
 
         email_data = self.llm.generate_json(prompt, temperature=0.7)
+        subject = email_data.get("subject")
+        body = email_data.get("body")
+        if not isinstance(subject, str) or not subject.strip():
+            raise ValueError("The regenerated email must contain a subject.")
+        if not isinstance(body, str) or not body.strip():
+            raise ValueError("The regenerated email must contain a body.")
 
         return EmailDraft(
-            subject=email_data.get("subject"),
-            body=email_data.get("body"),
+            subject=subject,
+            body=body,
             recipient_name=existing_draft.recipient_name,
             job_title=existing_draft.job_title,
             company=existing_draft.company,

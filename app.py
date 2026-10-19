@@ -73,6 +73,9 @@ def init_session_state():
     if "selected_jobs" not in st.session_state:
         st.session_state.selected_jobs = []
 
+    if "selected_job_refs" not in st.session_state:
+        st.session_state.selected_job_refs = {}
+
     if "found_contacts" not in st.session_state:
         st.session_state.found_contacts = {}
 
@@ -93,6 +96,69 @@ def init_session_state():
 
     if "draft_workspaces" not in st.session_state:
         st.session_state.draft_workspaces = {}
+
+
+def _workspace_state() -> dict[str, Any]:
+    return {
+        key: st.session_state.get(key)
+        for key in (
+            "cv_id",
+            "selected_jobs",
+            "selected_job_refs",
+            "found_contacts",
+            "preferences",
+            "page",
+        )
+    }
+
+
+def _workspace_signature() -> str:
+    data = _workspace_state()
+    return hashlib.sha256(
+        json.dumps(
+            data, sort_keys=True, default=lambda value: value.model_dump()
+        ).encode()
+    ).hexdigest()
+
+
+def _persist_workspace() -> None:
+    """Save only deliberate choices, keeping live editors intact on failure."""
+    if st.session_state.get("workspace_recovery_blocked"):
+        return
+    try:
+        signature = _workspace_signature()
+        if signature == st.session_state.get("workspace_saved_signature"):
+            return
+        facade.save_workspace(st.session_state.storage, _workspace_state())
+        st.session_state.workspace_saved_signature = signature
+        st.session_state.workspace_save_warning = None
+    except Exception:
+        st.session_state.workspace_save_warning = (
+            "Your current work is still open, but workspace recovery could not be saved. "
+            "Check storage/database access before refreshing; the previous saved workspace is retained."
+        )
+
+
+def _sync_preference_widgets() -> None:
+    """Commit changed widgets before sidebar navigation can trigger a rerun."""
+    preferences = st.session_state.get("preferences", {}).copy()
+    for field in ("target_roles", "target_locations", "industries", "seniority"):
+        key = f"preference_{field}"
+        if key not in st.session_state:
+            continue
+        value = st.session_state[key]
+        preferences[field] = (
+            [line.strip() for line in value.splitlines() if line.strip()]
+            if field in ("target_roles", "target_locations")
+            else value
+        )
+    st.session_state.preferences = preferences
+    _persist_workspace()
+
+
+def _rerun() -> None:
+    _persist_workspace()
+    st.rerun()
 
 
 def _use_profile(profile: CVProfile, cv_id: int | None = None) -> None:
@@ -131,7 +197,8 @@ def _select_job(job: JobPosting) -> None:
                 "This job is selected, but its local backup could not be saved."
             )
     try:
-        facade.persist_manual_job(job)
+        job_id = facade.persist_manual_job(job)
+        st.session_state.selected_job_refs[facade.workspace_job_key(job)] = job_id
         if st.session_state.cv_profile:
             facade.refresh_matches(st.session_state.cv_profile)
     except Exception:
@@ -183,13 +250,16 @@ def _prepare_application(job_id: int) -> None:
             return
         if job not in st.session_state.selected_jobs:
             st.session_state.selected_jobs.append(job)
+        st.session_state.selected_job_refs[facade.workspace_job_key(job)] = job_id
         st.session_state.draft_job_selection = st.session_state.selected_jobs.index(job)
         st.session_state.page = "draft" if st.session_state.cv_profile else "onboarding"
         st.session_state.prepare_job_error = None
+        _persist_workspace()
     except Exception as exc:
         st.session_state.prepare_job_error = f"Could not open this job: {exc}"
 
 
+_initial_workspace_keys = set(st.session_state)
 init_session_state()
 
 # Ensure the database schema exists (Phase 1+). Non-fatal if it can't init so
@@ -200,6 +270,48 @@ except Exception:  # pragma: no cover - defensive UI guard
     st.warning(
         "The database could not be opened. Check its location and permissions before saving."
     )
+
+
+if not st.session_state.get("workspace_recovery_attempted"):
+    st.session_state.workspace_recovery_attempted = True
+    try:
+        recovered = facade.restore_workspace(st.session_state.storage)
+        if recovered is not None:
+            for name, value in recovered["state"].items():
+                if name not in _initial_workspace_keys:
+                    st.session_state[name] = value
+            st.session_state.workspace_recovery_notices = recovered["notices"]
+        st.session_state.workspace_saved_signature = _workspace_signature()
+    except Exception:
+        st.session_state.workspace_recovery_blocked = True
+
+
+def _render_workspace_notices() -> None:
+    for notice in st.session_state.get("workspace_recovery_notices", []):
+        st.warning(notice)
+    if st.session_state.get("workspace_recovery_blocked"):
+        st.warning(
+            "Saved workspace recovery failed. Check your encryption key and storage, then reload. "
+            "Your saved workspace has not been overwritten. CVs and jobs remain in the database."
+        )
+        with st.expander("Workspace recovery options"):
+            st.caption(
+                "Start a new saved workspace from the choices currently open here. "
+                "The unreadable file will be retained as a private .bak file in your storage folder. "
+                "Existing CVs, jobs and saved drafts are kept."
+            )
+            if st.button("Start a new saved workspace", key="reset_saved_workspace"):
+                try:
+                    facade.reset_workspace(st.session_state.storage)
+                    st.session_state.workspace_recovery_blocked = False
+                    st.session_state.workspace_saved_signature = None
+                    _rerun()
+                except Exception:
+                    st.error(
+                        "Could not retain the recovery backup. Check storage access and try again."
+                    )
+    if st.session_state.get("workspace_save_warning"):
+        st.warning(st.session_state.workspace_save_warning)
 
 
 # Sidebar configuration
@@ -234,7 +346,7 @@ def render_sidebar():
                 type="primary" if key == current else "secondary",
             ):
                 st.session_state.page = key
-                st.rerun()
+                _rerun()
 
         st.divider()
 
@@ -566,7 +678,7 @@ def _render_cv_builder() -> None:
             else:
                 if _save_cv_profile(created):
                     st.session_state.cv_save_notice = "Your CV is saved. Review its readiness and download the format you need."
-                    st.rerun()
+                    _rerun()
 
 
 def _render_cv_assessment(profile: CVProfile, job: JobPosting | None = None) -> None:
@@ -645,7 +757,7 @@ def page_onboarding():
                         )
                     else:
                         _use_profile(profile, saved_id)
-                        st.rerun()
+                        _rerun()
                 except Exception:
                     st.error(
                         "This CV could not be opened. Check database access and restore "
@@ -715,7 +827,7 @@ def page_onboarding():
 
                         if _save_cv_profile(profile):
                             st.session_state.cv_save_notice = f"CV parsed and saved. Found {len(profile.experiences)} work experiences."
-                            st.rerun()
+                            _rerun()
 
                     except Exception as e:
                         st.error(f"❌ Parsing failed: {e}")
@@ -729,49 +841,53 @@ def page_onboarding():
         st.subheader("Preferences")
         preferences = st.session_state.get("preferences", {})
 
-        target_roles = st.text_area(
+        # Widget state is temporary when changing pages. Keep the independent
+        # preferences dict current in callbacks before sidebar navigation runs.
+        defaults = {
+            "target_roles": [
+                "Senior Software Engineer",
+                "ML Engineer",
+                "Full Stack Developer",
+            ],
+            "target_locations": ["Remote", "San Francisco", "Berlin"],
+            "industries": ["Tech/Software", "AI/ML"],
+            "seniority": "Senior",
+        }
+        for field, default in defaults.items():
+            key = f"preference_{field}"
+            if key not in st.session_state:
+                value = preferences.get(field, default)
+                st.session_state[key] = (
+                    "\n".join(value)
+                    if field in ("target_roles", "target_locations")
+                    else value
+                )
+
+        st.text_area(
             "Target Roles (one per line)",
-            value="\n".join(
-                preferences.get(
-                    "target_roles",
-                    ["Senior Software Engineer", "ML Engineer", "Full Stack Developer"],
-                )
-            ),
+            key="preference_target_roles",
+            on_change=_sync_preference_widgets,
             height=100,
         )
-
-        target_locations = st.text_area(
+        st.text_area(
             "Target Locations (one per line)",
-            value="\n".join(
-                preferences.get(
-                    "target_locations", ["Remote", "San Francisco", "Berlin"]
-                )
-            ),
+            key="preference_target_locations",
+            on_change=_sync_preference_widgets,
             height=100,
         )
-
-        industries = st.multiselect(
+        st.multiselect(
             "Preferred Industries",
             ["Tech/Software", "AI/ML", "Finance", "Healthcare", "E-commerce", "Other"],
-            default=preferences.get("industries", ["Tech/Software", "AI/ML"]),
+            key="preference_industries",
+            on_change=_sync_preference_widgets,
         )
-
-        seniority = st.select_slider(
+        st.select_slider(
             "Seniority Level",
             options=["Junior", "Mid-level", "Senior", "Staff", "Principal"],
-            value=preferences.get("seniority", "Senior"),
+            key="preference_seniority",
+            on_change=_sync_preference_widgets,
         )
-
-        # Persist collected preferences so they survive Streamlit reruns and can
-        # be consumed by downstream discovery/personalization steps.
-        st.session_state.preferences = {
-            "target_roles": [r.strip() for r in target_roles.splitlines() if r.strip()],
-            "target_locations": [
-                loc.strip() for loc in target_locations.splitlines() if loc.strip()
-            ],
-            "industries": industries,
-            "seniority": seniority,
-        }
+        _sync_preference_widgets()
 
     # Show parsed CV
     if st.session_state.cv_profile:
@@ -868,7 +984,7 @@ def page_onboarding():
         next_label = "Draft Studio" if next_page == "draft" else "Job Discovery"
         if st.button(f"Next: {next_label}", type="primary", use_container_width=True):
             st.session_state.page = next_page
-            st.rerun()
+            _rerun()
 
 
 # Page 2: Job Discovery
@@ -1063,7 +1179,7 @@ def page_discovery():
                     if st.button("Select This Job", key=f"select_{i}"):
                         _select_job(job)
                         st.success(f"Added {job.title}")
-                        st.rerun()
+                        _rerun()
 
     elif mode == "Paste Job URL":
         job_url = st.text_input(
@@ -1090,7 +1206,7 @@ def page_discovery():
                     if job:
                         _select_job(job)
                         st.success("Job added!")
-                        st.rerun()
+                        _rerun()
                     else:
                         st.error("Failed to fetch job details")
                 except Exception as e:
@@ -1118,13 +1234,13 @@ def page_discovery():
                 )
                 _select_job(job)
                 st.success("Job added!")
-                st.rerun()
+                _rerun()
             else:
                 st.warning("Please fill all fields")
 
     if st.button("View saved jobs in Pipeline", use_container_width=True):
         st.session_state.page = "pipeline"
-        st.rerun()
+        _rerun()
 
     # Show selected jobs
     if st.session_state.selected_jobs:
@@ -1138,11 +1254,11 @@ def page_discovery():
             with col2:
                 if st.button("Remove", key=f"remove_{i}"):
                     st.session_state.selected_jobs.pop(i)
-                    st.rerun()
+                    _rerun()
 
         if st.button("Next: Find Contacts", type="primary", use_container_width=True):
             st.session_state.page = "contacts"
-            st.rerun()
+            _rerun()
 
 
 # Page 3: Contact Discovery
@@ -1157,7 +1273,7 @@ def page_contacts():
         )
         if st.button("Find a job", use_container_width=True):
             st.session_state.page = "discovery"
-            st.rerun()
+            _rerun()
         return
 
     llm_ready = bool(st.session_state.llm_client)
@@ -1196,7 +1312,7 @@ def page_contacts():
                                 contacts
                             )
                             st.success(f"Found {len(contacts)} contacts")
-                            st.rerun()
+                            _rerun()
                         except Exception as e:
                             st.error(f"Search failed: {e}")
 
@@ -1220,7 +1336,7 @@ def page_contacts():
                                 st.session_state.found_contacts[job.company] = []
                             st.session_state.found_contacts[job.company].append(contact)
                             st.success(f"Added {name}")
-                            st.rerun()
+                            _rerun()
 
             # Show found contacts
             if job.company in st.session_state.found_contacts:
@@ -1289,13 +1405,13 @@ def page_contacts():
 
                     st.session_state.found_contacts[job.company].extend(permutations)
                     st.success(f"Generated {len(permutations)} email permutations")
-                    st.rerun()
+                    _rerun()
 
     st.divider()
 
     if st.button("Next: Draft Studio", type="primary", use_container_width=True):
         st.session_state.page = "draft"
-        st.rerun()
+        _rerun()
 
 
 # Page 4: Draft Studio
@@ -1310,14 +1426,14 @@ def page_draft_studio():
         )
         if st.button("Find a job", use_container_width=True):
             st.session_state.page = "discovery"
-            st.rerun()
+            _rerun()
         return
 
     if not st.session_state.cv_profile:
         st.info("Add or restore your CV to prepare personalized application materials.")
         if st.button("Add or restore my CV", use_container_width=True):
             st.session_state.page = "onboarding"
-            st.rerun()
+            _rerun()
         return
 
     llm_ready = bool(st.session_state.llm_client)
@@ -1566,7 +1682,7 @@ def page_draft_studio():
                         )
                         draft.recipient_email = recipient_email
                         _set_current_draft(draft, workspace_key)
-                        st.rerun()
+                        _rerun()
                     except Exception as e:
                         st.error(f"Generation failed: {e}")
 
@@ -1581,7 +1697,7 @@ def page_draft_studio():
                             )
                             draft.recipient_email = recipient_email
                             _set_current_draft(draft, workspace_key)
-                            st.rerun()
+                            _rerun()
                         except Exception as e:
                             st.error(f"Regeneration failed: {e}")
 
@@ -1909,14 +2025,14 @@ def _render_followups():
             c1, c2, c3 = st.columns(3)
             if c1.button("Snooze 3d", key=f"snooze3_{app_id}"):
                 facade.snooze_followup(app_id, 3)
-                st.rerun()
+                _rerun()
             if c2.button("Snooze 7d", key=f"snooze7_{app_id}"):
                 facade.snooze_followup(app_id, 7)
-                st.rerun()
+                _rerun()
             if c3.button("No reply — reject", key=f"rej_{app_id}"):
                 res = facade.advance_application(app_id, "rejected")
                 if res["ok"]:
-                    st.rerun()
+                    _rerun()
                 else:
                     st.warning(res["error"])
 
@@ -1986,7 +2102,7 @@ def page_pipeline():
                 facade.refresh_matches(st.session_state.cv_profile)
                 st.session_state.match_refresh_warning = None
                 st.success("Matches refreshed.")
-                st.rerun()
+                _rerun()
             except Exception:
                 st.error(
                     "Matches could not be refreshed. Check database access and try again."
@@ -2096,7 +2212,7 @@ def page_pipeline():
                 res = facade.add_to_pipeline(job["id"], st.session_state.cv_id)
                 if res["ok"]:
                     st.success("Added to pipeline (Saved).")
-                    st.rerun()
+                    _rerun()
                 else:
                     st.warning(res["error"])
             st.button(
@@ -2160,7 +2276,7 @@ def page_pipeline():
                         facade.advance_application(
                             card["application_id"], next_status[status]
                         )
-                        st.rerun()
+                        _rerun()
 
     withdrawn = board.get("withdrawn", [])
     if withdrawn:
@@ -2264,7 +2380,7 @@ def _render_application_detail(board: dict, statuses: list):
                 use_container_width=True,
             ):
                 facade.advance_application(app_id, next_status[status])
-                st.rerun()
+                _rerun()
         # Every active state can also end badly. Without this the board only
         # models the happy path and dead applications sit in "applied"
         # forever, skewing the funnel and nagging with stale reminders.
@@ -2274,7 +2390,7 @@ def _render_application_detail(board: dict, statuses: list):
             ):
                 res = facade.advance_application(app_id, "rejected")
                 if res["ok"]:
-                    st.rerun()
+                    _rerun()
                 else:
                     st.warning(res["error"])
             if st.button(
@@ -2282,7 +2398,7 @@ def _render_application_detail(board: dict, statuses: list):
             ):
                 res = facade.advance_application(app_id, "withdrawn")
                 if res["ok"]:
-                    st.rerun()
+                    _rerun()
                 else:
                     st.warning(res["error"])
 
@@ -2308,6 +2424,9 @@ elif st.session_state.get("page") == "draft":
     page_draft_studio()
 elif st.session_state.get("page") == "export":
     page_export()
+
+_persist_workspace()
+_render_workspace_notices()
 
 if __name__ == "__main__":
     pass

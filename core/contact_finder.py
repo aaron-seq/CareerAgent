@@ -37,10 +37,10 @@ class ContactFinder:
         )
 
         try:
-            queries = self.llm.generate_json(prompt, temperature=0.3)
-            # Handle list of strings or dict values
-            if isinstance(queries, dict):
-                queries = list(queries.values())
+            query_data = self.llm.generate_json(prompt, temperature=0.3)
+            queries = self._search_queries(query_data)
+            if not queries:
+                raise ValueError("The model did not return text search queries.")
         except Exception:
             # Fallback to default queries
             queries = [
@@ -51,10 +51,6 @@ class ContactFinder:
 
         contacts = []
         seen_names = set()
-
-        # Ensure queries is a list
-        if not isinstance(queries, list):
-            queries = [str(queries)]
 
         for index, query in enumerate(queries[:3]):  # Limit to 3 queries
             try:
@@ -82,6 +78,23 @@ class ContactFinder:
                 break
 
         return contacts
+
+    @staticmethod
+    def _search_queries(payload: object) -> list[str]:
+        """Accept the query envelope and legacy keyed/list responses safely."""
+        if isinstance(payload, dict):
+            values = payload.get("queries")
+            if values is None:
+                values = list(payload.values())
+        else:
+            values = payload
+        if not isinstance(values, list):
+            return []
+        return [
+            query.strip()
+            for query in values
+            if isinstance(query, str) and query.strip()
+        ]
 
     def generate_email_permutations(
         self, first_name: str, last_name: str, domain: str

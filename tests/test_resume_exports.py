@@ -54,7 +54,8 @@ def _complete_profile() -> CVProfile:
 
 def _all_facts(cv: CVProfile) -> list[str]:
     """Explicit expected facts, independent of renderer traversal/formatting."""
-    return [
+    contact_facts = []
+    for fact in (
         cv.name,
         cv.email,
         cv.phone,
@@ -62,6 +63,12 @@ def _all_facts(cv: CVProfile) -> list[str]:
         cv.linkedin,
         cv.github,
         cv.summary,
+    ):
+        assert isinstance(fact, str) and fact, (
+            "The complete fixture requires all contact fields."
+        )
+        contact_facts.append(fact)
+    return contact_facts + [
         "Python",
         "SQL",
         "Platform Engineer",

@@ -205,14 +205,14 @@ COMPANY: {company_name}
 JOB TITLE: {job_title}
 ROLE KEYWORDS: {role_keyword}
 
-Generate 5 diverse search queries as JSON array:
-[
+Generate 5 diverse search queries as a JSON object:
+{{"queries": [
     "query 1",
     "query 2",
     "query 3",
     "query 4",
     "query 5"
-]
+]}}
 
 Use patterns like:
 - "{company_name} engineering manager {role_keyword} email"
@@ -221,7 +221,7 @@ Use patterns like:
 - "{company_name} people operations team"
 - "{company_name} {role_keyword} team lead"
 
-Return ONLY JSON array of 5 queries, no other text."""
+Return ONLY the JSON object containing 5 queries, no other text."""
 
 
 COVER_LETTER_PROMPT = """You are helping {name} write a cover letter for a specific role.

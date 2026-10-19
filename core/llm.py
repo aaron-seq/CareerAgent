@@ -60,19 +60,19 @@ class LocalLLMClient:
     ) -> str:
         """Generate text response from LLM"""
         try:
-            payload = {
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "format": "json",
-                "options": {
-                    "temperature": temperature,
-                    "num_predict": max_tokens,
-                },
-            }
-
             response = requests.post(
-                f"{self.base_url}/api/generate", json=payload, timeout=self.timeout
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json",
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_tokens,
+                    },
+                },
+                timeout=self.timeout,
             )
 
             if response.status_code == 200:
@@ -97,6 +97,13 @@ class LocalLLMClient:
     ) -> Dict[str, Any]:
         """Generate JSON response with automatic parsing and retry logic"""
 
+        if (
+            not isinstance(max_retries, int)
+            or isinstance(max_retries, bool)
+            or max_retries < 1
+        ):
+            raise ValueError("max_retries must be a positive integer.")
+
         for attempt in range(max_retries):
             try:
                 # Add JSON formatting instruction
@@ -112,9 +119,11 @@ class LocalLLMClient:
 
                 # Parse JSON
                 parsed = json.loads(cleaned)
+                if not isinstance(parsed, dict):
+                    raise ValueError("Expected a JSON object from the model.")
                 return parsed
 
-            except json.JSONDecodeError:
+            except ValueError:
                 # Model output may contain a resume, contact data, or credentials.
                 logger.warning(
                     "Model returned invalid JSON (attempt %s/%s)",
@@ -128,12 +137,10 @@ class LocalLLMClient:
                         0.5  # Lower temperature for more deterministic output
                     )
                     continue
-                else:
-                    raise Exception(
-                        f"Failed to parse JSON after {max_retries} attempts."
-                    )
             except Exception as e:
                 raise Exception(f"LLM JSON generation failed: {str(e)}")
+
+        raise Exception(f"Failed to parse JSON after {max_retries} attempts.")
 
     def _clean_json_response(self, response: str) -> str:
         """Enhanced JSON extraction with better error handling"""
@@ -156,27 +163,19 @@ class LocalLLMClient:
                 if response.strip().lower().startswith(("json")):
                     response = response.strip()[4:].strip()
 
-        # Find JSON object boundaries (more precise)
+        # Locate the response envelope, then let the JSON decoder handle quoted
+        # braces and escapes. Counting braces truncates valid strings such as
+        # {"summary": "Built a template using } and { markers"}.
         start = response.find("{")
         if start == -1:
             raise ValueError("No JSON object found in response")
-
-        # Count braces to find matching closing brace
-        brace_count = 0
-        end = -1
-        for i in range(start, len(response)):
-            if response[i] == "{":
-                brace_count += 1
-            elif response[i] == "}":
-                brace_count -= 1
-                if brace_count == 0:
-                    end = i + 1
-                    break
-
-        if end == -1:
-            raise ValueError("Malformed JSON: no matching closing brace")
-
-        return response[start:end]
+        array_start = response.find("[")
+        if 0 <= array_start < start:
+            raise ValueError("Expected a JSON object, not an array.")
+        parsed, end = json.JSONDecoder().raw_decode(response[start:])
+        if not isinstance(parsed, dict):
+            raise ValueError("Expected a JSON object from the model.")
+        return response[start : start + end]
 
     def generate_with_schema(
         self, prompt: str, schema_model: Type[BaseModel], temperature: float = 0.3
@@ -266,17 +265,15 @@ class CloudLLMClient(LocalLLMClient):
         contains the word "json" that OpenAI-compatible JSON mode requires.
         """
         try:
-            payload = {
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "response_format": {"type": "json_object"},
-            }
-
             response = requests.post(
                 f"{self.base_url}/chat/completions",
-                json=payload,
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "response_format": {"type": "json_object"},
+                },
                 headers=self._headers,
                 timeout=self.timeout,
             )

@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         return 0
 
-    channels = []
+    channels: list[tuple[str, TelegramEmitter | DiscordEmitter]] = []
     if tg_token and tg_chat:
         channels.append(("Telegram", TelegramEmitter(tg_token, tg_chat)))
     if discord:
