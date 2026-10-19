@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ from core.job_finder import JobFinder
 # Core imports
 from core.llm import GROQ_DEFAULT_MODEL, CloudLLMClient, LocalLLMClient
 from core.logging_config import configure_logging
-from core.models import ContactCandidate, CVProfile, EmailDraft, JobPosting, SearchQuery
+from core.models import CVProfile, EmailDraft, JobPosting, SearchQuery
 from core.outreach import ComplianceConfig, LIARecord
 from core.personalization import PersonalizationEngine
 from core.storage import LocalStorage
@@ -37,7 +38,7 @@ st.set_page_config(
     page_title="CareerAgent - Local AI Career Agent",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 
@@ -350,156 +351,101 @@ def render_sidebar():
 
         st.divider()
 
-        # LLM Settings
-        st.subheader("LLM Settings")
-
-        provider = st.radio(
-            "Provider",
-            ["Ollama (local)", "Groq (cloud, free tier)"],
-            key="llm_provider",
-        )
-        use_cloud = (provider or "").startswith("Groq")
-
-        if use_cloud:
-            model = (
-                st.text_input(
-                    "Model",
-                    value=GROQ_DEFAULT_MODEL,
-                    key="selected_cloud_model",
-                    help="Any model id your Groq key can access.",
-                )
-                or GROQ_DEFAULT_MODEL
-            )
+        st.subheader("AI assistance")
+        with st.expander("AI settings", expanded=False):
             st.caption(
-                "CV text and other prompts are sent to Groq when you use this provider."
+                "Connect AI to import CV text or generate messages. Local Ollama keeps prompts on this machine."
             )
-        else:
-            configured_model = os.getenv("OLLAMA_MODEL") or "llama3.1:8b"
-            models = list(
-                dict.fromkeys(
-                    [
-                        configured_model,
-                        "llama3.1:8b",
-                        "llama3.2:3b",
-                        "qwen2.5:7b",
-                        "mistral:7b",
-                    ]
+            provider = st.radio(
+                "Provider",
+                ["Ollama (local)", "Groq (cloud, free tier)"],
+                key="llm_provider",
+            )
+            use_cloud = (provider or "").startswith("Groq")
+
+            if use_cloud:
+                model = (
+                    st.text_input(
+                        "Model",
+                        value=GROQ_DEFAULT_MODEL,
+                        key="selected_cloud_model",
+                        help="Any model id your Groq key can access.",
+                    )
+                    or GROQ_DEFAULT_MODEL
                 )
-            )
-            model = (
-                st.selectbox(
-                    "Model",
-                    models,
-                    key="selected_model",
+                st.caption(
+                    "CV text and other prompts are sent to Groq when you use this provider."
                 )
-                or configured_model
-            )
+            else:
+                configured_model = os.getenv("OLLAMA_MODEL") or "llama3.1:8b"
+                models = list(
+                    dict.fromkeys(
+                        [
+                            configured_model,
+                            "llama3.1:8b",
+                            "llama3.2:3b",
+                            "qwen2.5:7b",
+                            "mistral:7b",
+                        ]
+                    )
+                )
+                model = (
+                    st.selectbox(
+                        "Model",
+                        models,
+                        key="selected_model",
+                    )
+                    or configured_model
+                )
 
-        connected = st.session_state.llm_client
-        if connected is not None and (
-            isinstance(connected, CloudLLMClient) != use_cloud
-            or connected.model != model
-        ):
-            # The displayed provider must describe the client receiving CV data.
-            st.session_state.llm_client = None
+            connected = st.session_state.llm_client
+            if connected is not None and (
+                isinstance(connected, CloudLLMClient) != use_cloud
+                or connected.model != model
+            ):
+                # The displayed provider must describe the client receiving CV data.
+                st.session_state.llm_client = None
 
-        if st.button("Initialize LLM", use_container_width=True):
-            target = "Groq" if use_cloud else "Ollama"
-            with st.spinner(f"Connecting to {target}..."):
-                try:
-                    if use_cloud:
-                        llm = CloudLLMClient(
-                            api_key=os.getenv("GROQ_API_KEY", ""), model=model
-                        )
-                    else:
-                        llm = LocalLLMClient(model=model)
+            if st.button("Connect AI", use_container_width=True):
+                target = "Groq" if use_cloud else "Ollama"
+                with st.spinner(f"Connecting to {target}..."):
+                    try:
+                        if use_cloud:
+                            llm = CloudLLMClient(
+                                api_key=os.getenv("GROQ_API_KEY", ""), model=model
+                            )
+                        else:
+                            llm = LocalLLMClient(model=model)
 
-                    if llm.check_connection() and llm.check_model_availability(model):
-                        st.session_state.llm_client = llm
-                        st.success(f"Connected to {model}")
-                    elif use_cloud:
-                        st.error(
-                            "Groq or the selected model is unavailable. Check GROQ_API_KEY and the model."
-                        )
-                    else:
-                        st.error(
-                            f"Ollama or the selected model is unavailable. Start Ollama and run `ollama pull {model}`."
-                        )
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                        if llm.check_connection() and llm.check_model_availability(
+                            model
+                        ):
+                            st.session_state.llm_client = llm
+                            st.success(f"Connected to {model}")
+                        elif use_cloud:
+                            st.error(
+                                "Groq or the selected model is unavailable. Check GROQ_API_KEY and the model."
+                            )
+                        else:
+                            st.error(
+                                f"Ollama or the selected model is unavailable. Start Ollama and run `ollama pull {model}`."
+                            )
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
-        # Show connection status
         if st.session_state.llm_client:
-            st.success("LLM Connected")
+            st.caption(f"Connected: {st.session_state.llm_client.model}")
         else:
-            st.warning("LLM Not Connected")
-
+            st.caption(
+                "Optional · off. Build CVs, browse jobs and track applications now."
+            )
         st.divider()
 
         # Stats
         st.subheader("Session Stats")
-        st.metric("CV Parsed", "Yes" if st.session_state.cv_profile else "No")
+        st.metric("Active CV", "Yes" if st.session_state.cv_profile else "No")
         st.metric("Jobs Selected", len(st.session_state.selected_jobs))
         st.metric("Drafts Created", len(st.session_state.draft_history))
-
-
-# The rail reports which outputs exist. Discovery and tracking can be used
-# before a CV or a model is ready; only personalized generation needs both.
-STAGES = [
-    ("onboarding", "Onboarding"),
-    ("discovery", "Job Discovery"),
-    ("pipeline", "Pipeline"),
-    ("contacts", "Contact Finder"),
-    ("draft", "Draft Studio"),
-    ("export", "Export & Logs"),
-]
-
-
-def _completed_stages() -> set:
-    """Which stages have produced their output yet (presentation state only)."""
-    done = set()
-    if st.session_state.cv_profile:
-        done.add("onboarding")
-    if st.session_state.selected_jobs:
-        done.add("discovery")
-        done.add("pipeline")
-    if st.session_state.found_contacts:
-        done.add("contacts")
-    if st.session_state.draft_history:
-        done.add("draft")
-    return done
-
-
-def render_stage_rail(current: str) -> None:
-    """Draw the pipeline rail above the active screen."""
-    done = _completed_stages()
-    ready = {"onboarding", "discovery", "pipeline", "export"}
-    if st.session_state.selected_jobs:
-        ready.add("contacts")
-        if st.session_state.cv_profile:
-            ready.add("draft")
-
-    cells = []
-    for index, (key, label) in enumerate(STAGES, start=1):
-        if key == current:
-            state = "is-active"
-        elif key in done:
-            state = "is-done"
-        elif key in ready:
-            state = "is-ready"
-        else:
-            state = "is-locked"
-        cells.append(
-            f'<div class="stage {state}">'
-            f'<span class="stage-lamp"></span>'
-            f'<span class="stage-num">{index:02d}</span>'
-            f'<span class="stage-name">{label}</span>'
-            f"</div>"
-        )
-
-    st.markdown(
-        f'<div class="stage-rail">{"".join(cells)}</div>', unsafe_allow_html=True
-    )
 
 
 def _save_cv_profile(profile: CVProfile) -> bool:
@@ -525,17 +471,39 @@ def _save_cv_profile(profile: CVProfile) -> bool:
     return True
 
 
+def _remember_cv_builder_value(scope: str, key: str) -> None:
+    """Retain explicit editor input in RAM before navigation callbacks run."""
+    draft = st.session_state.get("cv_builder_draft", {})
+    if draft.get("scope") != scope:
+        draft = {"scope": scope, "values": {}}
+    draft["values"][key] = st.session_state[key]
+    st.session_state.cv_builder_draft = draft
+
+
+def _cv_builder_widget(scope: str, key: str) -> dict[str, Any]:
+    return {"key": key, "on_change": _remember_cv_builder_value, "args": (scope, key)}
+
+
 def _render_cv_builder() -> None:
     """Collect explicit candidate facts; core validates the submitted draft."""
     profile = st.session_state.cv_profile or CVProfile()
     source = f"{st.session_state.cv_id}:{profile.model_dump_json()}"
     scope = hashlib.sha256(source.encode()).hexdigest()[:16]
     prefix = f"cv_builder_{scope}"
+    draft = st.session_state.get("cv_builder_draft", {})
+    if draft.get("scope") != prefix:
+        # One active-profile draft bounds memory; deliberately activating or
+        # saving another profile starts its own editor from that profile's facts.
+        draft = {"scope": prefix, "values": {}}
+        st.session_state.cv_builder_draft = draft
+    for key, value in draft["values"].items():
+        if key not in st.session_state:
+            st.session_state[key] = value
     with st.expander("Build or edit your CV", expanded=not st.session_state.cv_profile):
         st.caption(
-            "Create a CV without connecting a model. Use your own facts; this "
-            "editor never invents skills, employers, achievements or credentials. "
-            "Changes become active only when you choose Create CV and check readiness."
+            "Use your own facts. Changes become active when you choose "
+            "Create CV and check readiness. Unsaved edits stay in this browser "
+            "session; save to keep them after a refresh."
         )
         if len(profile.experiences) > 30 or len(profile.projects) > 30:
             st.warning(
@@ -546,34 +514,42 @@ def _render_cv_builder() -> None:
             return
         data: dict[str, Any] = {}
         columns = st.columns(2)
-        for index, (field, label) in enumerate(
-            (
-                ("name", "Full name"),
-                ("email", "CV email"),
+        for column, field, label in (
+            (columns[0], "name", "Full name"),
+            (columns[1], "email", "CV email"),
+        ):
+            with column:
+                data[field] = st.text_input(
+                    label,
+                    value=getattr(profile, field) or "",
+                    **_cv_builder_widget(prefix, f"{prefix}_{field}"),
+                )
+        with st.expander("Contact details and links (optional)"):
+            for field, label in (
                 ("phone", "CV phone (optional)"),
                 ("linkedin", "LinkedIn URL (optional)"),
                 ("github", "GitHub URL (optional)"),
                 ("portfolio", "Portfolio URL (optional)"),
-            )
-        ):
-            with columns[index % 2]:
+            ):
                 data[field] = st.text_input(
-                    label, value=getattr(profile, field) or "", key=f"{prefix}_{field}"
+                    label,
+                    value=getattr(profile, field) or "",
+                    **_cv_builder_widget(prefix, f"{prefix}_{field}"),
                 )
         data["summary"] = st.text_area(
             "Professional summary (optional)",
             value=profile.summary or "",
-            key=f"{prefix}_summary",
+            **_cv_builder_widget(prefix, f"{prefix}_summary"),
         )
         data["skills"] = st.text_area(
             "Skills (one per line)",
             value="\n".join(profile.skills),
-            key=f"{prefix}_skills",
+            **_cv_builder_widget(prefix, f"{prefix}_skills"),
         )
         data["education"] = st.text_area(
             "Education or training (one per line)",
             value="\n".join(profile.education),
-            key=f"{prefix}_education",
+            **_cv_builder_widget(prefix, f"{prefix}_education"),
         )
         st.caption(
             "Projects count as experience evidence for entry-level applicants. "
@@ -588,7 +564,7 @@ def _render_cv_builder() -> None:
                 max_value=30,
                 value=len(profile.experiences),
                 step=1,
-                key=f"{prefix}_work_count",
+                **_cv_builder_widget(prefix, f"{prefix}_work_count"),
             )
         with count_columns[1]:
             project_count = st.number_input(
@@ -597,7 +573,7 @@ def _render_cv_builder() -> None:
                 max_value=30,
                 value=len(profile.projects),
                 step=1,
-                key=f"{prefix}_project_count",
+                **_cv_builder_widget(prefix, f"{prefix}_project_count"),
             )
         data["experiences"] = []
         for index in range(work_count):
@@ -617,7 +593,7 @@ def _render_cv_builder() -> None:
                     entry[field] = st.text_input(
                         f"Role {index + 1}: {label}",
                         value=original.get(field, ""),
-                        key=f"{prefix}_role_{index}_{field}",
+                        **_cv_builder_widget(prefix, f"{prefix}_role_{index}_{field}"),
                     )
                 for field, label in (
                     ("achievements", "Accomplishments"),
@@ -627,7 +603,7 @@ def _render_cv_builder() -> None:
                     entry[field] = st.text_area(
                         f"Role {index + 1}: {label} (one per line)",
                         value="\n".join(original.get(field, [])),
-                        key=f"{prefix}_role_{index}_{field}",
+                        **_cv_builder_widget(prefix, f"{prefix}_role_{index}_{field}"),
                     )
                 data["experiences"].append(entry)
         data["projects"] = []
@@ -648,7 +624,9 @@ def _render_cv_builder() -> None:
                     entry[field] = st.text_input(
                         f"Project {index + 1}: {label}",
                         value=original.get(field) or "",
-                        key=f"{prefix}_project_{index}_{field}",
+                        **_cv_builder_widget(
+                            prefix, f"{prefix}_project_{index}_{field}"
+                        ),
                     )
                 for field, label in (
                     ("description", "Factual description"),
@@ -657,12 +635,16 @@ def _render_cv_builder() -> None:
                     entry[field] = st.text_area(
                         f"Project {index + 1}: {label}",
                         value=original.get(field) or "",
-                        key=f"{prefix}_project_{index}_{field}",
+                        **_cv_builder_widget(
+                            prefix, f"{prefix}_project_{index}_{field}"
+                        ),
                     )
                 entry["technologies"] = st.text_area(
                     f"Project {index + 1}: Technologies (one per line)",
                     value="\n".join(original.get("technologies", [])),
-                    key=f"{prefix}_project_{index}_technologies",
+                    **_cv_builder_widget(
+                        prefix, f"{prefix}_project_{index}_technologies"
+                    ),
                 )
                 data["projects"].append(entry)
         if st.button(
@@ -721,17 +703,374 @@ def _render_cv_assessment(profile: CVProfile, job: JobPosting | None = None) -> 
         )
 
 
+def _remember_application_detail(cv_id: int, path: str, key: str) -> None:
+    draft = st.session_state.application_detail_drafts[cv_id]
+    value = st.session_state[key]
+    if value == draft["initial"][path]:
+        draft["values"].pop(path, None)
+    else:
+        draft["values"][path] = value
+    st.session_state.application_detail_notice = None
+
+
+def _application_detail_widget(cv_id: int, path: str, default: Any) -> dict[str, Any]:
+    draft = st.session_state.application_detail_drafts[cv_id]
+    key = f"application_detail_{cv_id}_{draft['revision']}_{path}"
+    draft["initial"].setdefault(path, default)
+    if key not in st.session_state:
+        st.session_state[key] = draft["values"].get(path, default)
+    return {
+        "key": key,
+        "on_change": _remember_application_detail,
+        "args": (cv_id, path, key),
+    }
+
+
+def _render_application_details() -> None:
+    """Edit only explicit answers associated with the active encrypted CV row."""
+    st.subheader("Application details")
+    st.caption(
+        "Optional answers for application forms, stored encrypted with this saved CV. "
+        "Leave undecided answers blank. A new CV starts with unanswered details."
+    )
+    cv_id = st.session_state.cv_id
+    if cv_id is None:
+        st.info("Save this CV before adding application details.")
+        if st.button("Save this CV", key="save_current_cv_for_details"):
+            if _save_cv_profile(st.session_state.cv_profile):
+                _rerun()
+        return
+    drafts = st.session_state.setdefault("application_detail_drafts", {})
+    if cv_id not in drafts:
+        try:
+            candidate = facade.load_candidate_profile(cv_id)
+            if candidate is None:
+                raise ValueError("Saved CV not found")
+        except Exception:
+            st.error(
+                "Application details could not be opened. Check database access and "
+                "the original encryption key. Existing saved answers are unchanged."
+            )
+            return
+        revision = st.session_state.get("application_detail_revision", 0) + 1
+        st.session_state.application_detail_revision = revision
+        drafts[cv_id] = {
+            "saved": candidate.model_dump(mode="json"),
+            "values": {},
+            "initial": {},
+            "revision": revision,
+        }
+    draft = drafts[cv_id]
+    saved = draft["saved"]
+    st.caption(f"Editing application details for saved CV #{cv_id}.")
+    notice = st.empty()
+    if st.session_state.get("application_detail_notice") == cv_id:
+        notice.success("Application details saved. New downloads use these answers.")
+    if draft["values"]:
+        notice.warning(
+            "You have unsaved application details. Downloads use the last saved answers."
+        )
+    with st.expander("Edit application details", expanded=False):
+        st.caption(
+            "Unsaved edits stay in this browser session. Save to keep them after a refresh. "
+            "These answers do not change job-match or CV-readiness scores."
+        )
+        st.text_input(
+            "Current city or region (optional)",
+            **_application_detail_widget(cv_id, "location", saved["location"] or ""),
+        )
+        st.text_area(
+            "Other portfolio websites (one per line, optional)",
+            help="The first website is used only if your CV has no portfolio URL.",
+            **_application_detail_widget(
+                cv_id, "websites", "\n".join(saved["websites"])
+            ),
+        )
+        st.markdown("**Work eligibility**")
+        authorization = saved["work_authorization"]
+        st.text_input(
+            "Country this work eligibility applies to (optional)",
+            max_chars=100,
+            **_application_detail_widget(
+                cv_id, "work_authorization.country", authorization["country"] or ""
+            ),
+        )
+        st.caption(
+            "Autofill uses eligibility only for supported questions explicitly naming "
+            "that same country. Missing, unfamiliar or different countries need your review."
+        )
+        for field, label in (
+            ("authorized", "Authorized to work in that country?"),
+            (
+                "requires_sponsorship",
+                "Require sponsorship now or in the future in that country?",
+            ),
+        ):
+            st.selectbox(
+                label,
+                [None, True, False],
+                format_func=lambda value: (
+                    "Not answered" if value is None else "Yes" if value else "No"
+                ),
+                **_application_detail_widget(
+                    cv_id, f"work_authorization.{field}", authorization[field]
+                ),
+            )
+        st.text_input(
+            "Visa or immigration status (optional)",
+            max_chars=5000,
+            **_application_detail_widget(
+                cv_id,
+                "work_authorization.visa_status",
+                authorization["visa_status"] or "",
+            ),
+        )
+        st.markdown("**Pay and availability**")
+        compensation = saved["compensation"]
+        for field, label in (
+            ("target", "Expected pay to share on applications (optional)"),
+            ("minimum", "Minimum pay fallback (optional)"),
+        ):
+            st.text_input(
+                label,
+                **_application_detail_widget(
+                    cv_id,
+                    f"compensation.{field}",
+                    "" if compensation[field] is None else str(compensation[field]),
+                ),
+            )
+        st.caption(
+            "Downloads use expected pay when supplied, otherwise your saved minimum. "
+            "Both are shared as stated with currency and period; no conversion or rounding."
+        )
+        pay_columns = st.columns(2)
+        with pay_columns[0]:
+            st.text_input(
+                "Pay currency (three-letter code)",
+                max_chars=3,
+                **_application_detail_widget(
+                    cv_id, "compensation.currency", compensation["currency"]
+                ),
+            )
+        with pay_columns[1]:
+            st.selectbox(
+                "Pay period",
+                ["year", "month", "day", "hour"],
+                **_application_detail_widget(
+                    cv_id, "compensation.period", compensation["period"]
+                ),
+            )
+        availability = saved["availability"]
+        st.text_input(
+            "Notice period in weeks (optional)",
+            help="Leave blank if undecided; 0 means no notice period. Maximum 104 weeks.",
+            **_application_detail_widget(
+                cv_id,
+                "availability.notice_period_weeks",
+                ""
+                if availability["notice_period_weeks"] is None
+                else str(availability["notice_period_weeks"]),
+            ),
+        )
+        st.text_input(
+            "Earliest start date or availability (optional)",
+            max_chars=5000,
+            **_application_detail_widget(
+                cv_id,
+                "availability.earliest_start_date",
+                availability["earliest_start_date"] or "",
+            ),
+        )
+        st.selectbox(
+            "Open to relocation?",
+            [None, True, False],
+            format_func=lambda value: (
+                "Not answered" if value is None else "Yes" if value else "No"
+            ),
+            **_application_detail_widget(
+                cv_id,
+                "preferences.open_to_relocation",
+                saved["preferences"]["open_to_relocation"],
+            ),
+        )
+        st.text_area(
+            "Reusable cover note (optional)",
+            max_chars=5000,
+            help="Use your own words. Review this generic note for each employer.",
+            **_application_detail_widget(
+                cv_id, "default_cover_note", saved["default_cover_note"] or ""
+            ),
+        )
+        with st.expander("Voluntary application answers", expanded=False):
+            st.caption(
+                "Leave any or all blank. They do not affect readiness or matching."
+            )
+            demographics = saved["demographics"]
+            for field, label in (
+                ("pronouns", "Pronouns (optional)"),
+                ("gender", "Gender (optional)"),
+                ("ethnicity", "Ethnicity (optional)"),
+                ("veteran_status", "Veteran status (optional)"),
+                ("disability_status", "Disability status (optional)"),
+            ):
+                st.text_input(
+                    label,
+                    max_chars=5000,
+                    **_application_detail_widget(
+                        cv_id, f"demographics.{field}", demographics[field] or ""
+                    ),
+                )
+            st.checkbox(
+                "Include these voluntary answers in my autofill profile",
+                **_application_detail_widget(
+                    cv_id,
+                    "demographics.share_on_applications",
+                    demographics["share_on_applications"],
+                ),
+            )
+        save_column, reset_column = st.columns(2)
+        with save_column:
+            if st.button(
+                "Save application details", type="primary", use_container_width=True
+            ):
+                data = deepcopy(saved)
+                for path, value in draft["values"].items():
+                    parts = path.split(".")
+                    target = data
+                    for part in parts[:-1]:
+                        target = target[part]
+                    target[parts[-1]] = value
+                try:
+                    result = facade.save_candidate_profile(cv_id, data)
+                except Exception:
+                    st.error(
+                        "Application details could not be saved. Your edits remain here; existing saved answers are unchanged."
+                    )
+                else:
+                    if result["ok"]:
+                        drafts.pop(cv_id)
+                        st.session_state.application_detail_notice = cv_id
+                        _rerun()
+                    else:
+                        st.error(result["error"])
+        with reset_column:
+            if st.button("Reset unsaved changes", use_container_width=True):
+                drafts.pop(cv_id)
+                st.session_state.application_detail_notice = None
+                _rerun()
+
+
+def _render_autofill_handoff() -> None:
+    """Review saved answers and offer one existing extension import contract."""
+    profile = st.session_state.cv_profile
+    if profile is None:
+        st.info("Create, import or restore a CV before preparing an autofill profile.")
+        if st.button("Add or restore my CV", key="autofill_add_cv"):
+            st.session_state.page = "onboarding"
+            _rerun()
+        return
+    cv_id = st.session_state.cv_id
+    candidate = None
+    if cv_id is not None:
+        try:
+            candidate = facade.load_candidate_profile(cv_id)
+            if candidate is None:
+                raise ValueError("Saved CV not found")
+            preview = facade.application_details_preview(candidate)
+        except Exception:
+            st.error(
+                "Saved application details could not be opened. Check the database and original encryption key before exporting."
+            )
+            return
+        st.caption(f"Using {profile.name or 'Unnamed CV'} · saved CV #{cv_id}.")
+        source = preview["compensation_source"]
+        if source is not None:
+            label = "Expected pay" if source == "target" else "Minimum pay fallback"
+            st.info(
+                f"{label} in this download: {preview['answers']['salary_expectation']}"
+            )
+        st.caption(
+            "Voluntary answers included by your saved choice."
+            if preview["voluntary_answers_shared"]
+            else "Voluntary answers excluded."
+        )
+        if (
+            st.session_state.get("application_detail_drafts", {})
+            .get(cv_id, {})
+            .get("values")
+        ):
+            st.warning(
+                "You have unsaved application details. This download uses the last saved answers."
+            )
+    else:
+        st.info(
+            "This CV is not saved yet. This download includes CV identity only; save it in Onboarding to add application details."
+        )
+    if st.button("Edit application details", key="autofill_edit_details"):
+        st.session_state.page = "onboarding"
+        _rerun()
+    exported = facade.extension_profile(profile, candidate)
+    with st.expander("Saved fields in this download", expanded=True):
+        st.json(exported)
+    include_pdf = st.checkbox(
+        "Include my CV PDF for resume upload",
+        value=False,
+        key=f"autofill_include_pdf_{cv_id}",
+        help="Optional readable PDF, up to 2 MB. It contains the active CV shown above.",
+    )
+    if include_pdf:
+        try:
+            exported = facade.extension_profile(profile, candidate, include_resume=True)
+        except ValueError as exc:
+            st.warning(
+                f"{exc} The download below contains answers only, without a PDF."
+            )
+        except Exception:
+            st.warning(
+                "The PDF could not be prepared. The download below contains answers only, without a PDF."
+            )
+        else:
+            st.caption(f"PDF included: {exported['resume']['filename']}")
+    st.download_button(
+        "Download autofill profile (JSON)",
+        data=json.dumps(exported, indent=2),
+        file_name="careeragent_autofill_profile.json",
+        mime="application/json",
+    )
+    st.caption(
+        "The JSON contains readable personal data. Load the CareerAgent extension from "
+        "the extension/ folder using Chrome's Load unpacked option. Open the downloaded "
+        "JSON and paste its contents into Import from CareerAgent in the popup. On a "
+        "supported Greenhouse, Lever or Ashby form, choose Autofill this page. "
+        "Review every answer and submit the employer's form yourself."
+    )
+
+
+def _render_apply_target(job_id: int | None, label: str = "Open application") -> None:
+    """Render only a validated stored posting URL, without changing tracking."""
+    if job_id is None:
+        return
+    try:
+        target = facade.apply_target(job_id)
+    except Exception:
+        st.caption("The saved application link could not be opened. Try again later.")
+        return
+    if not target["ok"]:
+        st.caption("This saved job is unavailable. Choose another posting.")
+        return
+    if target["url"]:
+        st.link_button(label, target["url"], use_container_width=True)
+    st.caption(target["note"])
+
+
 # Page 1: Onboarding
 def page_onboarding():
     """Onboarding screen - CV upload and preferences"""
     st.title("Onboarding")
-    st.markdown("Create, upload or restore your CV and define your target roles")
-
-    st.caption(
-        "1. Add or restore your CV. 2. Discover jobs. 3. Prepare materials and "
-        "review them before you apply. You can browse jobs and track applications "
-        "without connecting a model."
+    st.markdown(
+        "Create, import or restore your CV, then prepare materials for the jobs you choose."
     )
+    st.caption("CV building, downloads, job browsing and tracking work without AI.")
     try:
         saved_profiles = facade.saved_cv_profiles()
     except Exception:
@@ -765,22 +1104,18 @@ def page_onboarding():
                     )
 
     llm_ready = bool(st.session_state.llm_client)
-    if not llm_ready:
-        st.info(
-            "Build a CV below without a model, or connect one in the sidebar to parse "
-            "an existing PDF or CV text. Saved profiles, job browsing, tracking, "
-            "and resume exports also work without a model."
-        )
-
     if st.session_state.get("cv_save_notice"):
         st.success(st.session_state.cv_save_notice)
     if st.session_state.get("cv_backup_warning"):
         st.warning(st.session_state.cv_backup_warning)
-    _render_cv_builder()
-
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
+    build_tab, import_tab = st.tabs(["Build or edit a CV", "Import PDF or text"])
+    with build_tab:
+        _render_cv_builder()
+    with import_tab:
+        if not llm_ready:
+            st.info(
+                "Importing uses AI to organize your existing facts. Open AI settings in the sidebar and choose Connect AI, or choose Build or edit a CV to start now."
+            )
         st.subheader("Upload CV")
 
         # PDF upload
@@ -791,7 +1126,10 @@ def page_onboarding():
         # Text fallback
         with st.expander("Or Paste CV Text (Fallback)"):
             cv_text = st.text_area(
-                "Paste CV text", height=200, help="Use this if PDF upload fails"
+                "Paste CV text",
+                height=200,
+                help="Use this if PDF upload fails",
+                key="import_cv_text",
             )
 
         if st.button(
@@ -837,21 +1175,16 @@ def page_onboarding():
             else:
                 st.warning("Please upload a CV or paste text")
 
-    with col2:
-        st.subheader("Preferences")
+    with st.expander("Job search preferences", expanded=False):
         preferences = st.session_state.get("preferences", {})
 
         # Widget state is temporary when changing pages. Keep the independent
         # preferences dict current in callbacks before sidebar navigation runs.
         defaults = {
-            "target_roles": [
-                "Senior Software Engineer",
-                "ML Engineer",
-                "Full Stack Developer",
-            ],
-            "target_locations": ["Remote", "San Francisco", "Berlin"],
-            "industries": ["Tech/Software", "AI/ML"],
-            "seniority": "Senior",
+            "target_roles": [],
+            "target_locations": [],
+            "industries": [],
+            "seniority": "Any",
         }
         for field, default in defaults.items():
             key = f"preference_{field}"
@@ -883,7 +1216,7 @@ def page_onboarding():
         )
         st.select_slider(
             "Seniority Level",
-            options=["Junior", "Mid-level", "Senior", "Staff", "Principal"],
+            options=["Any", "Junior", "Mid-level", "Senior", "Staff", "Principal"],
             key="preference_seniority",
             on_change=_sync_preference_widgets,
         )
@@ -979,6 +1312,9 @@ def page_onboarding():
                 mime="application/json",
                 use_container_width=True,
             )
+
+        st.divider()
+        _render_application_details()
 
         next_page = "draft" if st.session_state.selected_jobs else "discovery"
         next_label = "Draft Studio" if next_page == "draft" else "Job Discovery"
@@ -1134,7 +1470,7 @@ def page_discovery():
         )
         if not st.session_state.llm_client:
             st.info(
-                "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+                "No model connected. Open AI settings in the sidebar, then choose Connect AI."
             )
             return
 
@@ -1188,14 +1524,14 @@ def page_discovery():
 
         if not st.session_state.llm_client:
             st.info(
-                "This mode uses the local LLM to parse the page. Initialize it "
-                "from the sidebar, or use the careers-URL mode instead."
+                "This mode uses your selected AI provider to parse the page. Connect it "
+                "from AI settings in the sidebar, or use the careers-URL mode instead."
             )
 
         if st.button("Fetch Job Details", type="primary"):
             if not st.session_state.llm_client:
                 st.info(
-                    "No model connected. Pick a provider in the sidebar, then choose Initialize LLM."
+                    "No model connected. Open AI settings in the sidebar, then choose Connect AI."
                 )
                 return
             with st.spinner("Fetching job details..."):
@@ -1256,16 +1592,22 @@ def page_discovery():
                     st.session_state.selected_jobs.pop(i)
                     _rerun()
 
-        if st.button("Next: Find Contacts", type="primary", use_container_width=True):
-            st.session_state.page = "contacts"
+        if st.button(
+            "Next: Prepare application materials",
+            type="primary",
+            use_container_width=True,
+        ):
+            st.session_state.page = "draft"
             _rerun()
 
 
 # Page 3: Contact Discovery
 def page_contacts():
     """Contact discovery screen"""
-    st.title("Contact Discovery")
-    st.markdown("Find hiring managers and generate email permutations")
+    st.title("Contact Finder")
+    st.markdown(
+        "Keep known contacts or explore unverified email patterns. Outreach is optional."
+    )
 
     if not st.session_state.selected_jobs:
         st.info(
@@ -1308,8 +1650,11 @@ def page_contacts():
                             if job.company not in st.session_state.found_contacts:
                                 st.session_state.found_contacts[job.company] = []
 
-                            st.session_state.found_contacts[job.company].extend(
-                                contacts
+                            st.session_state.found_contacts[job.company] = (
+                                facade.merge_contacts(
+                                    st.session_state.found_contacts[job.company],
+                                    contacts,
+                                )
                             )
                             st.success(f"Found {len(contacts)} contacts")
                             _rerun()
@@ -1323,59 +1668,68 @@ def page_contacts():
                     role = st.text_input("Role", key=f"manual_role_{idx}")
 
                     if st.button("Add", key=f"add_manual_{idx}"):
-                        if name and email:
-                            contact = ContactCandidate(
-                                name=name,
-                                email=email,
-                                role=role,
-                                email_confidence="confirmed",
-                                source="manual",
-                                confidence_score=1.0,
+                        try:
+                            contact = facade.create_manual_contact(name, email, role)
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            previous = st.session_state.found_contacts.get(
+                                job.company, []
                             )
-                            if job.company not in st.session_state.found_contacts:
-                                st.session_state.found_contacts[job.company] = []
-                            st.session_state.found_contacts[job.company].append(contact)
-                            st.success(f"Added {name}")
-                            _rerun()
+                            merged = facade.merge_contacts(previous, [contact])
+                            if len(merged) == len(previous):
+                                st.info(
+                                    "This email address is already in your contacts."
+                                )
+                            else:
+                                st.session_state.found_contacts[job.company] = merged
+                                _rerun()
 
             # Show found contacts
             if job.company in st.session_state.found_contacts:
                 contacts = st.session_state.found_contacts[job.company]
 
                 if contacts:
-                    st.write("**Found Contacts:**")
+                    st.write("**Contacts:**")
+                    st.caption(
+                        "Addresses are not independently verified. Review the source and recipient before outreach."
+                    )
 
                     for i, contact in enumerate(contacts):
-                        col1, col2, col3 = st.columns([3, 2, 1])
+                        col1, col2, col3 = st.columns([3, 3, 1])
 
                         with col1:
-                            confidence_indicator = (
-                                "High"
-                                if contact.confidence_score > 0.7
-                                else "Med"
-                                if contact.confidence_score > 0.4
-                                else "Low"
-                            )
                             st.write(
-                                f"[{confidence_indicator}] **{contact.name}** - {contact.role or 'Unknown'}"
+                                f"**{contact.name}** — {contact.role or 'Role not supplied'}"
                             )
 
                         with col2:
                             if contact.email:
-                                badge = (
-                                    "[Verified]"
-                                    if contact.email_confidence == "confirmed"
-                                    else "[Unverified]"
+                                st.write(contact.email)
+                                provenance = (
+                                    "User provided"
+                                    if contact.source == "manual"
+                                    else "Generated pattern"
+                                    if contact.email_confidence == "guessed"
+                                    else "Found in source"
+                                    if contact.source
+                                    or contact.email_confidence == "confirmed"
+                                    else "Source unknown"
                                 )
-                                st.caption(f"{badge} {contact.email}")
+                                st.caption(f"{provenance} · unverified")
                             else:
                                 st.caption("No email found")
 
                         with col3:
-                            st.caption(f"{int(contact.confidence_score * 100)}%")
+                            if st.button("Remove", key=f"remove_contact_{idx}_{i}"):
+                                st.session_state.found_contacts[job.company].pop(i)
+                                _rerun()
 
             # Email permutations
-            st.write("**Generate Email Permutations:**")
+            st.write("**Explore email patterns (optional)**")
+            st.caption(
+                "Enter an employer email domain you already know. Patterns are guesses; they do not verify a person's address."
+            )
             col1, col2, col3 = st.columns(3)
 
             with col1:
@@ -1383,28 +1737,24 @@ def page_contacts():
             with col2:
                 last_name = st.text_input("Last Name", key=f"lname_{idx}")
             with col3:
-                # Extract domain from company name or URL
-                domain = (
-                    job.url.split("/")[2]
-                    if job.url
-                    else f"{job.company.lower().replace(' ', '')}.com"
-                )
                 domain_input = st.text_input(
-                    "Domain", value=domain, key=f"domain_{idx}"
+                    "Employer email domain",
+                    placeholder="company.com",
+                    key=f"domain_{idx}",
                 )
 
             if st.button("Generate Permutations", key=f"gen_perm_{idx}"):
-                if first_name and last_name and domain_input:
-                    finder = ContactFinder(st.session_state.llm_client)
-                    permutations = finder.generate_email_permutations(
+                try:
+                    permutations = facade.generate_contact_patterns(
                         first_name, last_name, domain_input
                     )
-
-                    if job.company not in st.session_state.found_contacts:
-                        st.session_state.found_contacts[job.company] = []
-
-                    st.session_state.found_contacts[job.company].extend(permutations)
-                    st.success(f"Generated {len(permutations)} email permutations")
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    previous = st.session_state.found_contacts.get(job.company, [])
+                    st.session_state.found_contacts[job.company] = (
+                        facade.merge_contacts(previous, permutations)
+                    )
                     _rerun()
 
     st.divider()
@@ -1418,7 +1768,7 @@ def page_contacts():
 def page_draft_studio():
     """Draft generation and editing screen"""
     st.title("Draft Studio")
-    st.markdown("Generate and refine personalized outreach messages")
+    st.markdown("Prepare your resume, cover letter and outreach for a selected job.")
 
     if not st.session_state.selected_jobs:
         st.info(
@@ -1462,6 +1812,19 @@ def page_draft_studio():
     current_job = st.session_state.selected_jobs[selected_idx]
     workspace_key = _activate_draft_job(current_job)
     workspace = st.session_state.draft_workspaces[workspace_key]
+
+    job_id = st.session_state.selected_job_refs.get(
+        facade.workspace_job_key(current_job)
+    )
+    _render_apply_target(job_id)
+    st.caption(
+        f"Active CV: {st.session_state.cv_profile.name or 'Unnamed CV'} "
+        f"· {'saved CV #' + str(st.session_state.cv_id) if st.session_state.cv_id is not None else 'not saved yet'}. "
+        "Opening the posting or preparing downloads does not mark this application as applied."
+    )
+    if st.button("Prepare browser autofill profile", key="draft_prepare_autofill"):
+        st.session_state.page = "export"
+        _rerun()
 
     st.divider()
 
@@ -1917,30 +2280,7 @@ def page_export():
 
     # --- Autofill extension handoff (Phase 8) --- #
     st.subheader("Browser autofill profile")
-    st.caption(
-        "The CareerAgent Autofill extension fills application forms from these "
-        "fields. Copy the JSON into the extension popup (**Import from "
-        "CareerAgent**) instead of retyping what your CV already says. It "
-        "travels by clipboard on purpose - the extension needs no access to "
-        "this app, and your details never leave the browser."
-    )
-    if not st.session_state.cv_profile:
-        st.info("Upload your CV on the Onboarding screen to fill this in.")
-    else:
-        ext_json = json.dumps(
-            facade.extension_profile(st.session_state.cv_profile), indent=2
-        )
-        st.code(ext_json, language="json")
-        st.download_button(
-            "Download profile (JSON)",
-            data=ext_json,
-            file_name="careeragent_autofill_profile.json",
-            mime="application/json",
-        )
-        st.caption(
-            "Location is left blank - your CV does not record one. Fill it in "
-            "the popup once and the extension remembers it."
-        )
+    _render_autofill_handoff()
 
     st.divider()
 
@@ -2019,8 +2359,7 @@ def _render_followups():
             if card.get("days_since_applied") is not None:
                 bits.append(f"applied {card['days_since_applied']}d ago")
             st.caption(" · ".join(b for b in bits if b))
-            if card.get("url"):
-                st.markdown(f"[Open posting]({card['url']})")
+            _render_apply_target(card.get("job_id"), "Open posting")
 
             c1, c2, c3 = st.columns(3)
             if c1.button("Snooze 3d", key=f"snooze3_{app_id}"):
@@ -2049,52 +2388,56 @@ def page_pipeline():
     _render_followups()
     st.divider()
 
-    # --- Ingest from an ATS public API --- #
-    st.subheader("Ingest jobs from a company ATS")
-    col1, col2, col3 = st.columns([2, 2, 1])
-    with col1:
-        slug = st.text_input(
-            "Board slug",
-            placeholder="the company's board name on the ATS you pick",
+    with st.expander("Import a company job board (advanced)"):
+        st.caption(
+            "Use Job Discovery for a careers URL or keyword search. Import by provider and board name here when you already know them."
         )
-    with col2:
-        ats_type = st.selectbox("ATS", facade.ats_providers())
-    with col3:
-        company = st.text_input("Company name", placeholder="Display name")
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1:
+            slug = st.text_input(
+                "Board slug",
+                placeholder="the company's board name on the ATS you pick",
+            )
+        with col2:
+            ats_type = st.selectbox("ATS", facade.ats_providers())
+        with col3:
+            company = st.text_input("Company name", placeholder="Display name")
 
-    import_options = {}
-    if ats_type == "smartrecruiters":
-        with st.expander("Import a large job board"):
-            import_options["offset"] = st.number_input(
-                "Skip jobs already imported",
-                min_value=0,
-                value=0,
-                step=1,
-                help="Use the next offset shown in a partial import warning.",
-            )
-            import_options["max_jobs"] = st.number_input(
-                "Jobs per import", min_value=1, max_value=1000, value=250, step=1
-            )
-            st.caption(
-                "Each import is bounded. Repeat with the next offset to continue."
-            )
+        import_options = {}
+        if ats_type == "smartrecruiters":
+            with st.expander("Import a large job board"):
+                import_options["offset"] = st.number_input(
+                    "Skip jobs already imported",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    help="Use the next offset shown in a partial import warning.",
+                )
+                import_options["max_jobs"] = st.number_input(
+                    "Jobs per import", min_value=1, max_value=1000, value=250, step=1
+                )
+                st.caption(
+                    "Each import is bounded. Repeat with the next offset to continue."
+                )
 
-    if st.button("Ingest", type="primary", disabled=not slug):
-        with st.spinner(f"Pulling {slug} jobs from {ats_type}..."):
-            try:
-                result = facade.ingest_ats(ats_type, slug, company, **import_options)
-                if result.errors:
-                    st.error(f"Ingestion error: {result.errors[0]}")
-                else:
-                    st.success(
-                        f"Fetched {result.fetched}, stored {result.upserted} jobs."
+        if st.button("Ingest", type="primary", disabled=not slug):
+            with st.spinner(f"Pulling {slug} jobs from {ats_type}..."):
+                try:
+                    result = facade.ingest_ats(
+                        ats_type, slug, company, **import_options
                     )
-                    if st.session_state.cv_profile:
-                        facade.refresh_matches(st.session_state.cv_profile)
-                for warning in getattr(result, "warnings", []):
-                    st.warning(warning)
-            except Exception as e:
-                st.error(f"Ingestion failed: {e}")
+                    if result.errors:
+                        st.error(f"Ingestion error: {result.errors[0]}")
+                    else:
+                        st.success(
+                            f"Fetched {result.fetched}, stored {result.upserted} jobs."
+                        )
+                        if st.session_state.cv_profile:
+                            facade.refresh_matches(st.session_state.cv_profile)
+                    for warning in getattr(result, "warnings", []):
+                        st.warning(warning)
+                except Exception as e:
+                    st.error(f"Ingestion failed: {e}")
 
     if st.session_state.cv_profile and st.button("Re-score matches"):
         with st.spinner("Dedup + score against your CV..."):
@@ -2206,8 +2549,7 @@ def page_pipeline():
                 st.success("Matched: " + ", ".join(job["matched"][:12]))
             if job["missing"]:
                 st.warning("Missing: " + ", ".join(job["missing"][:12]))
-            if job["url"]:
-                st.write(f"[View posting]({job['url']})")
+            _render_apply_target(job["id"], "View posting")
             if st.button("Add to pipeline", key=f"track_{job['id']}"):
                 res = facade.add_to_pipeline(job["id"], st.session_state.cv_id)
                 if res["ok"]:
@@ -2338,8 +2680,7 @@ def _render_application_detail(board: dict, statuses: list):
 
     left, right = st.columns([3, 2])
     with left:
-        if card.get("url"):
-            st.markdown(f"[Open posting]({card['url']})")
+        _render_apply_target(card.get("job_id"), "Open posting")
         if card.get("applied_at"):
             st.caption(
                 f"Applied {card['days_since_applied']}d ago · "
@@ -2405,7 +2746,6 @@ def _render_application_detail(board: dict, statuses: list):
 
 # Router
 render_sidebar()
-render_stage_rail(st.session_state.get("page", "onboarding"))
 for notice_key in ("match_refresh_warning", "job_save_notice"):
     if st.session_state.get(notice_key):
         st.warning(st.session_state[notice_key])
