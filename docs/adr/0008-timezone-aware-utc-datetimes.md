@@ -1,6 +1,6 @@
 # 8. Timezone-aware UTC datetimes
 
-- Status: Accepted (supersedes the 2026-08-27 naive-UTC convention in `PROGRESS.md`)
+- Status: Accepted (supersedes the [2026-08-27 naive-UTC convention](https://github.com/aaron-seq/CareerAgent/blob/2db88ef8ab15387c2eb9062158250a338cc70e18/PROGRESS.md))
 - Date: 2026-10-16
 - Issue: [#37](https://github.com/aaron-seq/CareerAgent/issues/37)
 

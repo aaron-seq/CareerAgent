@@ -26,6 +26,7 @@ wheels/
 
 # Virtual Environment
 venv/
+.venv/
 .env
 credentials.json
 token.json

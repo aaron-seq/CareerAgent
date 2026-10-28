@@ -26,6 +26,13 @@ from core.models import CVProfile
 from core.storage import LocalStorage
 
 assert os.geteuid() != 0
+root = Path('/app')
+for relative in ('docs', 'tests', 'extension', '.github', 'requirements-test.txt', 'requirements-audit.txt'):
+    assert not (root / relative).exists(), f'Maintenance content shipped: {relative}'
+assert not list((root / 'requirements/locks').glob('test-*.txt'))
+assert not list((root / 'requirements/locks').glob('audit-*.txt'))
+for relative in ('LICENSE', 'assets/fonts/LICENSE.txt', 'assets/fonts/DejaVuSans.ttf', 'assets/fonts/DejaVuSans-Bold.ttf', '.streamlit/config.toml', 'alembic.ini', 'requirements/locks/runtime-py311.txt'):
+    assert (root / relative).is_file(), f'Missing runtime asset: {relative}'
 app = AppTest.from_file('/app/app.py', default_timeout=20).run()
 assert not app.exception
 assert any(title.value == 'Onboarding' for title in app.title)

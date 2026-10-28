@@ -1,654 +1,90 @@
-# Progress Log
-
-Living status log. Update the top block at the end of every working session.
-Full plan in `ROADMAP.md`; conventions in `CLAUDE.md`; research in `docs/RESEARCH.md`.
-
-## Current status
-- **Current phase:** Phases 0–10 have implementations; production hardening remains ongoing.
-- **Last updated:** 2026-10-19
-- **Next action:** Owner-led historical PII cleanup #38 and hosted-fetch/metadata-encryption prerequisites #41/#42 remain. Matching/grounding and external integration coverage remain separate follow-ups.
-- **Blockers:** Public-history PII remains unresolved. Gmail OAuth/delivery, Postgres locking and installed-extension/employer-page behavior remain unverified. Local inference, Chromium app recovery and synthetic real-DOM autofill work; fresh published-environment restoration remains separate.
-
-## Verification level per phase
-- **Genuinely run + tested here:** P1 data layer, P4 dedup/scoring, P5 resume
-  tooling, P6 tracking, P7 outreach gate logic, P9 enrichment/digest, P10
-  analytics, and the full internal E2E (`tests/test_e2e_pipeline.py`).
-- **Built + unit-tested, external boundary mocked:** P2 ingestion adapters
-  (respx), P3 JSON-LD/polite fetcher (respx), P7 email verification (stub
-  resolver), P9 Telegram/Discord emitters (respx).
-- **Built + unit-tested, NOT live-verified:** P8 installed extension on employer forms,
-  real email delivery, and deployment (dry-run only).
-
-Totals: **922 Python tests + 63 JS tests pass; Ruff/format and full-repository mypy clean.**
-Core coverage is **95.27%**, up from 95.20%.
-Passing tests do not establish production readiness.
-
-## Log
-
-### 2026-10-19 — Task-first UX and reviewed application details
-
-Simplified first run with native build/import tabs, optional collapsed AI
-settings, readable labels, current Streamlit selectors and mobile navigation.
-RAM-only callbacks preserve unsaved CV facts through fast sidebar navigation;
-save/activate explicitly changes scope. Manual contacts validate locally,
-display truthful provenance and can be removed. Email-pattern domains require
-explicit input rather than inferred ATS/company hosts.
-
-Connected the existing encrypted candidate-answer backend to an optional
-per-saved-CV editor and exact saved-answer export preview. Preserve unknown,
-False and zero; target pay takes precedence over minimum without conversion or
-silent precision changes. Demographics require explicit saved consent. Optional
-PDF errors keep identity/answers-only downloads available. Validated posting
-links and the export path do not mark applications submitted.
-
-Independent browser review caught and fixed native-widget draft loss, first-edit
-editor collapse, ignored secondary salary constraints, hidden-field autofill and
-city-to-country substitution. Real synthetic DOM exercises actual resume
-FileList attachment, eligibility/polarity/consent and zero submits. No employer
-application or message was sent. Keyboard/390px/1440px checks are representative,
-not a full accessibility or live-extension certification.
-
-**Validation:** 922 Python tests, 63 Node tests, 95.27% core coverage, Ruff/format,
-full mypy (124 files), actionlint and functional Docker smoke passed; seven
-intentional SQLModel reload warnings remain. See the [product review](docs/PRODUCT_UX_REVIEW_2026-10-19.md)
-and [ADR 0013](docs/adr/0013-reviewed-application-details-and-task-first-ux.md).
-
-### 2026-10-19 — Reviewed recovery, dependency security and real local inference
-
-Implemented encrypted refresh recovery with exact job row identity, bounded
-schema, atomic writes, wrong-key/corrupt guards and explicit retained-backup
-reset. Real Chromium caught a fast preference-edit/navigation loss; stable
-callbacks and four single-event regressions fixed all preference fields.
-Desktop/mobile browser recovery now passes without page errors or horizontal
-document overflow. Generated drafts, clients, credentials and approval state
-are never restored.
-
-Patched the two affected dependency packages found by the actual feed, migrated
-the supported floor to Python 3.11 (CI 3.11–3.13), added hash-verified runtime/test
-graphs, strict advisory CI, weekly/manual upstream drift and Dependabot. Corrected
-JSON extraction, retry budget, contact prompt/envelope and provider/text validation
-defects while removing the advisory type debt. Full-repository mypy is required.
-
-**Validation:** 816 Python tests, 55 JS tests, 95.20% core coverage, lint/format,
-required mypy, dependency consistency and final functional Docker pass. Three
-frozen graphs and the isolated scanner graph reported no known PyPI advisories
-when measured; no clean-product/OS claim. Seven intentional SQLModel schema-reload
-warnings remain visible. Actionlint and a negative hash-install check passed.
-Measured offline benchmark and synthetic real Ollama text/PDF/restart results
-are documented in the [engineering review](docs/ENGINEERING_REVIEW_2026-10-19.md).
-
-No application or message was submitted. Existing security/hosted prerequisites
-remain explicit; this does not make the app a hosted multi-user product.
-
-### 2026-10-17 — Model-free CV builder, transparent readiness, live public APIs
-
-- Added explicit fact entry/editing without a model. Validate locally, clear
-  obsolete extracted text, and persist a new encrypted CV before activation;
-  failed database saves preserve the current profile/materials. Older profiles
-  remain available. Project-only applicants are supported without inventing jobs.
-- Expose weighted content readiness with actionable checks, separately from
-  selected-job recognized-skill coverage. Raw identities/contacts/employers,
-  explicit negative clauses (including contractions), and C-level wording no
-  longer inflate this coverage. No external ATS ranking is claimed.
-- Preserve social links, work technologies, project impact and both project
-  URLs in exports. Bundle licensed offline fonts for selectable Unicode PDF
-  text. Reject unsupported glyphs/shaping with Markdown/JSON fallbacks; normalize
-  PDF tabs/CR to prevent joined words. Contact lines no longer resemble columns.
-- Wire the All Data button through the facade and include database-only contacts,
-  drafts, companies, jobs, suppression records and saved candidate answers.
-- Added an opt-in bounded live API command. **Eight public sources passed with
-  1,535 parsed postings**; evidence retains the earlier 404 and empty-board
-  attempts. Twelve public API GETs total; careers signatures checked locally,
-  application HTML/browser behavior untested. No sends/submissions/model calls.
-- Reviewed and merged pending PRs **#52 and #51**, fixing country/polarity/select
-  blockers in #51 before merge. Their current-head CI passed all six checks.
-
-**Validation:** 711 Python tests, 55 extension tests, Ruff lint/format and
-whitespace checks passed; seven existing SQLModel module-reload warnings.
-Core coverage **94.83%** (baseline 94.46%). Independent final review ran 135
-focused tests and reproduced the repaired scoring/PDF cases. Final Docker build
-passed real screens, encrypted persistence across replacement, nonroot and
-Streamlit health. The local app also starts and answers HTTP health/root requests.
-Installed dependencies pass `uv pip check`. Mypy remains advisory: 27 existing
-errors in eight modules with `--python-version 3.11`; no new module errors.
-
-Design and limits: [ADR 0010](docs/adr/0010-local-cv-builder-and-transparent-readiness.md)
-and [validation/evidence](docs/CV_VALIDATION.md). Local Ollama inference, Gmail,
-real browser forms and commercial ATS scoring remain unverified.
-
-### 2026-10-17 — Review fixes: country-scoped, conservative eligibility autofill
-
-Work-authorization exports now preserve the candidate's country. Authorization,
-sponsorship and visa-status questions are filled only when they name the same
-recognized country and match a supported positive wording. Missing/mismatched
-countries, negation and compound questions stay blank and are flagged for the
-human. Completeness requires the authorization country. Real select choices at
-index zero are preserved, just as typed text and existing uploads are.
-
-Verified in an isolated public-source checkout: **52 Python tests** covering
-apply/candidate/migrations and **55 extension tests** passed; focused Ruff lint
-and format checks passed. Country/polarity cases use synthetic profiles; no live
-application or email was submitted.
-
-Independent combined-branch validation after merging the core fixes: **572 Python
-tests and 55 extension tests passed**, with seven existing SQLModel reload
-warnings. Ruff lint/format and whitespace checks passed.
-
-### 2026-10-16 — Real-user acceptance fixes: tailoring gaps, offer reminders, export
-
-Found by an offline, no-LLM real-user acceptance run; each has a regression test.
-
-1. **Tailoring gaps were junk** ("110k, 140k, 3+, build, data, engineer,
-   friendly, hiring" alongside the real "aws, dbt"). Root cause in
-   `core/matching/scoring.py` keyword extraction: bare quantities passed the
-   filter, filler verbs/culture words weren't stopwords, and job keywords were
-   compared only to the CV's skills list. Now quantity tokens are dropped
-   (`s3`/`ec2`/`k8s`/`3d` kept), the stopword list covers action/hiring
-   filler, and a keyword the CV states anywhere (title, summary,
-   achievements) counts as matched. Improves match scores too. Partially
-   mitigates [#10](https://github.com/aaron-seq/CareerAgent/issues/10) (the
-   description-fallback noise); ingestion still never fills
-   `tech_stack`/`requirements`, so domain words like "pipelines" can still
-   surface — #10 stays open.
-2. **Follow-up reminders persisted at OFFER.** `transition()` cleared the
-   date only on REJECTED/WITHDRAWN, and `due_followups()` used `_ACTIVE`
-   (which includes OFFER for dedup). New `follow_up_applies()` — False for
-   OFFER/REJECTED/WITHDRAWN — drives clearing on transition, the due list,
-   snooze (no-op), and the board card (hides stale legacy dates).
-   SCREENING/INTERVIEW keep reminders: the candidate is still waiting on the
-   employer.
-3. **"Export All Data (ZIP)" held only job postings, one twice.**
-   `save_job_posting()` minted a new file per call; it now writes one stable,
-   encrypted file per posting fingerprint, and the export collapses legacy
-   duplicates. New `facade.export_all_data(storage)` adds
-   `pipeline/applications.json` (status, notes, dates) and
-   `cv_profiles/saved_cv_<id>.json` from the DB, plus a `README.txt`
-   manifest. **UI follow-up (app.py not touched here):** the export button
-   should call `facade.export_all_data(st.session_state.storage)` instead of
-   `storage.create_export_zip()`; the label "Export All Data (ZIP)" is then
-   accurate.
-
-**Verified:** 472 passed (459 + 13 new); ruff + format clean.
-
-### 2026-10-16 — Timezone-aware UTC datetimes; sqlmodel cap lifted (#37)
-
-**Problem:** sqlmodel 0.0.45+ infers a `UTCDateTime` column type that raises on
-naive values; with 0.0.48 installed, 78 of 452 tests failed on `main`. The
-`<0.0.45` stopgap cap (2026-10-14) froze the dependency.
-
-**Fix (ADR 0008, supersedes the 2026-08-27 naive-UTC convention below):**
-`utc_now()` now returns aware UTC; `ensure_utc()` replaces `to_naive_utc()`
-(naive = assume UTC, aware = convert). Every DB datetime column declares a
-project `UTCDateTime` TypeDecorator (`DateTime(timezone=True)`, coerces on
-write and read), so rows read back aware UTC on *every* sqlmodel version.
-Comparison boundaries that take outside input (`due_followups`, snooze,
-application cards, `SendPolicy`, ghost age) coerce with `ensure_utc`;
-`parse_date` returns aware UTC. Migration `3f1c2a9d7e45` moves the 12 columns
-to `timestamptz` on Postgres (`USING col AT TIME ZONE 'UTC'`). Cap lifted to
-`sqlmodel>=0.0.14,<1.0.0`.
-
-**Verified:** 459 passed on sqlmodel 0.0.14 (SQLAlchemy 2.0.54), 0.0.44 and
-0.0.48 (SQLAlchemy 2.1.x); ruff + format clean. Alembic on a temp SQLite DB:
-`upgrade head` → `alembic check` clean → pre-migration naive row reads back
-`2026-03-01 09:00+00:00` → `downgrade -1` → `upgrade head` round-trips with
-data intact. Postgres SQL inspected offline only (no live Postgres here).
-**Rollback:** `alembic downgrade -1`, revert, restore the cap.
-
-### 2026-10-16 — pypdf migration and working mypy pin (#21, #22)
-
-- **#21:** CV parser fallback moved from deprecated PyPDF2 to pypdf
-  (`pypdf>=6.21.0,<7.0.0`); `PdfReader`/`extract_text` are unchanged. New tests
-  build a PDF with fpdf2 at test time and extract its text through pdfplumber
-  and through the pypdf fallback. The PyPDF2 deprecation warning is gone.
-- **#22:** `mypy==2.4.0` (Python >=3.10 marker) replaces 1.7.1, which aborted on
-  numpy's PEP 695 stubs; mypy target 3.9 -> 3.10 (2.x minimum; pydantic's
-  `match` breaks a 3.9 target); added `types-python-dateutil`. Small fixes:
-  analytics dedupe, `generate_with_schema` type, explicit `sqlmodel.sql`
-  import in the initial migration. `mypy .`: 29 errors in 10 files
-  (configured files: 25 in 7). Remaining: JSON `dict | list` unions in
-  `core/ingestion/`, `contact_finder.py` dict/list reuse, `facade.py`
-  Optional id + abstract `JobSource`, `llm.py` requests JSON typing, test
-  Optional narrowing. Mypy stays advisory.
-- **Validation:** 452 -> 455 Python tests, 18 JS tests, ruff lint/format clean.
-
-### 2026-10-16 — core/ diagnostics move from print() to logging (#31)
-
-- Replaced the 11 remaining bare `print()` calls in `core/` (the issue
-  counted 14; three had already gone) in `cv_parser`, `contact_finder`,
-  `job_finder` and `gmail_drafts` with module-level `logging` loggers.
-  Handled failures now log a WARNING with the traceback attached instead of
-  vanishing into stdout; LLM send/receive chatter is DEBUG.
-- PII: no print emitted CV text directly, but log content was chosen to
-  stay PII-free: the CV debug line logs size only, Gmail token load/refresh
-  failures log the exception type only (messages can echo token material),
-  and draft creation logs the draft id, not recipient or body.
-- New `core/logging_config.configure_logging()` (stdlib `basicConfig`, no
-  new dependency) is called once in `app.py`; level comes from
-  `CAREERAGENT_LOG_LEVEL` (default INFO, documented in `.env.example`).
-  `scripts/` were left alone: none of them reaches the modules that printed.
-- 13 new tests in `tests/test_core_logging.py` (caplog): every converted
-  error path logs a warning and leaks no CV text/name/email/phone/token; a
-  regression guard fails on any new bare `print(` in `core/`.
-- Note: one full run during this work showed 78 transient failures. They
-  came from a concurrent `pip install` rewriting sqlalchemy/pydantic/sqlmodel
-  in the shared global site-packages mid-run, not from this change. Seven
-  later runs in the same deterministic order passed, three of them
-  concurrently.
-
-### 2026-10-16 — Candidate answers + apply flow salvaged from an unmerged branch
-
-`claude/ui-integration-followup` had four commits pushed after its PR merged.
-Each piece was re-implemented on main's current structure, or dropped:
-
-- **Ported (adapted):** `core/candidate.py` stores application answers (work
-  authorization, sponsorship, compensation, availability, preferences, opt-in
-  demographics) in an encrypted `cv_profile.candidate_payload` column beside
-  the CV, not a second CV copy. Migration `3c90c531157f` follows
-  `3f1c2a9d7e45`; upgrade → downgrade → upgrade verified on a temp SQLite DB and
-  covered by `tests/test_migrations.py`. Completeness meter ranks gaps by how
-  often they block a form.
-- **Ported (adapted):** `core/apply.py` + facade `apply_target`,
-  `mark_applied`, `save/load_candidate_profile`, `profile_completeness`, and
-  an extended `extension_profile(cv, candidate, include_resume)` instead of a
-  second export format. One fixture pins the JSON contract in both test suites.
-- **Ported (adapted):** extension screening-question answering (select, radio,
-  text, textarea), resume attachment to the resume input only, amber flags for
-  unanswered questions. Fixed a yes/no matcher bug from the old branch ("I am
-  not" matched "I am"). Still user-triggered; never submits.
-- **Ported:** pure job-card helpers in `core/presentation.py`.
-- **Dropped:** `freeboards.py` (main's `boards.py` supersedes it), the old
-  theme-aware CSS and app.py changes, stage/empty-state copy (main's stage
-  rail covers it), auto-fill on page load and broader host permissions.
-  `scripts/verify_sources.py` deferred: no live network here to verify it.
-- **Not done here:** app.py wiring (onboarding answers form + completeness,
-  Apply / I applied buttons, export with answers/resume, job-card helpers).
-- **Validation:** 533 Python tests (+81), 50 extension tests (+32), ruff
-  lint/format clean. The extension is not live-browser verified for selects,
-  radios or file attachment; ADR 0009 records the storage and contract choices.
-
-### 2026-10-16 — Guided workflow, task automation, and independent PR review
-
-- Fetched latest main and independently reviewed the sole pending PR #44.
-  Resolved a semantic-version metric crash and fresh Docker bind-permission
-  failure before merging it. Its updated Python 3.9–3.11/lint/extension CI and
-  subsequent main CI passed; fresh-volume app/persistence checks passed locally.
-- Reopen encrypted saved CVs without parsing again. Profile changes invalidate
-  generated materials and automatically refresh matches; recovery notices stay
-  visible on failure. Keep browsing, tracking, tailoring, review and exports
-  available without a model; gate only actual AI actions.
-- Scope email/letter/resume/WhatsApp workspaces and editor widgets by job;
-  preserve edits on return and reset editor values on new generations. Connect
-  API and manually selected/pasted jobs to Prepare application and the pipeline.
-- Keep withdrawn and duplicate-titled applications selectable. Preserve source
-  attribution/link per posting (#19), preferences through navigation, and make
-  ZIP exports downloadable in the browser.
-- SmartRecruiters now follows pages (#20), with unique-ID/request/job bounds,
-  clear partial results, malformed-payload checks, and continuation controls.
-- Added `python -m scripts.check` and functional Docker smoke. PR CI now tests
-  app screens, encrypted persistence across containers, nonroot execution and
-  health; Actions use verified SHA pins, Node 24, read-only token permissions,
-  explicit runner versions and bounded runtimes.
-- Digest CLI validates limits/channel configuration, reports rejected deliveries
-  with a failing status, sanitizes database/malformed-URL/network errors, and
-  never retries possibly completed sends automatically. No real delivery run.
-- **Validation:** 452 Python tests, 18 extension tests, lint/format, Compose
-  config, Docker build and functional smoke passed. Core coverage increased
-  92.48% → 92.78%; advisory mypy reports 29 existing errors (previously 32).
-  Existing eight deprecation/reload warnings remain documented. No real-browser
-  screenshot/accessibility or live model/OAuth/Postgres validation is claimed.
-- **Review:** Four subagents split PR, UI, ingestion and CI work, with independent
-  review and regression tests for findings. `docs/WORKFLOW_AUDIT.md` records the
-  findings, evidence, limits and rollback; ADR 0007 records the decisions.
-- Matrix validation exposed older Streamlit 1.50 retaining stale controls after
-  immediate navigation. Prepare application now uses supported callbacks before
-  rendering; the original failing Python 3.9 journey passes unchanged.
-- Independently ran all 452 tests on Python 3.9.25 / Streamlit 1.50: pass,
-  coverage 92.72%, with three additional SDK runtime-support warnings. Python
-  3.11 remains recommended; the runtime transition is tracked in #46.
-
-### 2026-10-15 — Boundary audit and targeted privacy/reliability fixes
-
-- Audited implementation/history and all 21 open GitHub issues; zero open PRs
-  needed consolidation. Restored a current `docs/SECURITY_AUDIT.md` with explicit
-  evidence, residual risks, benchmark, migration, and rollback guidance.
-- Moved Gmail creation behind the facade so Streamlit reruns cannot discard
-  approval or the compliant footer. Recheck current recipient/content/opt-out;
-  persist successful exports and serialize quota checks. The quota survives
-  request/service recreation, and simultaneous SQLite requests cannot both
-  consume the same minimum-gap allowance. Postgres locking is not live-tested.
-- Required MX verification now fails closed on unknown status; distinguish DNS
-  timeout from missing/null MX. Validate complete sender/footer/opt-out fields.
-  Added dnspython to implement the existing DNS requirement.
-- Retain a private local key across restarts; encrypt JSON artifacts, sanitize
-  and uniquely allocate filenames, contain reads, and support explicit atomic
-  legacy migration. Keep readable exports and warn at export. OAuth tokens are
-  privately written, and credentials/tokens/temp key material are ignored.
-- Reject failed/empty CV extraction; always clean private temporary uploads.
-  Resume tailoring only reorders unchanged candidate facts. Cover-letter metric
-  checks no longer join unrelated digits or conflate decimals/units, trust unseen
-  JD suffixes, or accept candidate claims solely from job metrics. Free prose
-  still needs human review.
-- Disconnect active inference on provider/model selection changes, honor Ollama
-  deployment settings, and reject unavailable models at initialization.
-- Harden local Docker deployment: non-root, excluded secrets/data, service-name
-  routing, loopback publication, persistent DB/key, optional Gmail credentials,
-  and optional trusted CA build-secret support. Container UI/imports and
-  encrypted continuity across replacement were verified.
-- Empty `DATABASE_URL` now selects SQLite, fixing a local digest-workflow
-  reproduction. The latest remote digest runs still fail; their logs were
-  inaccessible, so no remote repair is claimed.
-- **Validation:** 338 → 377 Python tests, 18 JS tests, lint/format, SQLite
-  migrations, Compose config, Docker build and functional checks pass. Coverage
-  92.07% → 92.48%. Mypy remains advisory (32 errors versus 33 baseline with
-  Python 3.11 target). Existing PyPDF2 deprecation and deliberate SQLModel-reload
-  warnings are documented rather than suppressed.
-- **Performance baseline:** 200 encrypted 8,000-byte-body save/load cycles;
-  save p50/p95 0.135/0.296 ms, load p50/p95 0.153/0.280 ms on this shared machine.
-  No end-to-end speedup or production load claim.
-- **Decision:** ADR 0006 records persistent key/artifact and gated-export semantics.
-
-### 2026-10-14 — Fresh installs broke 56 tests: sqlmodel 0.0.45 tz change
-
-**Found by:** a clean `pip install -r requirements-test.txt` on `main`
-(792b9f5). 56 of 338 tests failed with `Datetime values must have timezone
-information`. CI was still green only because its last run (2026-09-11)
-predates the sqlmodel release.
-
-**Root cause:** sqlmodel 0.0.45 maps every `datetime` field to a new
-`UTCDateTime` TypeDecorator that raises on naive values. The codebase stores
-naive UTC by design (`core/normalize.utc_now()`), and `sqlmodel<1.0.0` let the
-new release in. Bisected: 0.0.44 has no `UTCDateTime`; 0.0.45–0.0.48 all do.
-
-**Fix:** cap `sqlmodel<0.0.45` in `requirements.txt` (comment explains why).
-338/338 pass on 0.0.44 with SQLAlchemy 2.1.4. The proper fix — moving the
-models to aware datetimes with a migration — is tracked as a GitHub issue.
-**Rollback:** revert the one-line pin.
-
-### 2026-09-11 — Follow-up reminders reach the UI; app→extension profile handoff
-
-**Root cause, not symptom.** Phase 6 shipped `TrackingService.due_followups()`
-and `snooze_followup()` with passing unit tests, but neither was ever exposed
-on `core/facade.py` — the only door `app.py` uses for DB-backed logic. The
-reminder feature has been complete and unreachable since it was written.
-`ApplicationRow.notes` was likewise a column nothing wrote. The lesson
-generalises: `tests/test_tracking.py` tested the service directly, so a whole
-dead feature stayed green. The new facade-level E2E test exists to catch that
-class of gap.
-
-- **`core/facade.py`** — added `due_followups()`, `snooze_followup()`,
-  `set_application_notes()`, and `extension_profile()`. Board cards now come
-  from one `_application_card()` helper carrying `url`, `status`, `notes`,
-  `applied_at`, `days_since_applied`, `days_until_follow_up` and `overdue`.
-  The `url` is what makes a card actionable — it is where the autofill
-  extension runs, and without it the dashboard dead-ended.
-- **`app.py` Pipeline** — a **Follow-ups** panel above everything else
-  (overdue count, days-overdue, posting link, snooze 3d/7d, mark rejected),
-  an empty state that explains when reminders appear, and an
-  **Application detail** panel under the board for notes and status changes.
-- **Board layout fix, found by running it.** The first cut put the notes box
-  and buttons inside the six kanban columns. Live in the browser those columns
-  are ~129px, so the notes field rendered 94px wide and "→ screening" wrapped
-  to three lines. The columns are now a compact overview and everything
-  editable moved to the full-width detail panel (notes 503px, buttons single-line).
-- **Rejected/withdrawn from any active state.** The board previously only
-  modelled the happy path, so dead applications sat in "applied" forever,
-  skewing the funnel and nagging with stale reminders.
-- **App → extension handoff** — `facade.extension_profile(cv)` maps the parsed
-  CV onto the seven field names in `extension/src/field_mapping.js`; the
-  Export screen renders it as copyable JSON, and the popup gained an
-  **Import from CareerAgent** box. Clipboard, not HTTP: no host permission on
-  the app's origin, no CORS, no localhost server, and `parseImport` whitelists
-  the seven known keys so a larger pasted blob can't push anything else into
-  `chrome.storage.local`.
-- **Tests: 331 → 337 Python, 11 → 18 JS.** Five facade tests covering the
-  reminder lifecycle, the notes round-trip and the profile mapping; five JS
-  tests on the import parser; and
-  `test_candidate_journey_through_the_facade` — a real E2E that crosses the
-  facade boundary only (discover → save → apply → reminded → chase → offer),
-  the layer where the bug actually lived. `temp_db` moved from
-  `test_facade.py` to `conftest.py` now two modules need it.
-- **Live-verified in the browser**, not just under pytest: seeded an overdue
-  application, confirmed the panel and ⚠️ flags render, clicked **Snooze 7d**
-  and watched the reminder clear and the flag disappear.
-
-
-### 2026-08-27 — 13 job sources live-verified, timestamp convention, security audit
-
-Three parallel agents on disjoint files; all work verified, none committed.
-
-**Job ingestion: 6 sources -> 13.** New company ATS boards (SmartRecruiters,
-Recruitee, Workable) and keyless job boards (Arbeitnow, Jobicy, RemoteOK,
-Himalayas), plus an `ATTRIBUTION` map so sources that legally require credit
-(RemoteOK especially) get it in the UI. `app.py` now drives both pickers from
-`facade.aggregator_providers()` / `ats_providers()` instead of hardcoded lists.
-
-Live-verified 2026-08-27 against real vacancies: Arbeitnow 175, RemoteOK 99,
-Jobicy 50, Himalayas 20; SmartRecruiters BoschGroup + PublicStorage; Workable
-blueground/spotawheel/orfium/skroutz; Recruitee fixico/hygraph. 344 live
-postings from the four keyless boards alone.
-
-**Wellfound: NOT VIABLE, do not implement.** Four independent blockers verified
-(no public API, no logged-out JSON-LD + Turnstile, robots.txt disallows the
-browse surface, ToS bars automated collection). Breaches guardrail 3. Use the
-startup's own Greenhouse/Lever/Ashby board instead. Full evidence in
-`docs/RESEARCH.md` A2.
-
-**Timestamp convention: naive datetimes holding UTC**, repo-wide. `utc_now()`
-and `to_naive_utc()` in `core/normalize.py` are the only producers/coercers.
-Chosen over timezone-aware because SQLite `DATETIME` and Postgres `timestamp
-without time zone` (ADR 0003) cannot persist an offset, so aware values
-round-trip to naive and then raise `TypeError` on comparison. Killed all 194
-`datetime.utcnow()` deprecation warnings. Fixed a real bug this exposed:
-`date_posted` from `dateutil` arrives aware, and was being written into a naive
-column with the offset silently dropped (`+05:30` stored as UTC, off by 5.5h) —
-now coerced at both ingestion boundaries.
-
-**CI has never passed.** `requirements-test.txt` pinned `responses==0.25.9`, a
-version never published to PyPI (0.25.8 -> 0.26.0), so `pip install` died before
-`pytest` ran on every job — every merge to `main` went in ungated. The package
-was imported nowhere (`respx` does all HTTP mocking), so the pin was deleted
-rather than corrected. Dependency set now resolves clean.
-
-**Security audit** -> `docs/SECURITY_AUDIT.md` (21 findings: 1 Critical, 8 High).
-Independently verified: repo is PUBLIC, commit `d92bfb5` added 11
-`cv_profile_*.json` files with real name/phones/email, still in history after
-being untracked. Also: the CAN-SPAM footer is displayed but not sent
-(`app.py` sends the raw textarea body, not `decision.body`), opt-out HMAC keys
-regenerate per process when `CAREERAGENT_ENCRYPTION_KEY` is unset, the send cap
-is inert, and `assert_no_fabrication` has a demonstrated bypass (the guard
-trusts the whole JD while the model only sees `[:3000]`).
-
-**Tests: 297 -> 330 passing, warnings 194 -> 9.** `ruff` clean.
-
-### 2026-07-27 — CV parsing fabrication fix, cover letters, Groq provider, dark-native redesign
-First session with live network access: real Groq LLM calls and a real
-Remotive job-API pull, tested against the maintainer's actual CV end-to-end.
-- **Found and fixed a real fabrication bug.** A CV's contact links render as
-  anchor text (visible word "Github") with the URL only in the PDF's link-
-  annotation layer, which `extract_text()` discards. With no URL in its input,
-  the model invented a plausible-looking one from the candidate's name --
-  `github.com/AaronSequeira` instead of the real `github.com/aaron-seq`. Fixed
-  by extracting annotation-layer hyperlinks (`_extract_hyperlinks_from_pdf`)
-  and appending them to the prompt after truncation, plus rewriting the
-  prompt's placeholder shape (which itself taught the model to invent a
-  username) into an explicit copy-or-null instruction with an anti-fabrication
-  rule. Verified against the real CV: GitHub/LinkedIn now match exactly, two
-  previously-null project repo links recovered. 6 new tests
-  (`tests/test_cv_parser.py`).
-- **Added cover letter generation** (`core/resume/cover_letter.py`), gated the
-  same way `tailor.py` gates resume tailoring: raises rather than ship a
-  letter naming an employer not in the CV or citing an unsupported metric.
-  First live draft cited zero metrics -- the guard had made the model avoid
-  numbers entirely; rewrote the prompt to positively push real figures, and
-  the next draft cited 5, all CV-verified, plus one honestly-flagged gap. 8
-  new tests (`tests/test_cover_letter.py`).
-- **Added Groq as a free cloud LLM provider** alongside Ollama
-  (`CloudLLMClient` in `core/llm.py`, subclasses `LocalLLMClient`, overrides
-  only the 3 HTTP methods). Lets the app run without installing Ollama +
-  pulling multi-GB models first. This is a deliberate, documented deviation
-  from ADR 0002's "cloud only for non-PII work" guardrail -- see ADR 0005.
-  Verified live: connected, listed 15 models, `generate_json` round-tripped.
-- **Dark-native UI redesign.** `assets/style.css` had been authored for a
-  light theme while `.streamlit/config.toml` set a dark one, rendering every
-  heading near-invisible (near-black text on near-black background). Rewrote
-  dark-native; added a stage rail across the top reflecting the app's real
-  screen gating (Discovery can't run before Onboarding); reworded the six
-  gating messages from state descriptions ("please initialize LLM first") to
-  next actions ("pick a provider, then choose Initialize LLM").
-- **Privacy cleanup:** 11 parsed CV profiles (real PII: name, email, phone,
-  employers) and 1 job posting were tracked in git as stale test artifacts.
-  Untracked them and extended `.gitignore` to prevent recurrence
-  (`careeragent_data/{cv_profiles,contacts,job_postings}/`, `*_CV.pdf`). Note:
-  content is still in git history; a full purge needs a history rewrite, left
-  for the repo owner.
-- **Found, not yet fixed:** job-matching keyword extraction
-  (`core/matching/scoring.py::_job_keywords`) prefers curated
-  `tech_stack`/`requirements`, but aggregator-ingested jobs never populate
-  those fields (only the LLM job-parse path does) -- so it falls back to
-  tokenizing the raw description against a 20-word stopword list. Observed
-  live: a real job's "missing skills" list was full of stopwords (`at`, `is`,
-  `who`, `why`) and punctuation-glued tokens (`api.`, `built.`), and match
-  scores are systematically deflated (4 matched / ~200 prose tokens). Fix:
-  run aggregator-ingested jobs through the existing `JOB_PARSE_PROMPT` to
-  populate `tech_stack` -- the parser already exists, ingestion just skips it.
-  Cost is one LLM call per job, a tradeoff intentionally left for the
-  maintainer to decide rather than assumed.
-- 14 new tests. Totals: **204 Python + 11 JS tests green; ruff clean.**
-
-### 2026-07-25 — Removed fabricated enrichment data (honesty fix)
-The bundled "sample" enrichment CSVs contained **invented facts about real,
-named companies** (Glassdoor ratings, layoff history, sponsor status), and the
-lookup logic turned *absence of data* into a **false negative** — any company
-missing from an 8-row file was recorded as `sponsors_visa = False`. For a
-job-search tool that is actively harmful: a user could rule out an employer
-because of data we made up.
-- **Deleted** both fabricated CSVs. Nothing is shipped in their place.
-- **Tri-state everywhere:** `is_sponsor()` / `CompanySignal` return
-  `True` / `False` / `None`; `None` means *unknown* and is never rendered as a
-  negative. `annotate()` is a no-op without a dataset, leaving columns NULL.
-- **Schema:** `Company.had_layoffs` `bool = False` → `Optional[bool] = None`
-  (a default of `False` asserted "no layoffs" for every unknown company).
-  Migration `cbb284f817e8`, up/down verified.
-- **Real loaders:** `VisaSponsorFilter.from_csv` auto-detects the employer
-  column across the official UK Home Office and USCIS export formats.
-- **`scripts/fetch_datasets.py`** downloads the real UK register (discovers the
-  current CSV on gov.uk), verifies it parses, writes atomically via a `.part`
-  file, and fails loudly rather than leaving a truncated file.
-- **UI honesty:** the "visa sponsors only" filter is *disabled* with an
-  explanation when no register is loaded; a caption reports when matching is
-  using the lexical fallback rather than semantic embeddings
-  (`facade.data_status()`). Removed hardcoded `stripe` demo defaults.
-- 20 new/rewritten tests. Totals: **180 Python + 11 JS green; ruff clean.**
-
-**Still not real in this environment** (network is blocked except PyPI): live
-API pulls, the actual dataset download, semantic embeddings (model hub
-unreachable), and any live browser render.
-
-### 2026-07-23 — Remaining core services surfaced (branch: claude/discovery-api-first)
-Every `core/` service is now reachable from the UI; nothing built in Phases
-1–10 is left unwired.
-- **Aggregator ingestion** (`ingest_aggregator`): Remotive (keyless), The Muse
-  (optional key), Adzuna (requires env keys, fails with a clear message).
-  Surfaced as a "Job boards (API)" Discovery mode, with the Remotive
-  attribution requirement shown in the UI.
-- **Full enrichment chain** in `refresh_matches`: dedup → link companies →
-  salary → ghost score → visa sponsor → company signals → score. Fixed a real
-  gap: jobs were never linked to their `Company` row (`link_companies`), so
-  visa/Glassdoor/layoff data could not be joined per job.
-- **Filters** on the Pipeline screen: min score, remote-only, hide ghost jobs,
-  visa sponsors only, new-grad/internship level.
-- **Digest** on the Export screen: rendered inline + Markdown and RSS
-  downloads (`digest_rss` added).
-- **Interview prep** in Draft Studio: questions derived from the JD, with a
-  downloadable prep list.
-- 7 new facade tests. Totals: **165 Python + 11 JS tests green; ruff clean.**
-
-### 2026-07-23 — Discovery reworked to API-first (branch: claude/discovery-api-first)
-- Facade gains `discover_from_url`: detects the ATS from a careers URL and pulls
-  its public feed; otherwise fetches politely (robots.txt honored, rate-limited)
-  and extracts `schema.org/JobPosting` JSON-LD. Recognized-but-unsupported ATS
-  (e.g. Workday) is reported explicitly rather than silently scraped.
-- **Discovery screen** reordered API-first: "Company careers URL (recommended)"
-  is the default mode; DuckDuckGo is retained but relabeled "Web Search
-  (fallback)" with a caveat about unstructured results.
-- Fixed a branch-chain bug introduced while restructuring the modes (the new
-  mode fell through to the paste-description branch), and moved the LLM guard
-  from the whole screen to only the modes that need it — the careers-URL and
-  paste-description modes now work without Ollama.
-- 5 new facade tests (ATS detect, JSON-LD fallback, unsupported ATS, robots
-  block, no-JSON-LD). Totals: **158 Python + 11 JS tests green; ruff clean.**
-
-### 2026-07-23 — Resume tooling surfaced in the UI
-- Facade gains `lint_resume`, `resume_pdf`, `resume_markdown`, `resume_json`,
-  `tailor_for_job`.
-- **Onboarding:** ATS-friendliness report (errors/warnings/suggestions) plus
-  one-click downloads — ATS-clean PDF, Markdown, and JSON Resume.
-- **Draft Studio:** "Tailor resume to this job" — shows emphasized skills and
-  honest gaps, and offers a per-company tailored ATS PDF. Fabrication is
-  impossible by construction (`assert_no_fabrication` in `core/resume`).
-- 4 new facade tests (lint severities, emoji flagging, PDF/MD/JSON render,
-  truthful tailoring). Totals: **153 Python + 11 JS tests green; ruff clean.**
-
-### 2026-07-23 — UI wiring (core services → Streamlit)
-- Added `core/facade.py` — the single, **tested** entry point `app.py` calls
-  (session-managed; returns plain dicts, never ORM objects), keeping business
-  logic out of the UI per CLAUDE.md.
-- `app.py`: DB-persist CV on parse; new **Pipeline** screen (ATS API ingest →
-  explainable scored matches → add-to-pipeline → kanban board + funnel);
-  Draft Studio now runs the **outreach compliance gate** before a Gmail draft
-  (blocks send until identity + postal address + opt-out + LIA pass).
-- 6 facade tests (temp-file DB, respx-mocked ingest). `app.py` verified via
-  `py_compile`, `ruff`, and a stubbed-streamlit module-load smoke test — a live
-  browser render was **not** performed here.
-- Totals now: **149 Python tests + 11 JS tests green; ruff clean.**
-
-### 2026-07-23 — Phases 1–10 (full platform build)
-Built the platform in phase order, one commit per phase, CI green throughout:
-- **P1 `core/db`** — SQLModel tables, Alembic, Fernet PII encryption, repos,
-  legacy JSON import (ADR 0003).
-- **P2 `core/ingestion`** — Greenhouse/Lever/Ashby + Adzuna/Muse/Remotive
-  adapters → canonical `JobPosting`; idempotent upsert; error isolation.
-- **P3 `core/fetching`** — ATS detection (regex), JSON-LD extraction (bs4),
-  robots-respecting rate-limited fetcher.
-- **P4 `core/matching`** — pluggable embeddings (hashing fallback), fuzzy dedup,
-  explainable resume↔JD scoring.
-- **P5 `core/resume`** — JSON Resume interchange, ATS linter, fpdf2 PDF,
-  truthful tailoring with `assert_no_fabrication`.
-- **P6 `core/tracking`** — kanban state machine, reminders, dup-prevention,
-  blacklist.
-- **P7 `core/outreach`** — verification, CAN-SPAM/GDPR footer + LIA + send caps,
-  single pre-send gate.
-- **P8 `extension/`** — MV3 human-in-the-loop autofill; tested field-mapping
-  core (Node); never auto-submits.
-- **P9 `core/enrichment` + `core/alerting`** — salary/company/visa/ghost
-  enrichment, filters, digest (MD/RSS) + Telegram/Discord.
-- **P10 `core/analytics` + E2E + deploy** — funnel, A/B, interview prep; full
-  E2E pipeline test; `scripts/send_digest.py` + Actions cron; ADR 0004.
-
-### 2026-07-23 — Phase 0 complete (code-touching hygiene)
-- Added `pyproject.toml` with ruff (lint + format) and mypy config.
-- Ruff baseline gate is `E`/`F`/`W`/`I`; fixed all findings: removed dead
-  imports/variables, replaced 4 bare `except:` with `except Exception:`, and
-  persisted onboarding preferences into `st.session_state` (previously dropped).
-  `ruff check .` and `ruff format --check .` both clean across 19 files.
-- Fixed the five Pydantic v2 deprecations `.dict()` → `.model_dump()`
-  (`app.py`, `core/storage.py` ×4).
-- Rewrote CI `lint` job: ruff check + ruff format are **blocking gates**;
-  mypy runs **advisory** (`continue-on-error`) until modules gain type coverage.
-  Replaced black/flake8/isort in `requirements-test.txt` with ruff.
-- Added GitHub issue templates (`phase.md`, `bug_report.md`, `config.yml`).
-- `.env` schema already covered by the existing comprehensive `.env.example`.
-- All 51 existing tests pass (`pytest`).
-- **Deferred to a follow-up (documented in `pyproject.toml`):** enabling ruff
-  `UP` (typing.List → list) and `B` (bugbear, e.g. `raise ... from`) rules, and
-  tightening mypy from advisory to blocking, module by module.
-
-### 2026-07-23 — Phase 0 kickoff (research + scaffolding)
-- Captured the platform research as `docs/RESEARCH.md`.
-- Added `ROADMAP.md` (11 phases, 0–10, with acceptance criteria).
-- Added this `PROGRESS.md` and `CLAUDE.md` (conventions).
-- Started the ADR log under `docs/adr/`
-  (0001 record-architecture-decisions, 0002 target-architecture).
-- **Still open for Phase 0:** ruff/mypy config + CI lint step; Pydantic v2
-  deprecation fixes; `.env` schema doc; GitHub issue templates.
-- No code behavior changed in this session — docs/scaffolding only.
+# Project status and continuation
+
+Last verified: 2026-10-28, Asia/Kolkata. Current cleanup starts at
+[`2db88ef`](https://github.com/aaron-seq/CareerAgent/commit/2db88ef8ab15387c2eb9062158250a338cc70e18).
+This checkpoint replaces the repeated session log; its complete history remains
+in the [immutable prior log](https://github.com/aaron-seq/CareerAgent/blob/2db88ef8ab15387c2eb9062158250a338cc70e18/PROGRESS.md).
+
+## Active delivery
+
+- [Issue #85](https://github.com/aaron-seq/CareerAgent/issues/85): reduce duplicate
+  documentation and maintenance files in the runtime image. Branch:
+  `refactor/85-repository-cleanup`; draft PR publication and final CI pending.
+- [Private maintenance Project](https://github.com/users/aaron-seq/projects/7),
+  [milestone 1](https://github.com/aaron-seq/CareerAgent/milestone/1).
+  Status is manual: Todo = captured/ready, In Progress = implementation or
+  review/retest, Done = accepted and verified. Priority P2; no dates/assignees.
+- README owns quickstart; [usage](docs/USAGE.md) owns detailed user workflows;
+  [operations](docs/OPERATIONS.md) owns deployment, backups and upgrades;
+  [contributing](CONTRIBUTING.md) owns developer checks; [architecture](ARCHITECTURE.md)
+  owns the component map; [locks](requirements/locks/README.md) owns dependencies.
+- Repeated module trees, setup, generic templates and superseded research/phase
+  narration removed. Distinct ADRs, published reviews/validation, font notices,
+  migrations, lockfiles and all application behavior retained. Older README
+  workflow anchors lead to the replacement guides.
+- `.dockerignore` excludes docs/tests/extension/CI and test/audit dependency
+  files. Existing Docker smoke now rejects those files in the image and checks
+  required fonts, notices, theme, migration config and runtime lock.
+- Existing checkout and its untracked audit, credentials, database, personal
+  files, environments and other worktrees were preserved. No local output was
+  purged. No merge, release, deployment or history rewrite occurred.
+
+## Validation and limits
+
+Baseline at `2db88ef`, agent-run in a secret-free tracked archive on Windows
+Python 3.11.9: fresh source-manifest install succeeded; Ruff 0.15.8 lint/format,
+mypy 2.4.0 (124 files) and Node 22.18.0 tests (63) passed. Python tests could not
+collect: Windows Application Control rejected SQLAlchemy 2.1.6's native module.
+The OS policy was not changed. This Windows graph is not a Linux hash-lock result.
+
+Final local checks and Linux CI are pending. Docker's local Linux daemon was
+unavailable; starting installed Docker Desktop did not establish a connection.
+The image build/smoke and Linux locked Python 3.11-3.13 matrix must pass before
+acceptance. No live provider, Gmail/OAuth, employer-form, Postgres, accessibility,
+load/recovery deployment or history-wide secret scan was performed in this cleanup.
+
+Selected threat scope: packaging must omit maintenance files and retain runtime
+assets/licenses; docs must preserve key/data recovery and personal-data warnings.
+The final-review agent executed the actual package assertion block with synthetic
+files: clean fixture passed, eight contaminations and seven missing assets failed
+as intended. That checks the oracle, not a built image. Docs review found no missing
+local links or lost recovery/consent instructions. Agents are delegated system
+perspectives, not independent human reviewers; orchestrator verification is pending.
+
+GitHub read-only discovery: private vulnerability reporting is disabled; code
+scanning returned no analysis; Dependabot-alert access returned disabled/403.
+These are access/configuration observations, not clean scanner results. Existing
+security settings were not changed. Do not put new confidential findings in public
+issues. See the existing [security audit](docs/SECURITY_AUDIT.md) for known scope.
+
+## Retained work and evidence
+
+- Keep the unused `ollama` SDK candidate until six runtime/test locks and clean
+  environments can be revalidated together. No dependency upgrades in this change.
+- Dormant variant helpers remain tracked by [#35](https://github.com/aaron-seq/CareerAgent/issues/35);
+  public compatibility and database contracts need evidence before removal.
+- [#38](https://github.com/aaron-seq/CareerAgent/issues/38),
+  [#41](https://github.com/aaron-seq/CareerAgent/issues/41) and
+  [#42](https://github.com/aaron-seq/CareerAgent/issues/42) remain owner/security
+  prerequisites. This cleanup does not resolve historical exposure or hosted use.
+- Product/workflow findings [#65-#75](https://github.com/aaron-seq/CareerAgent/issues?q=is%3Aissue+is%3Aopen),
+  [first-use UX #77](https://github.com/aaron-seq/CareerAgent/issues/77) and
+  [UI migration #78](https://github.com/aaron-seq/CareerAgent/issues/78) remain separate.
+- PR #76 changes overlapping README text and adds a release guide plus extension
+  and ADR fixes; do not discard those behavioral fixes when reconciling docs.
+  Dependency PRs #79-#84 need their own reviewed lock refresh.
+- Published [engineering](docs/ENGINEERING_REVIEW_2026-10-19.md),
+  [product](docs/PRODUCT_UX_REVIEW_2026-10-19.md), [CV](docs/CV_VALIDATION.md)
+  and [workflow](docs/WORKFLOW_AUDIT.md) results validate only their stated revisions.
+  [Roadmap](ROADMAP.md) phases describe implementations, not production acceptance.
+
+## Resume here
+
+1. Verify branch/HEAD, `git status`, issue/PR, Project and milestone state.
+2. Inspect the cleanup PR diff and current-head CI; resolve introduced failures.
+3. In a fresh supported environment install the matching graph and run
+   `python -m scripts.check`, then `python -m scripts.check docker`.
+4. Reconcile PR #76's docs with the canonical guides; preserve its extension/ADR
+   changes. Keep unresolved validation and product/security work linked above.
+5. Keep the issue/milestone open until acceptance; merging/deployment need their
+   own authorization. Revert cleanup commits to roll back; no data migration.

@@ -1,252 +1,65 @@
 # Contributing to CareerAgent
 
-Thank you for your interest in contributing to CareerAgent! This document provides guidelines for contributing to the project.
+## Development setup
 
-## Getting Started
+Follow the [quickstart](README.md#getting-started) in a virtual environment.
+Use Python 3.11-3.13 and Node.js for extension tests. Install the matching test
+lock on Linux x86_64; other platforms resolve `requirements-test.txt` and
+validate their own graph. [Dependency instructions](requirements/locks/README.md)
+cover lock refresh and advisory scans. Ordinary tests need no model or API key.
+Copy `.env.example` to `.env` only when configuring optional integrations.
 
-### Prerequisites
+## Changes and checks
 
-- Python 3.11 or higher (CI covers 3.11–3.13)
-- An LLM provider for model-based parsing/generation: Ollama locally, **or** a free Groq
-  API key (console.groq.com/keys) set as `GROQ_API_KEY` — see ADR 0005
-- Git for version control
+Link an existing issue or open one describing the problem and acceptance
+criteria. Use a dedicated `feature/`, `fix/`, `docs/`, `refactor/` or `test/`
+branch; keep unrelated work separate. Follow [repository conventions](CLAUDE.md)
+and the [component contracts](ARCHITECTURE.md).
 
-### Development Setup
-
-1. Fork the repository
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/CareerAgent.git
-   cd CareerAgent
-   ```
-
-3. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-4. Install dependencies (test tools included; `pytest` fails at collection
-   without them):
-   ```bash
-   python -m pip install --require-hashes --only-binary=:all: \
-     -r requirements/locks/test-py311.txt
-   ```
-
-   Use `312` or `313` for that interpreter. These locks target Linux x86_64;
-   [dependency instructions](requirements/locks/README.md) cover refresh,
-   advisory checks and other platforms. CV building, browsing, deterministic
-   tailoring and ordinary tests need no model or API key.
-
-5. Pick an LLM provider:
-   ```bash
-   ollama pull llama3.1:8b
-   ```
-   or set `GROQ_API_KEY` after the next step.
-
-6. Copy environment template:
-   ```bash
-   cp .env.example .env
-   ```
-
-## Development Workflow
-
-### Branch Naming Convention
-
-- `feature/` - New features
-- `fix/` - Bug fixes
-- `docs/` - Documentation updates
-- `refactor/` - Code refactoring
-- `test/` - Test additions or modifications
-
-Example: `feature/add-job-source`
-
-### Making Changes
-
-1. Create a new branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Make your changes following the code style guidelines below
-
-3. Test your changes locally:
-   ```bash
-   streamlit run app.py
-   ```
-
-4. Run the Python and extension tests and lint/format gates:
-   ```bash
-   python -m scripts.check
-   ```
-
-   This runs lint, format, required mypy, Python coverage and Node extension tests.
-   Select subsets with `python -m scripts.check lint test`. Run the optional
-   container check with `python -m scripts.check docker`; it executes real app
-   screens, checks encrypted data across replacement containers, and probes
-   Streamlit health. A trusted proxy CA can be supplied with
-   `--docker-ca-bundle /path/to/trusted.pem`. Pull requests run Docker checks in CI.
-
-5. Commit your changes:
-   ```bash
-   git add .
-   git commit -m "feat: add feature description"
-   ```
-
-### Commit Message Convention
-
-Follow conventional commits:
-
-- `feat:` - New features
-- `fix:` - Bug fixes
-- `docs:` - Documentation changes
-- `style:` - Code style changes (formatting, etc.)
-- `refactor:` - Code refactoring
-- `test:` - Test additions or changes
-- `chore:` - Maintenance tasks
-
-Example:
-```
-feat: add WhatsApp integration for message drafts
-
-- Implement WhatsAppClient class
-- Add click-to-chat URL generation
-- Update UI with WhatsApp draft button
+```bash
+python -m scripts.check             # lint, format, mypy, Python coverage, Node
+python -m scripts.check lint test   # selected checks while developing
+python -m scripts.check docker      # build, actual screens, persistence, health
 ```
 
-## Code Style Guidelines
+The full default command is required before submitting a change. CI exercises
+Linux Python 3.11-3.13 and Docker; a local result covers its actual environment.
+For a trusted TLS proxy, Docker accepts
+`--docker-ca-bundle /path/to/trusted.pem`; keep certificate verification on.
 
-### Python Code Standards
+Add meaningful pytest regression tests in `tests/test_*.py` for changed
+behavior. Mock external APIs, including Ollama, job boards and Gmail. The
+extension has separate tests in `extension/test/`, run with `node --test`
+from `extension/`. Do not weaken assertions or skip checks to get a green run.
 
-- Follow PEP 8 style guide
-- Use type hints where appropriate
-- Maximum line length: 88 characters (Ruff formatter)
-- Use docstrings for all public functions and classes
+Exercise affected screens with synthetic data. For parsing/export changes,
+check real PDF hyperlinks, selectable text and grounded claims. For workflow
+changes, check navigation, refresh, per-CV/job state and failed writes. For
+provider changes, state whether the boundary was mocked or actually exercised.
+Do not send messages or submit employer applications as routine verification.
 
-### Docstring Format
+## Code and privacy
 
-```python
-def function_name(param1: str, param2: int) -> bool:
-    """
-    Brief description of function.
-    
-    Args:
-        param1: Description of param1
-        param2: Description of param2
-        
-    Returns:
-        Description of return value
-        
-    Raises:
-        ValueError: When invalid input is provided
-    """
-    pass
-```
+Ruff formats Python to 88 columns; mypy checks all repository Python files.
+Keep functions focused, document public contracts and use Pydantic v2 models.
+Put business rules in `core/` services rather than new UI paths. Log actionable
+failures without model responses, CV content or credentials. Preserve theme,
+offline-font, encryption and human-review rules in [CLAUDE.md](CLAUDE.md).
 
-### Code Organization
+Do not commit local data, credentials, keys or raw sensitive logs. Review
+explicitly selected paths with `git diff --cached` before committing; avoid
+staging an entire workspace blindly. Preserve licenses, migrations and useful
+validation evidence.
 
-- Keep functions focused and under 50 lines
-- Use Pydantic models for data structures
-- Handle errors gracefully with try-except blocks
-- Log actionable failures without model responses, CV content, or credentials.
+## Pull requests
 
-## Testing Guidelines
+Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`,
+`chore:`). Explain the concrete problem and resulting behavior in the PR;
+include the issue, actual checks and environment, unrun checks, compatibility
+and rollback where material. Add screenshots for visible changes. Distinguish
+self/agent review from independent human review.
 
-### Manual Testing Checklist
-
-Before submitting a PR, test the following:
-
-- [ ] LLM connection works (both Ollama and Groq providers)
-- [ ] CV parsing from PDF works, and contact links (GitHub/LinkedIn/project
-      repos) match the PDF's real hyperlinks rather than a guessed URL
-- [ ] CV parsing from text works
-- [ ] Job discovery search works
-- [ ] Contact finder returns results
-- [ ] Email draft generation works
-- [ ] Cover letter generation works, and any metric it cites actually
-      appears in the CV
-- [ ] Draft quality validation works
-- [ ] Gmail draft creation works (if configured)
-- [ ] WhatsApp link generation works
-- [ ] Data persistence in local storage
-- [ ] Navigation between all pages works
-
-### Unit Tests
-
-If adding unit tests:
-
-- Place tests in `tests/` directory
-- Name test files as `test_module_name.py`
-- Use pytest framework
-- Mock external dependencies (Ollama, DuckDuckGo, Gmail API)
-
-## Pull Request Process
-
-1. Update README.md if you've added features
-2. Run relevant automated/manual checks; state which external integrations were
-   actually exercised and which remain mocked or unrun.
-3. Update CHANGELOG.md with your changes (if exists)
-4. Push to your fork and create a PR
-
-### PR Title Format
-
-```
-[Type] Brief description
-```
-
-Examples:
-- `[Feature] Add public ATS job source`
-- `[Fix] Correct email validation logic`
-- `[Docs] Update installation instructions`
-
-### PR Description Template
-
-```markdown
-## Description
-Brief description of changes
-
-## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Documentation update
-- [ ] Code refactoring
-
-## Testing
-Describe testing performed
-
-## Screenshots (if applicable)
-Add screenshots for UI changes
-
-## Checklist
-- [ ] Code follows style guidelines
-- [ ] Self-review completed
-- [ ] Manual testing completed
-- [ ] Documentation updated
-```
-
-## Core Modules Overview
-
-See `ARCHITECTURE.md` for the full module map and diagrams — it's the single
-source of truth for this, kept in sync with the code. In short: `app.py`
-holds no business logic; the DB-backed platform services (job ingestion/
-matching, tracking, outreach compliance, enrichment, analytics, resume/
-cover-letter generation) go through `core/facade.py`, while CV parsing,
-contact finding, personalization, and local storage are still called
-directly. Compliant Gmail creation uses the facade. The guided workflow and
-functional validation decisions are recorded in ADR 0007.
-
-## Questions or Issues?
-
-Feel free to:
-- Open an issue for bugs or feature requests
-- Start a discussion for questions
-- Reach out via GitHub discussions
-
-## Code of Conduct
-
-- Be respectful and constructive
-- Welcome newcomers and help them contribute
-- Focus on improving the project
-- Provide helpful feedback in code reviews
-
-Thank you for contributing to CareerAgent!
+Update the relevant canonical guide and [current checkpoint](PROGRESS.md).
+Add an [ADR](docs/adr/) only for a consequential architectural decision.
+Keep acceptance and external-integration gaps explicit. Be respectful and
+constructive in issues and reviews.

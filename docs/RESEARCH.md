@@ -6,70 +6,14 @@
 > official sources at build time. See `ROADMAP.md` for the phased plan derived
 > from this research and `PROGRESS.md` for current status.
 
-## TL;DR
-- **CareerAgent today is a single-file Streamlit prototype (~818-line `app.py`) with a modular `core/` package** built around local Ollama LLMs, DuckDuckGo search, PyPDF2/pdfplumber CV parsing, and Gmail draft creation — it does outreach-drafting, not job ingestion or auto-apply, and has no database, no real tests, and unreliable web-scraping via DuckDuckGo.
-- **The strongest free foundation is API-first job ingestion** (ATS public APIs: Greenhouse/Lever/Ashby require no auth; Adzuna free tier; The Muse 3,600 req/hr keyed; Remotive/RemoteOK/Himalayas no-auth) **plus JSON-LD `JobPosting` extraction**, with headless scraping reserved as a fallback and full unattended LinkedIn auto-apply avoided entirely.
-- **Recommended architecture: keep Python, migrate to FastAPI + Postgres (Supabase/Neon free) + pgvector, use human-in-the-loop autofill (Manifest V3 extension) instead of unattended mass-apply,** and ship in ~10 phased sessions tracked via ROADMAP.md/PROGRESS.md/CLAUDE.md with ADRs.
+## Scope and historical context
 
----
-
-## STEP 1 — The Existing Repository
-
-**Repo:** `github.com/aaron-seq/CareerAgent` — Public, MIT license, Python 95.2% / CSS 4.2% / Dockerfile 0.6%, 6 commits, 0 stars, 1 open PR. Created under user `aaron-seq`.
-
-### Stated purpose
-"A local AI-powered career assistant for personalized job outreach. This application automates the process of finding contacts, generating tailored email drafts, and managing your job search workflow using local LLMs." The emphasis is privacy (local inference) and outreach, NOT high-volume job aggregation or auto-application.
-
-### Tech stack (from README + ARCHITECTURE.md + app.py)
-- **Frontend/UI:** Streamlit 1.29+ (single `app.py`, 5 screens: Onboarding, Discovery, Contacts, Draft Studio, Export). Custom CSS in `assets/style.css`.
-- **LLM:** Ollama local inference; models offered in UI selectbox: `llama3.1:8b`, `llama3.2:3b`, `qwen2.5:7b`, `mistral:7b`. Custom `LocalLLMClient` in `core/llm.py` with JSON parsing + retry.
-- **Data validation:** Pydantic 2.5+ (`core/models.py`: `SearchQuery`, `CVProfile`, `JobPosting`, `ContactCandidate`, `EmailDraft`).
-- **PDF parsing:** PyPDF2 + pdfplumber (`core/cv_parser.py`). *(Since migrated to pypdf, the maintained successor — issue #21.)*
-- **Search:** `duckduckgo-search` library (`core/job_finder.py`, `core/contact_finder.py`).
-- **Email:** Google Gmail API for draft creation (`core/gmail_drafts.py`); WhatsApp click-to-chat URL generation (`core/whatsapp.py`).
-- **Storage:** local filesystem JSON (`core/storage.py`, `careeragent_data/` directory) + ZIP export.
-- **Infra:** Dockerfile + docker-compose.yml (bundles Streamlit + Ollama), `.github/workflows/` present, `.streamlit/` config, `requirements.txt` + `requirements-test.txt`, `.env.example`.
-
-### Module layout (`core/`)
-`llm.py` (Ollama client), `models.py` (Pydantic), `validators.py` (draft quality checks), `cv_parser.py`, `job_finder.py`, `contact_finder.py`, `personalization.py`, `gmail_drafts.py`, `whatsapp.py`, `prompts.py`, `storage.py`. Plus top-level `app.py`, `ARCHITECTURE.md`, `CONTRIBUTING.md`, `tests/`.
-
-### What's implemented vs stubbed vs missing
-**Implemented (working code visible in app.py):**
-- CV upload (PDF or pasted text) → LLM extraction into `CVProfile` (name, email, experiences, projects, skills).
-- Job discovery via 3 modes: DuckDuckGo web search, paste job URL (fetch+parse), paste job description.
-- Contact discovery: DuckDuckGo-based hiring-manager search + email permutation generation + manual contact entry with confidence scoring (`email_confidence`, `confidence_score`).
-- Draft Studio: LLM email generation with 3 angles (technical/impact/product), regenerate, editable subject/body.
-- Draft validation: 7 quality gates (has metric, project link, company hook, clear CTA, under 180 words, no emojis, no bullet dashes) with a percentage quality score.
-- Gmail draft creation + local save + WhatsApp link.
-- Export screen: draft history + ZIP bundle.
-
-**Weak / fragile:**
-- **Job discovery relies entirely on `duckduckgo-search`** — unstructured, rate-limited, brittle, returns search snippets not structured postings. No dedicated job-board integrations.
-- **Contact finding is DuckDuckGo + email permutation guessing** — no verification (no MX/SMTP check), high bounce risk.
-- No salary, seniority, remote/onsite, posting-date fields populated from real sources.
-
-**Missing entirely:**
-- No relational database (JSON files only) — no dedup, no pipeline tracking, no historical analytics.
-- No real job-board/ATS API integrations.
-- No auto-apply or autofill of any kind.
-- No resume tailoring/generation (only parsing) — no JSON Resume, no PDF rendering.
-- No embeddings / semantic job-to-CV matching / scoring.
-- No auth/multi-user (single-user local app).
-- No PII encryption at rest (resumes stored as plaintext JSON).
-- No email verification, no deliverability infra (SPF/DKIM/DMARC), no send scheduling.
-- No visa/sponsorship filtering, no company enrichment, no alerting.
-
-### Code quality / testing / CI / docs
-- `app.py` is monolithic (818 lines) mixing UI, orchestration, and business logic; state managed via `st.session_state` — hard to test, no separation of API layer.
-- `tests/` directory + `requirements-test.txt` + pytest referenced, but the repo is early (6 commits) and test coverage is almost certainly minimal/skeletal.
-- `.github/workflows/` present but content unknown — likely minimal or a stub CI.
-- Docs are actually decent for a prototype: README + a genuinely detailed ARCHITECTURE.md (with mermaid diagrams, component tables, design decisions) + CONTRIBUTING.md.
-- No `CLAUDE.md`, no ROADMAP.md, no PROGRESS.md, no ADRs.
-- `.dict()` used on Pydantic model (deprecated in Pydantic v2 → should be `.model_dump()`).
-
-**Verdict:** A clean, well-documented but narrow prototype. The `core/` module boundaries are a good scaffold to build on. The biggest liabilities to fix first: replace DuckDuckGo job discovery with real APIs, add a database, and add PII encryption. The outreach engine (personalization + validators + Gmail drafts) is genuinely reusable.
-
----
+This July 2026 dossier evaluated the original outreach prototype. Its inferred
+module inventories and suggested phase plan are superseded by
+[architecture](../ARCHITECTURE.md), [roadmap](../ROADMAP.md) and
+[current status](../PROGRESS.md). The [original dossier](https://github.com/aaron-seq/CareerAgent/blob/2db88ef8ab15387c2eb9062158250a338cc70e18/docs/RESEARCH.md)
+retains that historical assessment. The source/API observations below remain
+research leads with the verification caveats at the end.
 
 ## STEP 2 — Tooling Landscape (free/open-source first)
 
@@ -351,66 +295,6 @@ company's board slug on the Pipeline screen instead.
 7. **Disclosure norms** — don't impersonate; outreach should be honest about being from the candidate.
 
 ---
-
-## STEP 4 — Recommended Architecture & Phased Roadmap
-
-### Recommended stack (opinionated, free-tier, single-dev maintainable)
-- **Language:** stay Python (repo is 95% Python, Ollama/pydantic already there).
-- **Backend:** **FastAPI** (typed, async, testable) as an API layer; extract business logic out of `app.py` into services. Keep Streamlit OR move UI to it later.
-- **UI:** keep **Streamlit** initially (fast, already built); optionally add a Manifest V3 **browser extension** for autofill (separate sub-project).
-- **DB:** **Postgres via Supabase or Neon free tier** + **pgvector** for embeddings; SQLite for local dev. Replace JSON-file storage.
-- **ORM/migrations:** SQLModel or SQLAlchemy + Alembic.
-- **LLM:** Ollama local (default, PII-safe) + Gemini/Groq free tiers for burst; **Pydantic AI** for structured extraction/agents.
-- **Embeddings:** sentence-transformers `all-MiniLM-L6-v2` (local, free) → pgvector.
-- **Job ingestion:** ATS public APIs + Adzuna/Muse/Remotive + JSON-LD (`extruct`) + Jina Reader/Crawl4AI fallback.
-- **Scheduling:** APScheduler locally / GitHub Actions cron for digests.
-- **Auth (when multi-user):** Supabase Auth.
-- **Email:** Gmail API (drafts already work) + verification via dnspython/email-validator.
-- **Autofill:** Manifest V3 extension, human-in-the-loop.
-- **Deploy:** HF Spaces or self-host (Ollama needs local compute); GitHub Actions for scheduled jobs.
-- **Testing:** pytest + `respx`/`vcr.py` for API mocking; ruff + mypy; GitHub Actions CI.
-
-### Stateful resumption / repo hygiene
-- **`CLAUDE.md`** — conventions file.
-- **`ROADMAP.md`** — the phase list with acceptance criteria.
-- **`PROGRESS.md`** — living log: current phase, what's done, next action, blockers, updated at end of each session.
-- **`docs/adr/`** — Architecture Decision Records (one MD per significant decision, numbered).
-- **GitHub issue templates** — one per phase with acceptance-criteria checklist.
-- **Conventional commits** + a branch per phase.
-
-### Phased delivery roadmap (~10 phases, each ~one focused session, shippable, tested)
-
-**Phase 0 — Foundation & hygiene.** Add CLAUDE.md, ROADMAP.md, PROGRESS.md, ADR folder, issue templates; set up ruff+mypy+pytest+CI in `.github/workflows`; fix Pydantic v2 deprecations; add `.env` schema. *AC:* CI green, lint clean, docs present.
-
-**Phase 1 — Data layer.** Introduce Postgres (Supabase/Neon) + SQLModel + Alembic; migrate models (`CVProfile`, `JobPosting`, `Contact`, `EmailDraft`, `Application`) from JSON to DB; add PII encryption for resume fields. *AC:* CRUD + migration tests pass; JSON import path works.
-
-**Phase 2 — Real job ingestion (APIs).** Replace DuckDuckGo discovery with an ingestion service: Greenhouse/Lever/Ashby public APIs + Adzuna + The Muse + Remotive; normalize into a canonical `JobPosting` schema; store with source + fetched-at. *AC:* pulls ≥N real jobs from ≥3 sources into DB with tests (mocked HTTP).
-
-**Phase 3 — ATS detection + JSON-LD extraction + polite fetcher.** Company-domain → ATS detection (regex signatures); `extruct` JSON-LD `JobPosting` parser; robots.txt + rate-limit + cache layer; Jina Reader/Crawl4AI fallback for pages without JSON-LD. *AC:* given a careers URL, returns structured jobs; robots.txt honored; tests with fixtures.
-
-**Phase 4 — Dedup + embeddings + scoring.** Fuzzy dedup (title+company+location, canonical URL); sentence-transformers embeddings → pgvector; resume↔JD cosine score + keyword-gap (KeyBERT/RapidFuzz) with explainability. *AC:* duplicate jobs collapse; each job gets an explainable match score vs the CV.
-
-**Phase 5 — Resume tooling.** LLM parse into **JSON Resume schema**; ATS-friendliness linter (flag tables/columns/headers/icons); render via RenderCV (YAML→PDF); tailored-variant generation per JD (truthful, no fabrication). *AC:* upload → JSON Resume → ATS-clean PDF; tailoring cites only real profile data.
-
-**Phase 6 — Application tracking pipeline.** Kanban states (saved→applied→screening→interview→offer/rejected); follow-up reminders; duplicate-application prevention; company blacklist. *AC:* full lifecycle tracked; reminders fire; no double-apply.
-
-**Phase 7 — Outreach engine hardening (compliance).** Reuse existing personalization + validators + Gmail drafts; add email verification (dnspython/email-validator), suppression list, per-campaign LIA record, postal address + opt-out in every template, send caps + jitter, reply detection. *AC:* no send without verification + suppression check; compliance fields enforced by tests.
-
-**Phase 8 — Human-in-the-loop autofill extension.** Manifest V3 extension: profile in `chrome.storage`, content-script field detection (autocomplete→ARIA→label→fuzzy→LLM fallback), per-site activation, fills but **user reviews + submits**; optimized for Greenhouse/Lever/Ashby. *AC:* fills a real Greenhouse form correctly; never auto-submits.
-
-**Phase 9 — Enrichment, filters, alerting.** Salary (Adzuna salary API), company enrichment (layoffs.fyi, Glassdoor rating), **visa sponsorship filter** (USCIS H-1B Data Hub / DOL LCA / UK sponsor register), ghost-job detection, new-grad/intern filter; alerting via Telegram/Discord/email digest/RSS (GitHub Actions cron). *AC:* jobs annotated with salary/visa/company signals; daily digest delivered.
-
-**Phase 10 — Analytics + polish + deploy.** Application→response funnel, A/B resume-variant tracking; interview-prep generation from JD; deploy (HF Spaces / self-host + scheduled Actions); docs + onboarding. *AC:* dashboard renders funnel; deployment reproducible; README updated.
-
----
-
-## Recommendations
-1. **First session (Phase 0–1):** Establish repo hygiene + move off JSON to Postgres. This unblocks everything and is low-risk. Benchmark to proceed: CI green + DB migration tested.
-2. **Prioritize API-first ingestion (Phase 2–3) over any scraping.** The ATS public APIs + Adzuna/Muse/Remotive + JSON-LD give you the bulk of job coverage with zero legal risk and no proxies. Only add headless scraping (Crawl4AI) when a target lacks both an API and JSON-LD.
-3. **Build autofill as human-in-the-loop from day one (Phase 8) — never unattended mass-apply.** This is the single most important design decision for staying on the right side of ToS/ethics and avoiding account bans.
-4. **Keep resume PII local + encrypted.** Use Ollama for resume parsing/tailoring; reserve cloud LLM free tiers for non-PII scale tasks (job extraction, dedup).
-5. **Treat outreach as regulated (Phase 7).** Bake CAN-SPAM/GDPR compliance into the data model (suppression list, postal address, opt-out, LIA) rather than bolting it on.
-6. **Thresholds that change the plan:** if job volume needs exceed free-tier quotas (e.g., Adzuna's monthly cap), shift to more ATS direct pulls + JSON-LD rather than paying; if you need multi-user/hosted, add Supabase Auth + move Ollama to a hosted GPU or swap to Gemini/Groq free tiers.
 
 ## Caveats
 - **Repo internals:** module-level code was partly inferred from README + ARCHITECTURE.md + `app.py`; verify exact dependency versions and test coverage directly.
