@@ -1,6 +1,6 @@
 # Project status and continuation
 
-Last verified: 2026-10-28, Asia/Kolkata. Current cleanup starts at
+Last verified: 2026-10-28T21:05:37+05:30 (Asia/Kolkata). Cleanup starts at
 [`2db88ef`](https://github.com/aaron-seq/CareerAgent/commit/2db88ef8ab15387c2eb9062158250a338cc70e18).
 This checkpoint replaces the repeated session log; its complete history remains
 in the [immutable prior log](https://github.com/aaron-seq/CareerAgent/blob/2db88ef8ab15387c2eb9062158250a338cc70e18/PROGRESS.md).
@@ -52,8 +52,12 @@ returned zero advisory rows (96/95/95 distributions). The initial scan returned
 45 feed rows across three packages; duplicates/aliases are not distinct verified
 application vulnerabilities. Current-head Linux matrix and Docker results are
 recorded in the [PR checks and validation record](https://github.com/aaron-seq/CareerAgent/pull/86).
-Acceptance requires those checks; an older passing revision does not validate
-new dependency graphs. No scan exclusions or CI gates changed.
+[CI at `f03fb24`](https://github.com/aaron-seq/CareerAgent/actions/runs/40713225520)
+is verified green: 922 Python tests on each supported minor, 63 extension tests,
+lint/type and three advisory gates pass. The real Docker smoke passed package
+exclusions, runtime assets, screens, encrypted replacement-container persistence
+and health. This checkpoint-only follow-up changes no application code or graph;
+read the PR for its exact current-head checks. No scan exclusions or CI gates changed.
 
 Docker's local Linux daemon was unavailable; starting installed Docker Desktop
 did not establish a connection. Full Windows Python execution remained blocked
@@ -78,8 +82,8 @@ issues. See the existing [security audit](docs/SECURITY_AUDIT.md) for known scop
 
 ## Retained work and evidence
 
-- The SDK removal and four version changes require current-head CI; see #87
-  and the dependency guide. Existing API/CLI behavior must remain supported.
+- SDK removal and four version changes are retested in #87; the unmerged draft
+  remains awaiting review. Existing API/CLI behavior stays supported.
 - Dormant variant helpers remain tracked by [#35](https://github.com/aaron-seq/CareerAgent/issues/35);
   public compatibility and database contracts need evidence before removal.
 - [#38](https://github.com/aaron-seq/CareerAgent/issues/38),
