@@ -9,7 +9,7 @@ in the [immutable prior log](https://github.com/aaron-seq/CareerAgent/blob/2db88
 
 - [Issue #85](https://github.com/aaron-seq/CareerAgent/issues/85): reduce duplicate
   documentation and maintenance files in the runtime image. Branch:
-  `refactor/85-repository-cleanup`; draft PR publication and final CI pending.
+  `refactor/85-repository-cleanup`; [draft PR #86](https://github.com/aaron-seq/CareerAgent/pull/86) is published, unmerged.
 - [Private maintenance Project](https://github.com/users/aaron-seq/projects/7),
   [milestone 1](https://github.com/aaron-seq/CareerAgent/milestone/1).
   Status is manual: Todo = captured/ready, In Progress = implementation or
@@ -20,7 +20,7 @@ in the [immutable prior log](https://github.com/aaron-seq/CareerAgent/blob/2db88
   owns the component map; [locks](requirements/locks/README.md) owns dependencies.
 - Repeated module trees, setup, generic templates and superseded research/phase
   narration removed. Distinct ADRs, published reviews/validation, font notices,
-  migrations, lockfiles and all application behavior retained. Older README
+  migrations and application source retained. Older README
   workflow anchors lead to the replacement guides.
 - `.dockerignore` excludes docs/tests/extension/CI and test/audit dependency
   files. Existing Docker smoke now rejects those files in the image and checks
@@ -37,11 +37,29 @@ mypy 2.4.0 (124 files) and Node 22.18.0 tests (63) passed. Python tests could no
 collect: Windows Application Control rejected SQLAlchemy 2.1.6's native module.
 The OS policy was not changed. This Windows graph is not a Linux hash-lock result.
 
-Final local checks and Linux CI are pending. Docker's local Linux daemon was
-unavailable; starting installed Docker Desktop did not establish a connection.
-The image build/smoke and Linux locked Python 3.11-3.13 matrix must pass before
-acceptance. No live provider, Gmail/OAuth, employer-form, Postgres, accessibility,
-load/recovery deployment or history-wide secret scan was performed in this cleanup.
+At cleanup commit `4f0bf0d`, [published Linux CI](https://github.com/aaron-seq/CareerAgent/actions/runs/40683501579)
+passed lint/type, all 922 Python tests on each of 3.11-3.13, and 63 extension
+tests. The unchanged dependency locks failed the live advisory gates; Docker was
+skipped because it depends on them. This triggered the bounded [#87 refresh](https://github.com/aaron-seq/CareerAgent/issues/87):
+Streamlit 1.66.1, Pillow 13.0.0, pypdf 6.21.3 and certifi 2026.10.19. The unused
+Ollama Python SDK was removed from the manifest and six runtime/test locks;
+all unrelated pins/hashes remain identical. Scanner-lock certifi was refreshed.
+
+Personally run on the refresh: 10 isolated lock tests passed
+(`python -m pytest --noconftest tests/test_dependency_locks.py -q`; these tests
+use no DB fixtures). Strict pip-audit 2.10.1 checks of each hashed test graph
+returned zero advisory rows (96/95/95 distributions). The initial scan returned
+45 feed rows across three packages; duplicates/aliases are not distinct verified
+application vulnerabilities. Current-head Linux matrix and Docker results are
+recorded in the [PR checks and validation record](https://github.com/aaron-seq/CareerAgent/pull/86).
+Acceptance requires those checks; an older passing revision does not validate
+new dependency graphs. No scan exclusions or CI gates changed.
+
+Docker's local Linux daemon was unavailable; starting installed Docker Desktop
+did not establish a connection. Full Windows Python execution remained blocked
+by the OS policy; a personally repeated full runner timed out and its pytest
+child was stopped. No live provider, Gmail/OAuth, employer-form, Postgres,
+accessibility, scale/deployment recovery or history-wide secret scan was run.
 
 Selected threat scope: packaging must omit maintenance files and retain runtime
 assets/licenses; docs must preserve key/data recovery and personal-data warnings.
@@ -49,7 +67,8 @@ The final-review agent executed the actual package assertion block with syntheti
 files: clean fixture passed, eight contaminations and seven missing assets failed
 as intended. That checks the oracle, not a built image. Docs review found no missing
 local links or lost recovery/consent instructions. Agents are delegated system
-perspectives, not independent human reviewers; orchestrator verification is pending.
+perspectives, not independent human reviewers. The orchestrator checked 71 local
+links/fragments and repeated the clean/contaminated package assertion scenarios.
 
 GitHub read-only discovery: private vulnerability reporting is disabled; code
 scanning returned no analysis; Dependabot-alert access returned disabled/403.
@@ -59,8 +78,8 @@ issues. See the existing [security audit](docs/SECURITY_AUDIT.md) for known scop
 
 ## Retained work and evidence
 
-- Keep the unused `ollama` SDK candidate until six runtime/test locks and clean
-  environments can be revalidated together. No dependency upgrades in this change.
+- The SDK removal and four version changes require current-head CI; see #87
+  and the dependency guide. Existing API/CLI behavior must remain supported.
 - Dormant variant helpers remain tracked by [#35](https://github.com/aaron-seq/CareerAgent/issues/35);
   public compatibility and database contracts need evidence before removal.
 - [#38](https://github.com/aaron-seq/CareerAgent/issues/38),
