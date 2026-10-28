@@ -110,4 +110,5 @@ issues. See the existing [security audit](docs/SECURITY_AUDIT.md) for known scop
 4. Reconcile PR #76's docs with the canonical guides; preserve its extension/ADR
    changes. Keep unresolved validation and product/security work linked above.
 5. Keep the issue/milestone open until acceptance; merging/deployment need their
-   own authorization. Revert cleanup commits to roll back; no data migration.
+   own authorization. Roll back docs/packaging if needed while retaining the
+   security refresh or a separately reviewed safe graph; no data migration.
