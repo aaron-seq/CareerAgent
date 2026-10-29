@@ -1,6 +1,6 @@
 # Python 3.11+; reviewed Linux runtime/test graphs live in requirements/locks/.
 # Core dependencies
-streamlit>=1.66.1,<2.0.0
+streamlit[pdf]>=1.66.1,<2.0.0
 pydantic>=2.14.1,<3.0.0
 python-dotenv>=1.0.0,<2.0.0
 
