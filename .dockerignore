@@ -35,3 +35,13 @@ temp_cv_*.pdf
 .claude
 .codex
 .aws
+
+# Maintenance and browser-extension sources are not application runtime assets.
+.github/
+docs/
+tests/
+extension/
+requirements-test.txt
+requirements-audit.txt
+requirements/locks/test-py*.txt
+requirements/locks/audit-py311.txt

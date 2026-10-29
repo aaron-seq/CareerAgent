@@ -6,17 +6,17 @@ AI-powered career assistant for personalized job search and outreach.
 ## System overview
 
 CareerAgent is a Streamlit UI over a `core/` package of independent business-
-logic services — `app.py` holds no business logic itself. It reaches `core/`
+logic services. Some orchestration still lives in `app.py` ([#12](https://github.com/aaron-seq/CareerAgent/issues/12)). It reaches `core/`
 two ways: the DB-backed platform services (ingestion, matching, resume,
 tracking, outreach, analytics) go through `core/facade.py`; the original
 CV/contact/personalization/storage modules are instantiated directly
-by `app.py` (see the diagram below — the `UI --> CF/PE/DV/Gmail/WA` edges
+by `app.py` (see the diagram below — the `UI --> CV/CF/PE/DV/WA` edges
 are that direct path, not routed through the facade). A 2026-08 repo audit
 flagged this as worth unifying behind the facade; not yet done. LLM
 inference runs against Ollama locally by default,
 with an OpenAI-compatible cloud provider (Groq's free tier) as an opt-in
 alternative (see ADR 0005). Persistence is SQLModel on SQLite for dev
-(Postgres in production, ADR 0003), with a legacy local-JSON path still used
+(Postgres is a deployment target, ADR 0003), with a legacy local-JSON path still used
 for drafts/exports.
 
 ```mermaid
@@ -173,7 +173,7 @@ across replacement containers in addition to probing server health.
 | `core/outreach/` | `verification.py`, `compliance.py` (CAN-SPAM/GDPR: postal address, opt-out, per-campaign LIA, suppression list), `service.py` (single pre-send gate). |
 | `core/enrichment/` | `salary.py`, `company.py` (Glassdoor/layoffs, tri-state — `None` means unknown, never a false negative), `visa.py`, `ghost.py`, `filters.py`. |
 | `core/alerting/` | `digest.py` (Markdown/RSS), `emitters.py` (Telegram/Discord). |
-| `core/analytics.py` | Application→response funnel, A/B variant tracking, interview-prep generation. |
+| `core/analytics.py` | Application→response funnel and interview-prep generation. Variant helpers have no workflow integration ([#35](https://github.com/aaron-seq/CareerAgent/issues/35)). |
 | `core/job_finder.py` | DuckDuckGo-based job search (fallback discovery mode; API-first ingestion above is preferred). |
 | `core/contact_finder.py` | Hiring-contact search + email permutation generation. |
 | `core/personalization.py` | Personalized email/WhatsApp draft generation. |
@@ -293,80 +293,8 @@ with mode 0600 and reused across processes. Keep it with database/data backups.
 Not every DB metadata field is encrypted; see `docs/SECURITY_AUDIT.md` before
 hosted deployment.
 
-## Directory structure
+## Setup and operations
 
-```
-CareerAgent/
-├── app.py                    # Streamlit UI (no business logic)
-├── core/
-│   ├── facade.py             # Single tested entry point for app.py
-│   ├── llm.py                # LocalLLMClient (Ollama) + CloudLLMClient (Groq)
-│   ├── models.py             # Pydantic data models
-│   ├── prompts.py            # LLM prompt templates
-│   ├── cv_parser.py          # CV extraction (+ PDF hyperlink recovery)
-│   ├── job_finder.py         # DuckDuckGo job search (fallback mode)
-│   ├── contact_finder.py     # Contact discovery
-│   ├── personalization.py    # Email/WhatsApp draft generation
-│   ├── validators.py         # Draft quality validation
-│   ├── gmail_drafts.py       # Gmail API integration
-│   ├── whatsapp.py           # WhatsApp URL generation
-│   ├── storage.py            # Legacy local-JSON persistence + ZIP export
-│   ├── normalize.py          # Shared text/company normalization helpers
-│   ├── candidate.py          # Application answers + completeness meter
-│   ├── apply.py              # Apply URL classification + autofill answers
-│   ├── presentation.py       # Pure job-card formatting helpers
-│   ├── tracking.py           # Kanban application pipeline
-│   ├── analytics.py          # Funnel, A/B tracking, interview prep
-│   ├── db/                   # SQLModel schema, sessions, repository, crypto
-│   ├── ingestion/            # ATS + aggregator job ingestion
-│   ├── fetching/             # ATS detection, JSON-LD, polite fetcher
-│   ├── matching/             # Embeddings, dedup, explainable scoring
-│   ├── resume/                # Tailoring, cover letters, ATS lint, render
-│   ├── outreach/             # Verification + compliance gate
-│   ├── enrichment/           # Salary, company signals, visa, ghost score
-│   └── alerting/             # Digest (Markdown/RSS/Telegram/Discord)
-├── extension/                 # Manifest V3 human-in-the-loop autofill
-├── alembic/                   # Database migrations
-├── scripts/                   # Operational scripts (e.g. digest delivery)
-├── tests/                     # pytest suite
-├── assets/                    # style.css (dark-native theme)
-├── docs/                      # RESEARCH.md, ADRs
-├── .github/workflows/         # CI/CD configuration
-├── Dockerfile
-└── docker-compose.yml
-```
-
-## Deployment
-
-### Local development
-```bash
-python -m pip install --require-hashes --only-binary=:all: -r requirements/locks/test-py311.txt
-# Either: ollama serve && ollama pull llama3.1:8b
-# Or: set GROQ_API_KEY in .env (free tier, no credit card: console.groq.com/keys)
-streamlit run app.py
-```
-
-### Docker
-```bash
-docker-compose up
-```
-Starts Streamlit and Ollama on the Compose network. Pull a model explicitly
-with `docker compose exec ollama ollama pull llama3.1:8b`. The app uses the
-Ollama service name, publishes its UI on host loopback, runs as UID 1000, and
-persists SQLite plus its key under the mounted `careeragent_data/` directory.
-Gmail credentials are optional private mounts; they are excluded from builds.
-
-## Technology stack
-
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| Frontend | Streamlit 1.29+ | Interactive web UI |
-| LLM | Ollama (local) or Groq (free-tier cloud, OpenAI-compatible) | AI inference |
-| Validation | Pydantic 2.5+ | Data validation and serialization |
-| Persistence | SQLModel + Alembic, SQLite (dev) / Postgres (prod) | Structured storage, PII encrypted at rest |
-| PDF parsing | pdfplumber, pypdf | CV text + hyperlink extraction |
-| PDF rendering | fpdf2 | ATS-friendly resume PDF output |
-| Job data | Greenhouse/Lever/Ashby/SmartRecruiters/Recruitee/Workable, Adzuna, The Muse, Remotive, Arbeitnow, Jobicy, RemoteOK, Himalayas | API-first ingestion |
-| Web search | duckduckgo-search | Fallback job/contact discovery |
-| Email | Google Gmail API | Draft creation |
-| Testing | pytest, mypy, Ruff, Node | Shared required checks; measured current totals in PROGRESS.md |
+See [quickstart](README.md#getting-started), [contributor checks](CONTRIBUTING.md),
+[operations and recovery](docs/OPERATIONS.md), and [dependency locks](requirements/locks/README.md).
+The component map above is the maintained module reference.

@@ -100,6 +100,17 @@ compiled files is not assumed.
 
 ## Security-driven compatibility change
 
+The [2026-10-28 refresh](https://github.com/aaron-seq/CareerAgent/issues/87)
+updates certifi to 2026.10.19, pypdf to 6.21.3 and Pillow to 13.0.0. Streamlit
+1.66.1 is the compatibility bridge: its published metadata permits Pillow 13.
+All unrelated pins and hashes stay unchanged. The unused Ollama Python SDK is
+removed; `core/llm.py` uses HTTP and still requires the separate Ollama runtime
+for local inference. No scanner suppressions or CI gates were relaxed.
+See [Pillow release notes](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html),
+[pypdf release notes](https://github.com/py-pdf/pypdf/releases/tag/6.21.3),
+[Streamlit metadata](https://pypi.org/pypi/streamlit/1.66.1/json), and the
+[PSF certifi notice](https://mail.python.org/archives/list/security-announce@python.org/thread/LSEJ6DOJPIHHNNRS43GROPIH2EPJRUDS/).
+
 The 2026-10-17 audit found two affected installed packages: Pillow 11.3.0 and
 pytest 7.4.3. The feed contained duplicate entries, so its 37-entry count is not
 37 distinct confirmed flaws. Pillow's fixes require 12.3.0 and pytest's temporary
