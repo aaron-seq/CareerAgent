@@ -7,6 +7,7 @@ explicit error so users can download the lossless Markdown version instead.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from io import BytesIO
 from pathlib import Path
@@ -140,7 +141,22 @@ def _latex_text(text: str) -> str:
             )
     # A single pass prevents braces/backslashes in replacement commands from
     # being escaped again, while protecting every candidate-controlled field.
-    return "".join(_LATEX_ESCAPES.get(character, character) for character in text)
+    parts = []
+    for token in re.split(r"(\s+)", text):
+        # Ordinary TeX cannot wrap a long URL/identifier. Add optional breaks
+        # between whole escaped characters; never split an escape command.
+        chunks = (
+            [token[i : i + 24] for i in range(0, len(token), 24)]
+            if len(token) > 24 and not token.isspace()
+            else [token]
+        )
+        parts.append(
+            r"\allowbreak{}".join(
+                "".join(_LATEX_ESCAPES.get(char, char) for char in chunk)
+                for chunk in chunks
+            )
+        )
+    return "".join(parts).replace("\n", "\\par\n")
 
 
 def render_latex(doc: dict[str, Any]) -> str:
@@ -155,7 +171,9 @@ def render_latex(doc: dict[str, Any]) -> str:
         r"\documentclass[11pt,a4paper]{article}",
         r"\usepackage[margin=18mm,top=15mm,bottom=15mm]{geometry}",
         r"\usepackage{fontspec}",
-        r"\setmainfont{DejaVuSans.ttf}[Path=fonts/,BoldFont=DejaVuSans-Bold.ttf]",
+        # Keep literal word spaces and separate glyphs in extracted PDF text.
+        r"\setmainfont{DejaVuSans.ttf}[Path=fonts/,BoldFont=DejaVuSans-Bold.ttf,Kerning=Off,Ligatures=NoCommon]",
+        r"\XeTeXinterwordspaceshaping=2",
         r"\setlength{\parindent}{0pt}",
         r"\setlength{\parskip}{4pt}",
         r"\setlength{\emergencystretch}{3em}",
@@ -192,7 +210,7 @@ def render_latex_project(doc: dict[str, Any]) -> bytes:
     instructions = (
         "# Resume LaTeX project\n\n"
         "Upload this ZIP as a new Overleaf project:\n"
-        "https://www.overleaf.com/learn/how-to/Uploading_a_project\n\n"
+        "https://docs.overleaf.com/managing-projects-and-files/uploading-a-project\n\n"
         "Choose XeLaTeX as the compiler and main.tex as the main document. "
         "Keep the fonts/ directory beside main.tex; font notices are in "
         "fonts/LICENSE.txt. No extra font download is needed.\n\n"
@@ -201,7 +219,9 @@ def render_latex_project(doc: dict[str, Any]) -> bytes:
         "To keep them local, compile main.tex with XeLaTeX on your machine.\n\n"
         "The source preserves your supplied facts in one column. Review the "
         "compiled PDF: its pagination can differ from CareerAgent's PDF "
-        "preview, and no ATS ranking or hiring outcome is guaranteed.\n"
+        "preview, and no ATS ranking or hiring outcome is guaranteed. "
+        "The bundled fonts cover Latin, Greek and Cyrillic text. For other "
+        "scripts, choose suitable fonts and layout before using the PDF.\n"
     )
     files = [("main.tex", render_latex(doc).encode("utf-8"))]
     files.extend(

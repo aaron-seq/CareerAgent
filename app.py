@@ -166,6 +166,7 @@ def _use_profile(profile: CVProfile, cv_id: int | None = None) -> None:
     """Replace the active profile and invalidate its generated UI material."""
     st.session_state.cv_profile = profile
     st.session_state.cv_id = cv_id
+    st.session_state.cv_editor_preview = None
     st.session_state.draft_workspaces = {}
     st.session_state.active_draft_job = None
     for name in ("current_draft", "tailored", "cover", "current_wa_draft"):
@@ -484,6 +485,153 @@ def _cv_builder_widget(scope: str, key: str) -> dict[str, Any]:
     return {"key": key, "on_change": _remember_cv_builder_value, "args": (scope, key)}
 
 
+def _render_overleaf_download(
+    profile: CVProfile, label: str, filename: str, key: str
+) -> None:
+    """Keep existing formats available when a source export is unavailable."""
+    try:
+        project = facade.resume_latex_project(profile)
+    except (ValueError, OSError) as exc:
+        detail = str(exc) if isinstance(exc, ValueError) else "Check the bundled fonts."
+        st.warning(f"LaTeX export is unavailable. {detail}")
+        return
+    st.download_button(
+        label,
+        data=project,
+        file_name=filename,
+        mime="application/zip",
+        key=key,
+        use_container_width=True,
+    )
+
+
+def _render_cv_draft_preview(data: dict[str, Any], scope: str) -> None:
+    """Preview explicit draft facts without activating or persisting a profile."""
+    st.subheader("Draft preview")
+    st.caption(
+        "Preview your edits before saving. Draft downloads contain readable personal data."
+    )
+    digest = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+    preview = st.session_state.get("cv_editor_preview")
+    if preview and preview["scope"] != scope:
+        preview = None
+        st.session_state.cv_editor_preview = None
+    if st.button(
+        "Update draft preview", key=f"{scope}_preview", use_container_width=True
+    ):
+        st.session_state.cv_editor_preview = None
+        try:
+            draft = facade.build_cv_profile(data)
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+        preview = {
+            "scope": scope,
+            "digest": digest,
+            "pdf": None,
+            "pdf_error": None,
+            "latex": None,
+            "project": None,
+            "latex_error": None,
+            "markdown": facade.resume_markdown(draft),
+            "json": json.dumps(facade.resume_json(draft), indent=2, ensure_ascii=False),
+        }
+        try:
+            preview["pdf"] = facade.resume_pdf(draft)
+        except (ValueError, OSError) as exc:
+            preview["pdf_error"] = (
+                str(exc)
+                if isinstance(exc, ValueError)
+                else "PDF assets could not be read. Check the installation and try again."
+            )
+        try:
+            preview["latex"] = facade.resume_latex(draft)
+            preview["project"] = facade.resume_latex_project(draft)
+        except (ValueError, OSError) as exc:
+            preview["latex_error"] = (
+                str(exc)
+                if isinstance(exc, ValueError)
+                else "LaTeX assets could not be read. Check the installation and try again."
+            )
+        st.session_state.cv_editor_preview = preview
+    if not preview:
+        st.info(
+            "Edit your facts, then choose Update draft preview. Saving creates a separate CV snapshot."
+        )
+        return
+    if preview["digest"] != digest:
+        st.info(
+            "This preview is out of date. Choose Update draft preview to include your latest edits."
+        )
+        return
+    st.caption("Unsaved draft - your saved CV and application materials are unchanged.")
+    pdf_tab, text_tab, latex_tab = st.tabs(
+        ["PDF preview", "Plain text", "LaTeX source"]
+    )
+    with pdf_tab:
+        if preview["pdf"] is not None:
+            st.pdf(
+                preview["pdf"],
+                height=640,
+                key=f"{scope}_draft_preview",
+                alt="Resume generated from your current unsaved facts",
+            )
+            st.download_button(
+                "Download draft PDF",
+                data=preview["pdf"],
+                file_name="resume_draft.pdf",
+                mime="application/pdf",
+                key=f"{scope}_draft_pdf",
+                use_container_width=True,
+            )
+            st.caption(
+                "If your browser cannot display the PDF, use its download. Layout is single-column with selectable text; ATS results are not guaranteed."
+            )
+        else:
+            st.warning(
+                f"{preview['pdf_error']} Lossless text and source downloads remain available where supported."
+            )
+    with text_tab:
+        st.code(preview["markdown"], language="markdown", wrap_lines=True)
+    with latex_tab:
+        if preview["latex"] is not None:
+            st.code(preview["latex"], language="latex", wrap_lines=True)
+        if preview["latex_error"]:
+            st.warning(preview["latex_error"])
+        st.caption(
+            "Edit your facts here; generated LaTeX uses the same content. For source editing, import the ZIP into Overleaf and select XeLaTeX. Review its compiled PDF, especially unsupported scripts or fonts."
+        )
+        if preview["project"] is not None:
+            st.download_button(
+                "Download draft Overleaf ZIP",
+                data=preview["project"],
+                file_name="resume_draft_overleaf.zip",
+                mime="application/zip",
+                key=f"{scope}_draft_latex",
+                use_container_width=True,
+            )
+        st.link_button(
+            "Overleaf project upload instructions",
+            "https://docs.overleaf.com/managing-projects-and-files/uploading-a-project",
+        )
+    st.download_button(
+        "Download draft Markdown",
+        data=preview["markdown"],
+        file_name="resume_draft.md",
+        mime="text/markdown",
+        key=f"{scope}_draft_md",
+        use_container_width=True,
+    )
+    st.download_button(
+        "Download draft JSON Resume",
+        data=preview["json"],
+        file_name="resume_draft.json",
+        mime="application/json",
+        key=f"{scope}_draft_json",
+        use_container_width=True,
+    )
+
+
 def _render_cv_builder() -> None:
     """Collect explicit candidate facts; core validates the submitted draft."""
     profile = st.session_state.cv_profile or CVProfile()
@@ -499,7 +647,7 @@ def _render_cv_builder() -> None:
     for key, value in draft["values"].items():
         if key not in st.session_state:
             st.session_state[key] = value
-    with st.expander("Build or edit your CV", expanded=not st.session_state.cv_profile):
+    with st.expander("Build or edit your CV", expanded=True):
         st.caption(
             "Use your own facts. Changes become active when you choose "
             "Create CV and check readiness. Unsaved edits stay in this browser "
@@ -512,155 +660,163 @@ def _render_cv_builder() -> None:
                 "dropping your records. Your complete CV remains available for export."
             )
             return
-        data: dict[str, Any] = {}
-        columns = st.columns(2)
-        for column, field, label in (
-            (columns[0], "name", "Full name"),
-            (columns[1], "email", "CV email"),
-        ):
-            with column:
-                data[field] = st.text_input(
-                    label,
-                    value=getattr(profile, field) or "",
-                    **_cv_builder_widget(prefix, f"{prefix}_{field}"),
-                )
-        with st.expander("Contact details and links (optional)"):
-            for field, label in (
-                ("phone", "CV phone (optional)"),
-                ("linkedin", "LinkedIn URL (optional)"),
-                ("github", "GitHub URL (optional)"),
-                ("portfolio", "Portfolio URL (optional)"),
+        edit_column, preview_column = st.columns([1, 1], gap="large")
+        with edit_column:
+            data: dict[str, Any] = {}
+            columns = st.columns(2)
+            for column, field, label in (
+                (columns[0], "name", "Full name"),
+                (columns[1], "email", "CV email"),
             ):
-                data[field] = st.text_input(
-                    label,
-                    value=getattr(profile, field) or "",
-                    **_cv_builder_widget(prefix, f"{prefix}_{field}"),
+                with column:
+                    data[field] = st.text_input(
+                        label,
+                        value=getattr(profile, field) or "",
+                        **_cv_builder_widget(prefix, f"{prefix}_{field}"),
+                    )
+            with st.expander("Contact details and links (optional)"):
+                for field, label in (
+                    ("phone", "CV phone (optional)"),
+                    ("linkedin", "LinkedIn URL (optional)"),
+                    ("github", "GitHub URL (optional)"),
+                    ("portfolio", "Portfolio URL (optional)"),
+                ):
+                    data[field] = st.text_input(
+                        label,
+                        value=getattr(profile, field) or "",
+                        **_cv_builder_widget(prefix, f"{prefix}_{field}"),
+                    )
+            data["summary"] = st.text_area(
+                "Professional summary (optional)",
+                value=profile.summary or "",
+                **_cv_builder_widget(prefix, f"{prefix}_summary"),
+            )
+            data["skills"] = st.text_area(
+                "Skills (one per line)",
+                value="\n".join(profile.skills),
+                **_cv_builder_widget(prefix, f"{prefix}_skills"),
+            )
+            data["education"] = st.text_area(
+                "Education or training (one per line)",
+                value="\n".join(profile.education),
+                **_cv_builder_widget(prefix, f"{prefix}_education"),
+            )
+            st.caption(
+                "Projects count as experience evidence for entry-level applicants. "
+                "Add only the entries you need; reducing a count removes those entries "
+                "from the next saved CV. Your existing saved CV stays available."
+            )
+            count_columns = st.columns(2)
+            with count_columns[0]:
+                work_count = st.number_input(
+                    "Work experience entries",
+                    min_value=0,
+                    max_value=30,
+                    value=len(profile.experiences),
+                    step=1,
+                    **_cv_builder_widget(prefix, f"{prefix}_work_count"),
                 )
-        data["summary"] = st.text_area(
-            "Professional summary (optional)",
-            value=profile.summary or "",
-            **_cv_builder_widget(prefix, f"{prefix}_summary"),
-        )
-        data["skills"] = st.text_area(
-            "Skills (one per line)",
-            value="\n".join(profile.skills),
-            **_cv_builder_widget(prefix, f"{prefix}_skills"),
-        )
-        data["education"] = st.text_area(
-            "Education or training (one per line)",
-            value="\n".join(profile.education),
-            **_cv_builder_widget(prefix, f"{prefix}_education"),
-        )
-        st.caption(
-            "Projects count as experience evidence for entry-level applicants. "
-            "Add only the entries you need; reducing a count removes those entries "
-            "from the next saved CV. Your existing saved CV stays available."
-        )
-        count_columns = st.columns(2)
-        with count_columns[0]:
-            work_count = st.number_input(
-                "Work experience entries",
-                min_value=0,
-                max_value=30,
-                value=len(profile.experiences),
-                step=1,
-                **_cv_builder_widget(prefix, f"{prefix}_work_count"),
-            )
-        with count_columns[1]:
-            project_count = st.number_input(
-                "Project entries",
-                min_value=0,
-                max_value=30,
-                value=len(profile.projects),
-                step=1,
-                **_cv_builder_widget(prefix, f"{prefix}_project_count"),
-            )
-        data["experiences"] = []
-        for index in range(work_count):
-            original = (
-                profile.experiences[index].model_dump()
-                if index < len(profile.experiences)
-                else {}
-            )
-            with st.container(border=True):
-                st.markdown(f"**Work experience {index + 1}**")
-                entry = {}
-                for field, label in (
-                    ("title", "Job title"),
-                    ("company", "Employer"),
-                    ("duration", "Actual dates or duration"),
-                ):
-                    entry[field] = st.text_input(
-                        f"Role {index + 1}: {label}",
-                        value=original.get(field, ""),
-                        **_cv_builder_widget(prefix, f"{prefix}_role_{index}_{field}"),
-                    )
-                for field, label in (
-                    ("achievements", "Accomplishments"),
-                    ("metrics", "Existing metrics (optional)"),
-                    ("technologies", "Technologies"),
-                ):
-                    entry[field] = st.text_area(
-                        f"Role {index + 1}: {label} (one per line)",
-                        value="\n".join(original.get(field, [])),
-                        **_cv_builder_widget(prefix, f"{prefix}_role_{index}_{field}"),
-                    )
-                data["experiences"].append(entry)
-        data["projects"] = []
-        for index in range(project_count):
-            original = (
-                profile.projects[index].model_dump()
-                if index < len(profile.projects)
-                else {}
-            )
-            with st.container(border=True):
-                st.markdown(f"**Project {index + 1}**")
-                entry = {}
-                for field, label in (
-                    ("name", "Name"),
-                    ("link", "Project URL (optional)"),
-                    ("github", "Repository URL (optional)"),
-                ):
-                    entry[field] = st.text_input(
-                        f"Project {index + 1}: {label}",
-                        value=original.get(field) or "",
+            with count_columns[1]:
+                project_count = st.number_input(
+                    "Project entries",
+                    min_value=0,
+                    max_value=30,
+                    value=len(profile.projects),
+                    step=1,
+                    **_cv_builder_widget(prefix, f"{prefix}_project_count"),
+                )
+            data["experiences"] = []
+            for index in range(work_count):
+                original = (
+                    profile.experiences[index].model_dump()
+                    if index < len(profile.experiences)
+                    else {}
+                )
+                with st.container(border=True):
+                    st.markdown(f"**Work experience {index + 1}**")
+                    entry = {}
+                    for field, label in (
+                        ("title", "Job title"),
+                        ("company", "Employer"),
+                        ("duration", "Actual dates or duration"),
+                    ):
+                        entry[field] = st.text_input(
+                            f"Role {index + 1}: {label}",
+                            value=original.get(field, ""),
+                            **_cv_builder_widget(
+                                prefix, f"{prefix}_role_{index}_{field}"
+                            ),
+                        )
+                    for field, label in (
+                        ("achievements", "Accomplishments"),
+                        ("metrics", "Existing metrics (optional)"),
+                        ("technologies", "Technologies"),
+                    ):
+                        entry[field] = st.text_area(
+                            f"Role {index + 1}: {label} (one per line)",
+                            value="\n".join(original.get(field, [])),
+                            **_cv_builder_widget(
+                                prefix, f"{prefix}_role_{index}_{field}"
+                            ),
+                        )
+                    data["experiences"].append(entry)
+            data["projects"] = []
+            for index in range(project_count):
+                original = (
+                    profile.projects[index].model_dump()
+                    if index < len(profile.projects)
+                    else {}
+                )
+                with st.container(border=True):
+                    st.markdown(f"**Project {index + 1}**")
+                    entry = {}
+                    for field, label in (
+                        ("name", "Name"),
+                        ("link", "Project URL (optional)"),
+                        ("github", "Repository URL (optional)"),
+                    ):
+                        entry[field] = st.text_input(
+                            f"Project {index + 1}: {label}",
+                            value=original.get(field) or "",
+                            **_cv_builder_widget(
+                                prefix, f"{prefix}_project_{index}_{field}"
+                            ),
+                        )
+                    for field, label in (
+                        ("description", "Factual description"),
+                        ("impact", "Real impact (optional)"),
+                    ):
+                        entry[field] = st.text_area(
+                            f"Project {index + 1}: {label}",
+                            value=original.get(field) or "",
+                            **_cv_builder_widget(
+                                prefix, f"{prefix}_project_{index}_{field}"
+                            ),
+                        )
+                    entry["technologies"] = st.text_area(
+                        f"Project {index + 1}: Technologies (one per line)",
+                        value="\n".join(original.get("technologies", [])),
                         **_cv_builder_widget(
-                            prefix, f"{prefix}_project_{index}_{field}"
+                            prefix, f"{prefix}_project_{index}_technologies"
                         ),
                     )
-                for field, label in (
-                    ("description", "Factual description"),
-                    ("impact", "Real impact (optional)"),
-                ):
-                    entry[field] = st.text_area(
-                        f"Project {index + 1}: {label}",
-                        value=original.get(field) or "",
-                        **_cv_builder_widget(
-                            prefix, f"{prefix}_project_{index}_{field}"
-                        ),
-                    )
-                entry["technologies"] = st.text_area(
-                    f"Project {index + 1}: Technologies (one per line)",
-                    value="\n".join(original.get("technologies", [])),
-                    **_cv_builder_widget(
-                        prefix, f"{prefix}_project_{index}_technologies"
-                    ),
-                )
-                data["projects"].append(entry)
-        if st.button(
-            "Create CV and check readiness",
-            type="primary",
-            key=f"{prefix}_save",
-            use_container_width=True,
-        ):
-            try:
-                created = facade.build_cv_profile(data)
-            except ValueError as exc:
-                st.error(str(exc))
-            else:
-                if _save_cv_profile(created):
-                    st.session_state.cv_save_notice = "Your CV is saved. Review its readiness and download the format you need."
-                    _rerun()
+                    data["projects"].append(entry)
+            if st.button(
+                "Create CV and check readiness",
+                type="primary",
+                key=f"{prefix}_save",
+                use_container_width=True,
+            ):
+                try:
+                    created = facade.build_cv_profile(data)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    if _save_cv_profile(created):
+                        st.session_state.cv_save_notice = "Your CV is saved. Review its readiness and download the format you need."
+                        _rerun()
+        with preview_column:
+            _render_cv_draft_preview(data, prefix)
 
 
 def _render_cv_assessment(profile: CVProfile, job: JobPosting | None = None) -> None:
@@ -1284,8 +1440,15 @@ def page_onboarding():
         with exp1:
             try:
                 pdf = facade.resume_pdf(profile)
-            except ValueError as exc:
-                st.warning(f"{exc} Markdown and JSON downloads remain available.")
+            except (ValueError, OSError) as exc:
+                detail = (
+                    str(exc)
+                    if isinstance(exc, ValueError)
+                    else "Check the bundled fonts."
+                )
+                st.warning(
+                    f"PDF export is unavailable. {detail} Markdown and JSON downloads remain available."
+                )
             else:
                 st.download_button(
                     "Download ATS-clean PDF",
@@ -1312,6 +1475,16 @@ def page_onboarding():
                 mime="application/json",
                 use_container_width=True,
             )
+
+        st.caption(
+            "These downloads use your saved CV. Save editor changes to include them."
+        )
+        _render_overleaf_download(
+            profile,
+            "Download Overleaf project",
+            "resume_overleaf.zip",
+            "saved_resume_overleaf",
+        )
 
         st.divider()
         _render_application_details()
@@ -1884,8 +2057,15 @@ def page_draft_studio():
                 _render_cv_assessment(tailored["profile"], current_job)
                 try:
                     pdf = facade.resume_pdf(tailored["profile"])
-                except ValueError as exc:
-                    st.warning(f"{exc} Markdown and JSON downloads remain available.")
+                except (ValueError, OSError) as exc:
+                    detail = (
+                        str(exc)
+                        if isinstance(exc, ValueError)
+                        else "Check the bundled fonts."
+                    )
+                    st.warning(
+                        f"PDF export is unavailable. {detail} Markdown and JSON downloads remain available."
+                    )
                 else:
                     st.download_button(
                         "Download tailored ATS PDF",
@@ -1911,6 +2091,13 @@ def page_draft_studio():
                     file_name="resume_tailored.json",
                     mime="application/json",
                     use_container_width=True,
+                )
+
+                _render_overleaf_download(
+                    tailored["profile"],
+                    "Download tailored Overleaf ZIP",
+                    "resume_tailored_overleaf.zip",
+                    f"tailored_overleaf_{workspace_key}",
                 )
 
         # --- Cover letter, grounded in the CV --- #

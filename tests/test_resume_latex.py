@@ -50,6 +50,7 @@ def test_latex_preserves_facts_unicode_both_links_and_section_order():
     document = _document()
     before = deepcopy(document)
     source = render_latex(document)
+    facts = source.replace(r"\allowbreak{}", "")
     assert document == before
     for fact in (
         "Synthetic Δοκιμή Кириллица",
@@ -70,7 +71,7 @@ def test_latex_preserves_facts_unicode_both_links_and_section_order():
         "Used by 12 volunteers",
         "Community computing course",
     ):
-        assert fact in source
+        assert fact in facts
     headings = [
         source.index(r"\section*{" + name + "}")
         for name in ("Summary", "Skills", "Experience", "Projects", "Education")
@@ -119,9 +120,25 @@ def test_whitespace_preserves_words_and_paragraphs():
     document = _document()
     document["basics"]["summary"] = "First\twords\r\nnext line\r\rSecond paragraph"
     source = render_latex(document)
-    assert "First words\nnext line\n\nSecond paragraph" in source
+    assert "First words\\par\nnext line\\par\n\\par\nSecond paragraph" in source
     assert "Firstwords" not in source
     assert "\r" not in source and "\t" not in source
+
+
+def test_long_unbroken_links_have_safe_breakpoints_without_losing_text():
+    document = _document()
+    link = "https://example.test/" + "A" * 220 + "?token=" + "7" * 180
+    document["basics"]["url"] = link
+    source = render_latex(document)
+    assert r"\allowbreak{}" in source
+    assert link in source.replace(r"\allowbreak{}", "")
+    # Escaping happens to whole characters before breakpoints are inserted.
+    document["basics"]["url"] = "_" * 130
+    assert r"\_" * 130 in render_latex(document).replace(r"\allowbreak{}", "")
+    document["basics"]["name"] = "W" * 40
+    source = render_latex(document)
+    assert "W" * 40 not in source  # even a short, wide name must wrap
+    assert "W" * 40 in source.replace(r"\allowbreak{}", "")
 
 
 @pytest.mark.parametrize("character", ["\x00", "\x07", "\x0b", "\x1b", "\x7f", "\x85"])
@@ -153,7 +170,8 @@ def test_overleaf_zip_has_fixed_safe_paths_exact_source_fonts_and_notices():
         instructions = archive.read("README.md").decode("utf-8")
         assert "XeLaTeX" in instructions
         assert (
-            "https://www.overleaf.com/learn/how-to/Uploading_a_project" in instructions
+            "https://docs.overleaf.com/managing-projects-and-files/uploading-a-project"
+            in instructions
         )
         assert "personal data" in instructions and "local" in instructions
         for entry in archive.infolist():
