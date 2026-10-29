@@ -132,6 +132,7 @@ _LATEX_ESCAPES = {
 
 def _latex_text(text: str) -> str:
     """Encode candidate text without ever interpreting it as TeX source."""
+    text = unicodedata.normalize("NFC", text)
     text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\t", " ")
     for character in text:
         if character != "\n" and unicodedata.category(character) in {"Cc", "Cs"}:
@@ -145,11 +146,18 @@ def _latex_text(text: str) -> str:
     for token in re.split(r"(\s+)", text):
         # Ordinary TeX cannot wrap a long URL/identifier. Add optional breaks
         # between whole escaped characters; never split an escape command.
-        chunks = (
-            [token[i : i + 24] for i in range(0, len(token), 24)]
-            if len(token) > 24 and not token.isspace()
-            else [token]
-        )
+        chunks = [token]
+        if len(token) > 24 and not token.isspace():
+            chunks = []
+            start = 0
+            for index, character in enumerate(token):
+                # A combining mark belongs to the preceding base character.
+                if index - start >= 24 and not unicodedata.category(
+                    character
+                ).startswith("M"):
+                    chunks.append(token[start:index])
+                    start = index
+            chunks.append(token[start:])
         parts.append(
             r"\allowbreak{}".join(
                 "".join(_LATEX_ESCAPES.get(char, char) for char in chunk)
@@ -171,8 +179,8 @@ def render_latex(doc: dict[str, Any]) -> str:
         r"\documentclass[11pt,a4paper]{article}",
         r"\usepackage[margin=18mm,top=15mm,bottom=15mm]{geometry}",
         r"\usepackage{fontspec}",
-        # Keep literal word spaces and separate glyphs in extracted PDF text.
-        r"\setmainfont{DejaVuSans.ttf}[Path=fonts/,BoldFont=DejaVuSans-Bold.ttf,Kerning=Off,Ligatures=NoCommon]",
+        # Disable TeX punctuation mapping too: -- and quotes can be URL/name data.
+        r"\setmainfont{DejaVuSans.ttf}[Path=fonts/,BoldFont=DejaVuSans-Bold.ttf,Kerning=Off,Ligatures=NoCommon,Mapping={}]",
         r"\XeTeXinterwordspaceshaping=2",
         r"\setlength{\parindent}{0pt}",
         r"\setlength{\parskip}{4pt}",

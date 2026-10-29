@@ -6,7 +6,8 @@ Last verified: 2026-10-29 (Asia/Kolkata). Current work is
 [`d06cee0`](https://github.com/aaron-seq/CareerAgent/commit/d06cee0839f731fadb90a2a9434e0c0c6d4225af).
 The [private Project](https://github.com/users/aaron-seq/projects/7) and
 [milestone 2](https://github.com/aaron-seq/CareerAgent/milestone/2) track review.
-The issue links the draft PR and final-head checks. Merge/deployment is pending.
+The issue links [PR #90](https://github.com/aaron-seq/CareerAgent/pull/90), its
+current checks and merge state. The user authorized merging after bug review.
 
 ## Resume editor
 
@@ -36,6 +37,15 @@ The issue links the draft PR and final-head checks. Merge/deployment is pending.
 - Personally checked Chromium at 1440px and 390px: visible PDF canvas, stale
   download suppression and ZIP download. Preview/export made no external
   requests. This was local testing, not an Overleaf account or ATS service test.
+- Three fresh review agents checked editor state, exports and saved-material
+  workflows before merging. [#91](https://github.com/aaron-seq/CareerAgent/issues/91)
+  exposed fontspec changing literal punctuation in compiled names/URLs; an
+  explicit empty mapping fixes it. Real compiler/extractor regressions cover
+  apostrophes, quotes, repeated hyphens, Unicode, long links and multiple pages.
+  [#94](https://github.com/aaron-seq/CareerAgent/issues/94) keeps decomposed accents
+  attached when wrapping. Existing draft-write failures are tracked separately
+  in [#92](https://github.com/aaron-seq/CareerAgent/issues/92) and
+  [#93](https://github.com/aaron-seq/CareerAgent/issues/93).
 - Agent-run strict pip-audit 2.10.1 passed all three hashed test graphs with
   zero advisory rows/skips (97/96/96 distributions); lock tests passed. Delegated
   review is a system perspective, not independent human approval.
@@ -57,8 +67,8 @@ retains cleanup measurements, older reviews and open follow-ups. Original local
 audit, credentials, databases and personal files remain untouched.
 
 1. Read #88 and its draft PR; verify branch/HEAD, working tree and current checks.
-2. Resolve introduced CI/review failures. Keep #88/milestone 2 open for review;
-   no merge, deployment or live-provider tests are implied.
+2. Verify current-head CI/review before the authorized merge; record its SHA and
+   post-merge checks in #88. No deployment or live-provider tests are implied.
 3. Existing security prerequisites #38/#41/#42, dormant helpers #35, product
    findings #65–#78 and overlapping/dependency PRs #76/#79–#84 remain separate.
    Reconcile their useful changes without discarding security-fixed locks.

@@ -141,6 +141,15 @@ def test_long_unbroken_links_have_safe_breakpoints_without_losing_text():
     assert "W" * 40 in source.replace(r"\allowbreak{}", "")
 
 
+@pytest.mark.parametrize("base, expected", [("e", "é"), ("q", "q\u0301")])
+def test_wrapping_keeps_decomposed_accents_with_their_base(base, expected):
+    document = _document()
+    document["basics"]["name"] = "W" * 23 + base + "\u0301" + "W" * 20
+    source = render_latex(document)
+    assert "W" * 23 + expected + "W" * 20 in source.replace(r"\allowbreak{}", "")
+    assert "\\allowbreak{}\u0301" not in source
+
+
 @pytest.mark.parametrize("character", ["\x00", "\x07", "\x0b", "\x1b", "\x7f", "\x85"])
 def test_illegal_control_characters_are_rejected_explicitly(character):
     document = _document()
