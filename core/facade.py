@@ -75,7 +75,14 @@ from .normalize import (
 from .outreach import ComplianceConfig, LIARecord, OutreachService, SendDecision
 from .resume import generate_cover_letter as _generate_cover_letter
 from .resume import lint as ats_lint
-from .resume import render_markdown, render_pdf, tailor_resume, to_json_resume
+from .resume import (
+    render_latex,
+    render_latex_project,
+    render_markdown,
+    render_pdf,
+    tailor_resume,
+    to_json_resume,
+)
 from .resume.assessment import assess_resume as _assess_resume
 from .resume.builder import build_cv_profile as _build_cv_profile
 from .storage import LocalStorage
@@ -1233,6 +1240,16 @@ def resume_pdf(cv: CVProfile) -> bytes:
 
 def resume_markdown(cv: CVProfile) -> str:
     return render_markdown(to_json_resume(cv))
+
+
+def resume_latex(cv: CVProfile) -> str:
+    """Generate escaped XeLaTeX source; fonts come with the project ZIP."""
+    return render_latex(to_json_resume(cv))
+
+
+def resume_latex_project(cv: CVProfile) -> bytes:
+    """Downloadable project ZIP; no upload, compiler or persistence involved."""
+    return render_latex_project(to_json_resume(cv))
 
 
 def resume_json(cv: CVProfile) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-"""Render truthful, single-column Markdown and selectable-text PDF CVs.
+"""Render truthful, single-column Markdown, PDF and escaped XeLaTeX CVs.
 
 PDF fonts are bundled for offline use. Coverage is deliberately bounded:
 unsupported glyphs and scripts requiring shaping/bidirectional layout raise an
@@ -7,9 +7,12 @@ explicit error so users can download the lossless Markdown version instead.
 
 from __future__ import annotations
 
+import re
 import unicodedata
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from fpdf import FPDF
 from fpdf.fonts import TTFFont
@@ -111,6 +114,137 @@ def render_markdown(doc: dict[str, Any]) -> str:
         lines.extend(["", f"## {title}"])
         lines.extend(f"**{text}**" if bold else text for text, bold in content)
     return "\n".join(lines) + "\n"
+
+
+_LATEX_ESCAPES = {
+    "\\": r"\textbackslash{}",
+    "%": r"\%",
+    "$": r"\$",
+    "&": r"\&",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "^": r"\textasciicircum{}",
+    "~": r"\textasciitilde{}",
+}
+
+
+def _latex_text(text: str) -> str:
+    """Encode candidate text without ever interpreting it as TeX source."""
+    text = unicodedata.normalize("NFC", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\t", " ")
+    for character in text:
+        if character != "\n" and unicodedata.category(character) in {"Cc", "Cs"}:
+            raise ValueError(
+                "LaTeX export does not support control character "
+                f"U+{ord(character):04X}. Remove it before exporting."
+            )
+    # A single pass prevents braces/backslashes in replacement commands from
+    # being escaped again, while protecting every candidate-controlled field.
+    parts = []
+    for token in re.split(r"(\s+)", text):
+        # Ordinary TeX cannot wrap a long URL/identifier. Add optional breaks
+        # between whole escaped characters; never split an escape command.
+        chunks = [token]
+        if len(token) > 24 and not token.isspace():
+            chunks = []
+            start = 0
+            for index, character in enumerate(token):
+                # A combining mark belongs to the preceding base character.
+                if index - start >= 24 and not unicodedata.category(
+                    character
+                ).startswith("M"):
+                    chunks.append(token[start:index])
+                    start = index
+            chunks.append(token[start:])
+        parts.append(
+            r"\allowbreak{}".join(
+                "".join(_LATEX_ESCAPES.get(char, char) for char in chunk)
+                for chunk in chunks
+            )
+        )
+    return "".join(parts).replace("\n", "\\par\n")
+
+
+def render_latex(doc: dict[str, Any]) -> str:
+    """Render single-column XeLaTeX source with the same facts as PDF/Markdown.
+
+    Compile beside the bundled ``fonts/`` directory, included by
+    :func:`render_latex_project`. This generates text only: it runs no compiler
+    and makes no network request. The PDF renderer remains the app preview;
+    XeLaTeX pagination can differ and its output still needs human review.
+    """
+    lines = [
+        r"\documentclass[11pt,a4paper]{article}",
+        r"\usepackage[margin=18mm,top=15mm,bottom=15mm]{geometry}",
+        r"\usepackage{fontspec}",
+        # Disable TeX punctuation mapping too: -- and quotes can be URL/name data.
+        r"\setmainfont{DejaVuSans.ttf}[Path=fonts/,BoldFont=DejaVuSans-Bold.ttf,Kerning=Off,Ligatures=NoCommon,Mapping={}]",
+        r"\XeTeXinterwordspaceshaping=2",
+        r"\setlength{\parindent}{0pt}",
+        r"\setlength{\parskip}{4pt}",
+        r"\setlength{\emergencystretch}{3em}",
+        r"\pagestyle{empty}",
+        r"\raggedright",
+        r"\begin{document}",
+    ]
+    basics = doc.get("basics", {})
+    contacts = _contact_lines(basics)
+    sections = _sections(doc)
+    if basics.get("name"):
+        lines.append(
+            r"{\fontsize{18}{22}\selectfont\bfseries "
+            + _latex_text(basics["name"])
+            + r"}\par"
+        )
+    for contact in contacts:
+        lines.append(r"{\small " + _latex_text(contact) + r"}\par")
+    for title, content in sections:
+        lines.extend(["", r"\section*{" + _latex_text(title) + "}"])
+        for text, bold in content:
+            escaped = _latex_text(text)
+            lines.append(
+                (r"{\bfseries " + escaped + "}" if bold else escaped) + r"\par"
+            )
+    if not basics.get("name") and not contacts and not sections:
+        lines.append(r"\null")  # even an empty document produces a blank PDF page
+    lines.extend([r"\end{document}", ""])
+    return "\n".join(lines)
+
+
+def render_latex_project(doc: dict[str, Any]) -> bytes:
+    """Package fixed project paths and licensed fonts for local/Overleaf use."""
+    instructions = (
+        "# Resume LaTeX project\n\n"
+        "Upload this ZIP as a new Overleaf project:\n"
+        "https://docs.overleaf.com/managing-projects-and-files/uploading-a-project\n\n"
+        "Choose XeLaTeX as the compiler and main.tex as the main document. "
+        "Keep the fonts/ directory beside main.tex; font notices are in "
+        "fonts/LICENSE.txt. No extra font download is needed.\n\n"
+        "These files contain readable personal data. Review them before "
+        "sharing; uploading to Overleaf shares them with that service. "
+        "To keep them local, compile main.tex with XeLaTeX on your machine.\n\n"
+        "The source preserves your supplied facts in one column. Review the "
+        "compiled PDF: its pagination can differ from CareerAgent's PDF "
+        "preview, and no ATS ranking or hiring outcome is guaranteed. "
+        "The bundled fonts cover Latin, Greek and Cyrillic text. For other "
+        "scripts, choose suitable fonts and layout before using the PDF.\n"
+    )
+    files = [("main.tex", render_latex(doc).encode("utf-8"))]
+    files.extend(
+        ("fonts/" + filename, (_FONT_DIRECTORY / filename).read_bytes())
+        for filename in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "LICENSE.txt")
+    )
+    files.append(("README.md", instructions.encode("utf-8")))
+    output = BytesIO()
+    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
+        for filename, data in files:
+            info = ZipInfo(filename, date_time=(1980, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, data, compress_type=ZIP_DEFLATED, compresslevel=9)
+    return output.getvalue()
 
 
 def _pdf_text(text: str, supported: dict[int, str]) -> str:

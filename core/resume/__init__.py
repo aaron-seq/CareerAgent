@@ -3,7 +3,7 @@
 from .ats_linter import ATSIssue, is_ats_friendly, lint
 from .cover_letter import CoverLetterReport, generate_cover_letter, verify_grounded
 from .json_resume import from_json_resume, to_json_resume
-from .render import render_markdown, render_pdf
+from .render import render_latex, render_latex_project, render_markdown, render_pdf
 from .tailor import FabricationError, TailorReport, assert_no_fabrication, tailor_resume
 
 __all__ = [
@@ -17,6 +17,8 @@ __all__ = [
     "to_json_resume",
     "render_markdown",
     "render_pdf",
+    "render_latex",
+    "render_latex_project",
     "FabricationError",
     "TailorReport",
     "assert_no_fabrication",

@@ -28,13 +28,31 @@ import controls; requests stop if a provider repeats a page.
 
 In **Build or edit your CV**, enter your name and your actual skills, education,
 roles, or projects. Add work/project entries with the count controls; entirely
-blank entries are ignored. Save with **Create CV and check readiness**. Edits
+blank entries are ignored. Choose **Update draft preview** to inspect the current
+facts beside the editor: **PDF preview**, **Plain text** and **LaTeX source**.
+Previewing needs no AI connection and does not save or activate a CV. Changing
+facts hides outdated draft downloads until you update the preview.
+
+Save with **Create CV and check readiness**. Edits
 create a new saved profile, keeping the previous version available. A failed
 database save leaves your active CV unchanged.
 
 Unsaved builder edits stay in the current browser session when switching tabs
 or navigating between screens. Save before refreshing or closing the browser.
 Activating a different saved CV starts its editor from that CV's facts.
+
+Draft downloads use your previewed edits; the saved-CV and tailored downloads
+use their separately labelled profiles. **Download draft Overleaf ZIP** includes
+`main.tex`, bundled fonts and their notices. [Upload the ZIP as a new Overleaf
+project](https://docs.overleaf.com/managing-projects-and-files/uploading-a-project),
+select **XeLaTeX** and `main.tex`, then edit the source there. You can also compile
+it locally. Downloads contain readable personal data; uploading shares it with
+Overleaf. CareerAgent generates escaped source and runs no TeX commands.
+
+Review the compiled PDF: its pagination can differ from the app's preview.
+Bundled fonts cover Latin, Greek and Cyrillic; other scripts may require suitable
+fonts and layout changes in the source. Lossless Markdown/JSON exports remain
+available when PDF generation fails. No export guarantees an ATS ranking.
 
 **Local CV readiness** is a 100-point content checklist: name 10, usable email
 15, skills 15, experience or projects 25, supporting details 15, education 10,
