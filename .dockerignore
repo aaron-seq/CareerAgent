@@ -41,6 +41,11 @@ temp_cv_*.pdf
 docs/
 tests/
 extension/
+ARCHITECTURE.md
+CLAUDE.md
+CONTRIBUTING.md
+PROGRESS.md
+ROADMAP.md
 requirements-test.txt
 requirements-audit.txt
 requirements/locks/test-py*.txt

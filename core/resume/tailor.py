@@ -31,13 +31,6 @@ class FabricationError(AssertionError):
     """Raised when a tailored resume would contain content not in the original."""
 
 
-def _skill_set(cv: CVProfile) -> set[str]:
-    s: set[str] = set()
-    for skill in cv.skills:
-        s.update(tokenize(skill))
-    return s
-
-
 def assert_no_fabrication(original: CVProfile, tailored: CVProfile) -> None:
     """Guarantee the tailored resume adds no new skills, and no experience
     entry claims a (company, title) combination the candidate didn't

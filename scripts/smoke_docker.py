@@ -27,7 +27,7 @@ from core.storage import LocalStorage
 
 assert os.geteuid() != 0
 root = Path('/app')
-for relative in ('docs', 'tests', 'extension', '.github', 'requirements-test.txt', 'requirements-audit.txt'):
+for relative in ('docs', 'tests', 'extension', '.github', 'ARCHITECTURE.md', 'CLAUDE.md', 'CONTRIBUTING.md', 'PROGRESS.md', 'ROADMAP.md', 'requirements-test.txt', 'requirements-audit.txt'):
     assert not (root / relative).exists(), f'Maintenance content shipped: {relative}'
 assert not list((root / 'requirements/locks').glob('test-*.txt'))
 assert not list((root / 'requirements/locks').glob('audit-*.txt'))

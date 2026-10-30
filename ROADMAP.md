@@ -1,117 +1,52 @@
 # CareerAgent Roadmap
 
-Phased plan to grow CareerAgent from an outreach-drafting prototype into a
-full, compliant, API-first job-search-and-application platform. Derived from
-`docs/RESEARCH.md`. Each phase is a self-contained, shippable, tested unit of
-work. Progress is tracked in `PROGRESS.md`; conventions live in `CLAUDE.md`.
+The original phases describe the project's history, not a completed checklist
+of every proposed tool or live integration. Follow [current status](PROGRESS.md),
+[open issues](https://github.com/aaron-seq/CareerAgent/issues) and the
+[private cleanup and bug-review Project](https://github.com/users/aaron-seq/projects/8)
+for active work. The [original plan and acceptance criteria](https://github.com/aaron-seq/CareerAgent/blob/627a8b34fcdce134a0a922665902b0855c147184/ROADMAP.md)
+remain available at an immutable revision.
 
 ## Guiding principles
-- **API-first, scraping as fallback.** Prefer official ATS/aggregator APIs and
-  JSON-LD extraction over headless scraping. Never scrape logged-in social
-  platforms.
-- **Human-in-the-loop before any submit.** Autofill assists; the human reviews
-  and clicks submit. No unattended mass-apply.
-- **PII stays local and encrypted.** Resume/contact data uses local LLMs by
-  default; cloud calls are opt-in. *(Narrowed in ADR 0005: a cloud provider
-  is now available as an explicit, visible, per-session choice even for
-  PII-heavy work like CV parsing, because requiring Ollama made the app
-  unusable without a multi-GB local install. The guardrail that survives:
-  cloud must stay opt-in per session, never a silent default.)*
-- **Compliance is built in, not bolted on.** Suppression list, opt-out, postal
-  address, and per-campaign LIA live in the data model.
-- **Free-tier first.** Choose tools with durable free tiers; re-verify quotas at
-  build time.
+
+[CLAUDE.md](CLAUDE.md) owns the privacy, human-review, API-first and truthful
+candidate-data rules. [Contributing](CONTRIBUTING.md) owns validation and delivery.
 
 ## Phases
 
-Legend: ☐ not started · ◐ in progress · ☑ done
-
-- ☑ **Phase 0 — Foundation & hygiene.** CLAUDE.md, ROADMAP.md, PROGRESS.md, ADR
-  folder, issue templates; ruff+mypy+pytest+CI; fix Pydantic v2 deprecations
-  (`.dict()` → `.model_dump()`); `.env` schema.
-  *AC:* CI green, lint clean, docs present. **Done** — `ruff check`/`ruff format`
-  clean, 51 tests passing, ruff is a blocking CI gate (mypy advisory).
-
-- ☑ **Phase 1 — Data layer.** Postgres (Supabase/Neon) + SQLModel + Alembic;
-  migrate `CVProfile`, `JobPosting`, `Contact`, `EmailDraft`, `Application` from
-  JSON to DB; PII encryption for resume fields.
-  *AC:* CRUD + migration tests pass; JSON import path works.
-
-- ☑ **Phase 2 — Real job ingestion (APIs).** Ingestion service:
-  Greenhouse/Lever/Ashby public APIs + Adzuna + The Muse + Remotive; normalize
-  into canonical `JobPosting`; store with source + fetched-at.
-  *AC:* pulls ≥N real jobs from ≥3 sources into DB with mocked-HTTP tests.
-
-- ☑ **Phase 3 — ATS detection + JSON-LD + polite fetcher.** Careers URL → ATS
-  detection (regex signatures); `extruct` JSON-LD parser; robots.txt +
-  rate-limit + cache; Jina Reader/Crawl4AI fallback.
-  *AC:* careers URL returns structured jobs; robots.txt honored; fixture tests.
-
-- ☑ **Phase 4 — Dedup + embeddings + scoring.** Fuzzy dedup
-  (title+company+location, canonical URL); sentence-transformers `all-MiniLM-L6-v2`
-  → pgvector; resume↔JD cosine + keyword-gap (KeyBERT/RapidFuzz), explainable.
-  *AC:* duplicates collapse; each job gets an explainable match score.
-
-- ☑ **Phase 5 — Resume tooling.** LLM parse into JSON Resume schema;
-  ATS-friendliness linter; RenderCV (YAML→PDF); truthful tailored variants.
-  *AC:* upload → JSON Resume → ATS-clean PDF; tailoring cites only real data.
-
-- ☑ **Phase 6 — Application tracking pipeline.** Kanban states
-  (saved→applied→screening→interview→offer/rejected); follow-up reminders;
-  duplicate-application prevention; company blacklist.
-  *AC:* full lifecycle tracked; reminders fire; no double-apply.
-
-- ☑ **Phase 7 — Outreach engine hardening (compliance).** Reuse personalization
-  + validators + Gmail drafts; add email verification (dnspython/email-validator),
-  suppression list, per-campaign LIA, postal address + opt-out in every template,
-  send caps + jitter, reply detection.
-  *AC:* no send without verification + suppression check; enforced by tests.
-
-- ☑ **Phase 8 — Human-in-the-loop autofill extension.** Manifest V3 extension:
-  profile in `chrome.storage`, layered field detection
-  (autocomplete→ARIA→label→fuzzy→LLM fallback), per-site activation; fills but
-  never auto-submits; optimized for Greenhouse/Lever/Ashby.
-  *AC:* fills a real Greenhouse form correctly; never auto-submits.
-
-- ☑ **Phase 9 — Enrichment, filters, alerting.** Salary (Adzuna), company
-  enrichment (layoffs.fyi, Glassdoor), visa sponsorship filter (USCIS H-1B /
-  DOL LCA / UK sponsor register), ghost-job detection, new-grad/intern filter;
-  alerting via Telegram/Discord/email digest/RSS (GitHub Actions cron).
-  *AC:* jobs annotated with salary/visa/company signals; daily digest delivered.
-
-- ☑ **Phase 10 — Analytics + polish + deploy.** Application→response funnel; A/B
-  resume-variant tracking; interview-prep generation from JD; deploy (HF Spaces /
-  self-host + scheduled Actions); docs + onboarding.
-  *AC:* dashboard renders funnel; deployment reproducible; README updated.
+| Historical phase | Implemented scope / canonical reference |
+| --- | --- |
+| 0 — Foundation | [Conventions and required checks](CONTRIBUTING.md). |
+| 1 — Data layer | SQLModel, Alembic and encrypted payloads; [operations and recovery](docs/OPERATIONS.md). |
+| 2–3 — Ingestion and extraction | ATS/aggregator sources, JSON-LD and polite fetching; [component contracts](ARCHITECTURE.md). |
+| 4 — Matching | In-process embeddings, deduplication and explainable scoring; [architecture decisions](docs/adr/). |
+| 5 — Resume tooling | Structured CVs, truthful tailoring, ATS checks, PDF preview and Overleaf-compatible export; [usage](docs/USAGE.md#build-a-cv-and-improve-its-readiness). |
+| 6 — Application tracking | Pipeline states and follow-ups; [usage](docs/USAGE.md#your-first-application). |
+| 7 — Outreach | Compliance-gated Gmail drafts; [operational limits](docs/OPERATIONS.md). |
+| 8 — Autofill | Human-reviewed browser extension; [contract and verification limits](extension/README.md). |
+| 9 — Enrichment and alerts | Dataset-backed signals and digest tooling; [dataset setup](core/enrichment/data/README.md). |
+| 10 — Analytics and operations | Funnel/interview tooling and container checks; [architecture](ARCHITECTURE.md) and [operations](docs/OPERATIONS.md). |
 
 ## Implementation status (2026-07-23)
 
-These historical checkmarks describe feature implementation, not production
-readiness. The current status, demonstrated guarantees, and remaining security /
-integration work are in `PROGRESS.md` and `docs/SECURITY_AUDIT.md`.
+This anchor preserves the historical status URL. Current code uses
+BeautifulSoup/stdlib JSON for JSON-LD, in-process vectors rather than pgvector,
+and fpdf2 for PDF export rather than RenderCV. The base install uses hashing;
+the optional sentence-transformers backend is preferred when available.
+The original extruct, Jina/Crawl4AI,
+reply-detection and LLM autofill proposals are not delivered capabilities.
 
-**All phases 0–10 implemented and tested** (204+ Python tests + 11 JS tests
-green as of 2026-07-27, `ruff` clean — see `PROGRESS.md` for the current
-count). A full internal end-to-end test
-(`tests/test_e2e_pipeline.py`) exercises ingest → dedup → enrich → score →
-track → digest → tailor → outreach gate.
-
-Deviations from the original plan, made for the build environment (no outbound
-access to job APIs / model hub / Ollama, no pgvector) and recorded in ADRs:
-
-- **DB:** SQLite for dev/CI, Postgres as the deployment target; vectors stored
-  as JSON with in-process NumPy cosine (pgvector is the documented swap) —
-  ADR 0003.
-- **Embeddings:** `HashingEmbedder` (no-download, deterministic) is the default;
-  `sentence-transformers` is an optional upgrade — `core/matching/embeddings.py`.
-- **JSON-LD:** parsed with BeautifulSoup + stdlib `json` instead of `extruct`
-  (broken transitive dep in this env).
-- **Resume PDF:** rendered with `fpdf2` (pure-Python, no system libs) rather
-  than RenderCV; JSON Resume remains the interchange format.
-- **Built + unit-tested but not live-verified here:** live API pulls, real LLM
-  output, the browser extension in a real browser, real email sends, and actual
-  deployment (ADR 0004). Each is noted in `PROGRESS.md`.
+Live-provider, browser and deployment acceptance must be assessed separately
+from mocked tests. See [CV/API evidence](docs/CV_VALIDATION.md),
+[browser evidence](docs/PRODUCT_UX_REVIEW_2026-10-19.md),
+[security prerequisites](docs/SECURITY_AUDIT.md) and
+[autofill gaps #13](https://github.com/aaron-seq/CareerAgent/issues/13).
+[A/B variant tracking #35](https://github.com/aaron-seq/CareerAgent/issues/35)
+still lacks a producing/consuming workflow. Historical phase checkmarks did
+not establish production readiness.
 
 ## Definition of done (every phase)
-Code + tests green + docs updated + `PROGRESS.md` updated + an ADR in
-`docs/adr/` if a significant decision was made.
+
+Use the maintained [definition of done](CLAUDE.md#definition-of-done) and
+[PR requirements](CONTRIBUTING.md#pull-requests). Record actual checks and
+remaining acceptance gaps on the issue/PR; do not infer them from phase labels.

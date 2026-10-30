@@ -1,77 +1,68 @@
 # Project status and continuation
 
-Last verified: 2026-10-29 (Asia/Kolkata). Current work is
-[issue #88](https://github.com/aaron-seq/CareerAgent/issues/88), branch
-`feature/88-ats-resume-editor`, based on main at
-[`d06cee0`](https://github.com/aaron-seq/CareerAgent/commit/d06cee0839f731fadb90a2a9434e0c0c6d4225af).
-The [private Project](https://github.com/users/aaron-seq/projects/7) and
-[milestone 2](https://github.com/aaron-seq/CareerAgent/milestone/2) track review.
-The issue links [PR #90](https://github.com/aaron-seq/CareerAgent/pull/90), its
-current checks and merge state. The user authorized merging after bug review.
+Checkpoint: 2026-10-30 (Asia/Kolkata). Current cleanup is
+[#95](https://github.com/aaron-seq/CareerAgent/issues/95), branch
+`codex/95-maintenance-cleanup`, based on main
+[`627a8b3`](https://github.com/aaron-seq/CareerAgent/commit/627a8b34fcdce134a0a922665902b0855c147184).
+The [private cleanup and bug-review Project](https://github.com/users/aaron-seq/projects/8)
+tracks this pass. #95 links the PR, measured changes and current checks.
 
-## Resume editor
+<a id="resume-editor"></a>
 
-- Onboarding's existing builder now previews unsaved facts beside the form.
-  Previewing does not activate/save a CV, call AI or invalidate application
-  materials. Edits hide outdated exports; switching/saving a CV clears preview.
-- PDF uses the existing factual renderer and Streamlit's local PDF viewer.
-  Plain text, escaped LaTeX and PDF/Markdown/JSON/Overleaf ZIP downloads use the
-  same facts. Saved and tailored exports have separate labels and ZIPs.
-- ZIPs include `main.tex`, existing licensed fonts and import instructions.
-  XeLaTeX source wraps long tokens and retains paragraphs/extractable spaces.
-  CareerAgent executes no TeX; Overleaf upload is manual. Review fonts/layout
-  for unsupported scripts. [Usage](docs/USAGE.md#build-a-cv-and-improve-its-readiness)
-  owns the user instructions.
-- Only `streamlit-pdf` 2.1.0 was added to the six Linux runtime/test locks; all
-  prior pins/hashes are preserved. No migration or credential changes.
+## Delivered and active work
 
-## Validation and limits
+- [Resume editor PR #90](https://github.com/aaron-seq/CareerAgent/pull/90) is
+  merged, including literal TeX punctuation and combining-accent fixes #91/#94.
+  [Post-merge CI](https://github.com/aaron-seq/CareerAgent/actions/runs/40927437036)
+  passed 954 Python tests on each Linux 3.11/3.12/3.13 graph, 63 Node tests,
+  lint/type, dependency audits and the functional Docker check. These are
+  published CI results. [Usage](docs/USAGE.md) owns editor and manual Overleaf
+  import instructions; no live Overleaf account or ATS service test is implied.
+- This cleanup consolidates the roadmap, extension handoff and phase template;
+  corrects stale navigation and the US dataset example; removes one private
+  unused helper; and excludes five exact maintenance docs from the runtime
+  image. Runtime code/assets, licenses, migrations and dependency pins remain.
+- Retain historical validation reports, screenshots, ADRs and instructions.
+  Local credentials, personal files, databases, downloaded datasets and caches
+  are preserved. Image/clone size savings are not claimed without measurement.
 
-- Red/green checks covered missing preview controls, missing-font fallbacks,
-  explicit paragraphs and long-token wrapping. Focused editor/save/export
-  regressions and current lint/type results are recorded in #88's PR.
-- Personally compiled synthetic ZIP exports with Tectonic 0.17.0 (XeTeX):
-  one-page, five-page/30-role and empty documents. Inspected rendered pages;
-  pypdf and pdfplumber retained facts, links, symbols, Unicode and section order.
-  No overfull boxes, missing glyphs or content outside margins in those fixtures.
-- Personally checked Chromium at 1440px and 390px: visible PDF canvas, stale
-  download suppression and ZIP download. Preview/export made no external
-  requests. This was local testing, not an Overleaf account or ATS service test.
-- Three fresh review agents checked editor state, exports and saved-material
-  workflows before merging. [#91](https://github.com/aaron-seq/CareerAgent/issues/91)
-  exposed fontspec changing literal punctuation in compiled names/URLs; an
-  explicit empty mapping fixes it. Real compiler/extractor regressions cover
-  apostrophes, quotes, repeated hyphens, Unicode, long links and multiple pages.
-  [#94](https://github.com/aaron-seq/CareerAgent/issues/94) keeps decomposed accents
-  attached when wrapping. Existing draft-write failures are tracked separately
-  in [#92](https://github.com/aaron-seq/CareerAgent/issues/92) and
-  [#93](https://github.com/aaron-seq/CareerAgent/issues/93).
-- Agent-run strict pip-audit 2.10.1 passed all three hashed test graphs with
-  zero advisory rows/skips (97/96/96 distributions); lock tests passed. Delegated
-  review is a system perspective, not independent human approval.
-- Windows' correct Python 3.11 graph cannot collect DB tests because Application
-  Control blocks SQLAlchemy's native DLL. A secret-free alternate local graph
-  was used for UI tests with a test-only offline embedding provider. Its broad
-  run had 938 passes and ten failures, all reproduced on pristine `849c0d8`:
-  POSIX modes, symlink privileges and failed-fsync temporary-file cleanup.
-  Final Linux matrix/Docker checks, rather than that alternate graph, validate
-  the frozen dependencies. Local Docker's Linux daemon remains unavailable.
+<a id="validation-and-limits"></a>
 
-## Prior work and continuation
+## Validation and follow-ups
 
-[Cleanup PR #86](https://github.com/aaron-seq/CareerAgent/pull/86) is merged;
-issues #85/#87 and milestone 1 are closed. Its
-[post-merge CI](https://github.com/aaron-seq/CareerAgent/actions/runs/40828273105)
-passed. The [previous checkpoint](https://github.com/aaron-seq/CareerAgent/blob/d06cee0839f731fadb90a2a9434e0c0c6d4225af/PROGRESS.md)
-retains cleanup measurements, older reviews and open follow-ups. Original local
-audit, credentials, databases and personal files remain untouched.
+Baseline: 216 tracked files / 4,129,405 Git-blob bytes; 16,312 maintained source
+lines; 32 Markdown files / 23,728 whitespace words; Git-archive ZIP 1,960,632
+bytes. #95's PR records same-scope final metrics and checks.
 
-1. Read #88 and its draft PR; verify branch/HEAD, working tree and current checks.
-2. Verify current-head CI/review before the authorized merge; record its SHA and
-   post-merge checks in #88. No deployment or live-provider tests are implied.
-3. Existing security prerequisites #38/#41/#42, dormant helpers #35, product
-   findings #65–#78 and overlapping/dependency PRs #76/#79–#84 remain separate.
-   Reconcile their useful changes without discarding security-fixed locks.
+Agent-run baseline and final isolated native Python 3.11
+`python -m scripts.check lint type extension` passed (126 Python files, 63 Node
+tests). Baseline Python collection exited 2 with 21 import errors because Windows
+Application Control blocked `fontTools.misc.bezierTools`; no full native suite
+ran. Local Docker's Linux daemon is unavailable. Final Linux PR CI must validate
+the frozen graphs and runtime image. Agent reproductions on an alternate
+Windows graph are identified separately in bug issues.
 
-Rollback is the feature diff and its one added dependency; no data migration.
-Keep the security updates already merged in #86.
+Three agents covered baseline/checks, core bugs/dead code, and docs/packaging.
+The orchestrator reran #96–#99 and reviewed the complete diff. Reviews are
+delegated system perspectives, not independent human approval.
+
+Existing write-failure issues [#89](https://github.com/aaron-seq/CareerAgent/issues/89),
+[#92](https://github.com/aaron-seq/CareerAgent/issues/92) and
+[#93](https://github.com/aaron-seq/CareerAgent/issues/93), location identity
+[#67](https://github.com/aaron-seq/CareerAgent/issues/67)/[#75](https://github.com/aaron-seq/CareerAgent/issues/75),
+and new import/company/salary/download findings
+[#96](https://github.com/aaron-seq/CareerAgent/issues/96)–[#99](https://github.com/aaron-seq/CareerAgent/issues/99)
+are follow-ups in Project 8. Security prerequisites
+[#38](https://github.com/aaron-seq/CareerAgent/issues/38),
+[#41](https://github.com/aaron-seq/CareerAgent/issues/41) and
+[#42](https://github.com/aaron-seq/CareerAgent/issues/42) remain separate.
+
+<a id="prior-work-and-continuation"></a>
+
+## Continuation
+
+Review #95's final diff, checks and retained evidence before merging its PR.
+No deployment or data migration is part of this cleanup; rollback is its Git
+diff. Prior editor/compiler/browser evidence and earlier cleanup measurements
+remain in the [previous checkpoint](https://github.com/aaron-seq/CareerAgent/blob/627a8b34fcdce134a0a922665902b0855c147184/PROGRESS.md)
+and [Project 7](https://github.com/users/aaron-seq/projects/7).
