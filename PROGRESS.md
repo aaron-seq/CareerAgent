@@ -1,11 +1,14 @@
 # Project status and continuation
 
-Checkpoint: 2026-10-30 (Asia/Kolkata). Current cleanup is
+Checkpoint: 2026-11-01 (Asia/Kolkata). Current cleanup is
 [#95](https://github.com/aaron-seq/CareerAgent/issues/95), branch
 `codex/95-maintenance-cleanup`, based on main
 [`627a8b3`](https://github.com/aaron-seq/CareerAgent/commit/627a8b34fcdce134a0a922665902b0855c147184).
 The [private cleanup and bug-review Project](https://github.com/users/aaron-seq/projects/8)
-tracks this pass. #95 links the PR, measured changes and current checks.
+tracks this pass. [PR #100](https://github.com/aaron-seq/CareerAgent/pull/100)
+contains the implementation, measured changes and current checks. It remains
+draft and unmerged; [milestone 3](https://github.com/aaron-seq/CareerAgent/milestone/3)
+stays open until reviewed delivery is merged.
 
 <a id="resume-editor"></a>
 
@@ -38,8 +41,10 @@ Agent-run baseline and final isolated native Python 3.11
 `python -m scripts.check lint type extension` passed (126 Python files, 63 Node
 tests). Baseline Python collection exited 2 with 21 import errors because Windows
 Application Control blocked `fontTools.misc.bezierTools`; no full native suite
-ran. Local Docker's Linux daemon is unavailable. Final Linux PR CI must validate
-the frozen graphs and runtime image. Agent reproductions on an alternate
+ran. Local Docker's Linux daemon is unavailable. The
+[PR checks](https://github.com/aaron-seq/CareerAgent/pull/100/checks) record
+final-head validation of the frozen graphs and runtime image; #95 retains
+the verified results. Agent reproductions on an alternate
 Windows graph are identified separately in bug issues.
 
 Three agents covered baseline/checks, core bugs/dead code, and docs/packaging.
@@ -61,7 +66,9 @@ are follow-ups in Project 8. Security prerequisites
 
 ## Continuation
 
-Review #95's final diff, checks and retained evidence before merging its PR.
+The editor and earlier cleanup goals are complete in merged PRs #90 and #86.
+Bug discovery and GitHub reporting are complete; the linked fixes remain Todo.
+Review #100's final diff, checks and retained evidence before merging it.
 No deployment or data migration is part of this cleanup; rollback is its Git
 diff. Prior editor/compiler/browser evidence and earlier cleanup measurements
 remain in the [previous checkpoint](https://github.com/aaron-seq/CareerAgent/blob/627a8b34fcdce134a0a922665902b0855c147184/PROGRESS.md)
