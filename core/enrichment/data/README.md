@@ -10,8 +10,15 @@ Populate it with real data:
 
 ```bash
 python -m scripts.fetch_datasets --uk   # Home Office register of licensed sponsors
-python -m scripts.fetch_datasets --us   # USCIS H-1B Employer Data Hub
+python -m scripts.fetch_datasets --us --url "<direct-csv-url>"
 ```
+
+For US data, choose a direct CSV download from the
+[USCIS H-1B Employer Data Hub](https://www.uscis.gov/tools/reports-and-studies/h-1b-employer-data-hub).
+`--us` requires an explicit download URL; it does not discover one.
+For updates, use `--out` with a new filename until
+[#99](https://github.com/aaron-seq/CareerAgent/issues/99) is fixed: invalid
+downloads can replace an existing dataset before validation.
 
 Expected filenames (override with env vars):
 

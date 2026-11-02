@@ -1,109 +1,73 @@
 # CareerAgent Autofill (Manifest V3)
 
-Human-in-the-loop autofill for job application forms. It fills fields from a
-locally-stored profile; **you review and click submit**. It never submits a
-form for you, and it only activates on the supported ATS domains
-(Greenhouse, Lever, Ashby).
-
-## Design
-
-- **`src/field_mapping.js`** — pure, dependency-free field-detection logic
-  (the tested core). Layered detection: `autocomplete` attribute → input type →
-  ARIA/label → name/id fuzzy → placeholder.
-- **`src/content_script.js`** — reads visible inputs, maps them, and fills them,
-  dispatching `input`/`change` events so React-based ATS forms register the
-  value. It also answers screening questions (text, textarea, `<select>`,
-  yes/no radio groups) from `profile.answers`, attaches `profile.resume` to the
-  resume upload only (never a cover-letter input), and outlines every
-  recognised question it could not answer in amber. Contains no submit logic
-  by design; skips fields that already have a value.
-- **`src/service_worker.js`** — owns the profile in `chrome.storage.local`
-  (PII stays in the browser) and relays fill requests.
-- **`src/popup.html` / `popup.js`** — edit the profile, import it from the
-  CareerAgent app, and trigger a fill.
+Autofill for Greenhouse, Lever and Ashby application forms. The extension fills
+from a local profile; **you review every field and click submit**. Activation
+is limited by `content_scripts.matches`; it has no submit logic.
 
 ## Getting the profile in
 
-Either type it into the popup, or import it from the app: CareerAgent's
-**Export & Logs** screen renders a **Browser autofill profile** JSON block
-built from your parsed CV (`facade.extension_profile`); paste it into the
-popup's **Import from CareerAgent** box.
+Follow [save application answers and prepare autofill](../docs/USAGE.md#save-application-answers-and-prepare-autofill)
+to download reviewed JSON from **Export & Logs** and paste it into the popup's
+**Import from CareerAgent** box. You can also edit identity fields in the popup.
+The handoff uses a file/clipboard, with no app-origin host permission, CORS
+endpoint or localhost server. The imported profile stays in
+`chrome.storage.local`; the extension makes no outbound API calls.
 
-The handoff is deliberately a clipboard copy rather than an HTTP call to the
-running app. That keeps the extension free of any host permission on the app's
-origin, needs no CORS or localhost server, and means the profile never travels
-over a socket — it goes clipboard → `chrome.storage.local` and stops there.
-`parseImport` takes only the seven known fields plus two optional blocks, so
-pasting a larger blob cannot push anything else into storage:
+## Import contract
 
-- `answers`: screening answers from the candidate profile
-  (`facade.extension_profile(cv, candidate)`). Each key is whitelisted with its
-  type (`work_authorized`, `requires_sponsorship`, `willing_to_relocate` are
-  booleans; the rest strings). An absent key means unknown. The question is
-  left blank and flagged rather than answered "No". Demographic keys are kept
-  only with `share_demographics: true`, which the app sets only on opt-in.
-- `resume`: `{filename, mime: "application/pdf", data_b64}`. It must be a PDF,
-  up to 2 MB, with a sanitised filename.
+`src/popup.js`'s `parseImport` accepts only `fullName`, `email`, `phone`,
+`linkedin`, `github`, `portfolio`, `location` and two optional blocks:
 
-`test/fixtures/candidate_profile.json` is the shared contract: the Python
-tests assert the app produces it and the Node tests import it.
+- `answers`: known keys with validated types. Missing means unknown, not "No".
+  Demographics require `share_demographics: true`. Eligibility answers retain
+  the candidate's country; filling requires the same recognized country and
+  supported positive wording. Missing/unfamiliar countries, inverted or compound
+  questions remain amber for human review. A city or visa name supplies no
+  missing authorization context.
+- `resume`: `{filename, mime: "application/pdf", data_b64}`, validated as a PDF
+  of at most 2 MB with a sanitized filename. Only the resume input is eligible,
+  never a cover-letter input.
 
-`location` is not in `CVProfile`; it comes from the candidate profile when one
-is saved, otherwise it imports empty; fill it once in the popup and
-`chrome.storage.local` keeps it. Editing the visible fields keeps imported
-answers and the resume.
+`location` comes from saved application details, otherwise it imports empty.
+Editing the seven visible fields preserves imported answers and resume. The
+[shared fixture](test/fixtures/candidate_profile.json) is checked by Python
+export tests and Node import tests.
 
-## Guardrails
+<a id="design"></a>
+<a id="guardrails"></a>
 
-- **Never auto-submits.** The human reviews the filled form and submits.
-- **Per-site activation** via `content_scripts.matches` (not `<all_urls>`).
-- **Local PII.** The profile lives in `chrome.storage.local`; nothing is sent
-  anywhere by the extension.
+## Design and guardrails
+
+- `src/field_mapping.js`: dependency-free detection through autocomplete, input
+  type, ARIA/label, name/id and placeholder. No LLM fallback is implemented.
+- `src/content_script.js`: fills supported visible text/select/radio questions,
+  dispatches `input`/`change`, and flags unanswered recognized questions amber.
+  Existing values and real selected choices are preserved; React-select
+  comboboxes are flagged for manual input.
+- `src/service_worker.js`: owns local profile storage and relays fill requests.
+  `src/popup.html` / `popup.js` edit/import the profile and trigger a fill.
 
 ## Develop / test
 
 ```bash
 cd extension
-npm test        # runs node --test on the field-mapping + import logic
+npm test        # node --test; no dependency installation needed
 ```
 
-Load unpacked in Chrome: `chrome://extensions` → Developer mode → Load
-unpacked → select this `extension/` directory.
+In Chrome, open `chrome://extensions` → Developer mode → Load unpacked →
+select this `extension/` directory.
 
 ## Verification status
 
-The field-mapping logic is unit-tested under Node (50 tests, including the
-profile-import parser, screening-question rules, resume validation, and the
-content script driven against a fake DOM). It has also
-been **live-verified**: loaded unpacked into real Chromium via Playwright's
-`launchPersistentContext` + `--load-extension`, with a profile seeded through
-the real popup, against actual live job postings —
-`job-boards.greenhouse.io` (Anthropic) and `jobs.lever.co` (Immutable). It
-correctly detected and filled name/email/phone/location/LinkedIn/GitHub/
-portfolio fields on both, dispatched React-visible `input`/`change` events,
-and never touched the submit button. That pass also found and fixed two real
-bugs (see git history around this note): a short-keyword false match ("tel"
-inside "Constellation") and an overly-generic "url" keyword stealing
-unrelated fields ("Twitter URL"); both now have regression tests.
+The [historical extension report](https://github.com/aaron-seq/CareerAgent/blob/2ceaf85145a146ca9b4616b16f5c37bbab38b32c/extension/README.md#verification-status)
+records real Chromium/Playwright checks on Greenhouse (Anthropic) and Lever
+(Immutable): identity fields, React-visible events and no submit interaction.
+That is a reported historical check, not a new live test of the current build.
 
-Screening-question answering (selects, radio groups), resume attachment and
-the amber flags are covered only by the fake-DOM tests. They have not been
-exercised in a real browser yet. React-select comboboxes are flagged, not
-filled. Also still not exercised live: Ashby (`jobs.ashbyhq.com`), and the "LLM fallback"
-detection layer named in `ROADMAP.md`'s Phase 8 description, which was never
-actually implemented (current layers stop at placeholder fuzzy-matching,
-returning no match rather than falling back to an LLM call).
-
-This is still manual-QA-in-CI territory, not automated: `node --test` has no
-browser/DOM, so the live-browser pass is not part of the regular test run.
-A real user still needs to load this unpacked via `chrome://extensions` to
-use it for real.
-
-
-Eligibility answers retain the country the candidate supplied. The extension
-fills authorization, sponsorship and visa-status questions only when the
-question explicitly names that same recognized country and uses supported
-positive wording. Missing countries, unfamiliar country names, inverted and
-compound questions remain outlined in amber for the candidate. A city or visa
-name never supplies missing authorization context. Existing select choices,
-including a real first option, are preserved.
+Screening selects/radios, resume attachment and amber flags have fake-DOM test
+coverage. The later [Chromium DOM evidence](../docs/validation/ux-2026-10-19/extension-dom.json)
+uses injected scripts on a synthetic page, not employer forms or the extension
+service worker. Ashby remains unverified live ([#13](https://github.com/aaron-seq/CareerAgent/issues/13)).
+Regular Node CI does not run a real browser or employer application. Review
+[open autofill issues](https://github.com/aaron-seq/CareerAgent/issues?q=is%3Aopen+autofill)
+before relying on a filled answer.

@@ -100,6 +100,15 @@ compiled files is not assumed.
 
 ## Security-driven compatibility change
 
+The [2026-11-02 retry](https://github.com/aaron-seq/CareerAgent/issues/101)
+raises the existing pypdf/pyasn1 source floors and six runtime/test locks to
+pypdf 6.21.4 and pyasn1 0.6.5. These patch releases address the newly reported
+advisories that failed the current gate; unrelated versions/hashes and the
+isolated scanner graph remain unchanged. Both provide pure Python wheels and
+support the project's Python floor. See the
+[pypdf security release](https://github.com/py-pdf/pypdf/releases/tag/6.21.4) and
+[pyasn1 security release](https://github.com/pyasn1/pyasn1/releases/tag/v0.6.5).
+
 The [2026-10-28 refresh](https://github.com/aaron-seq/CareerAgent/issues/87)
 updates certifi to 2026.10.19, pypdf to 6.21.3 and Pillow to 13.0.0. Streamlit
 1.66.1 is the compatibility bridge: its published metadata permits Pillow 13.

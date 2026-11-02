@@ -111,8 +111,8 @@ for results at their recorded revisions.
 - [Product/browser evidence](docs/PRODUCT_UX_REVIEW_2026-10-19.md) and
   [workflow evidence](docs/WORKFLOW_AUDIT.md).
 - [Issues](https://github.com/aaron-seq/CareerAgent/issues),
-  [maintenance Project](https://github.com/users/aaron-seq/projects/7) (private)
-  and [current milestone](https://github.com/aaron-seq/CareerAgent/milestone/1).
+  [cleanup and bug-review Project](https://github.com/users/aaron-seq/projects/8) (private)
+  and [milestones](https://github.com/aaron-seq/CareerAgent/milestones).
 
 ## License
 
