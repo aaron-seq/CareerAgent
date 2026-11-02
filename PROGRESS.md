@@ -1,14 +1,14 @@
 # Project status and continuation
 
-Checkpoint: 2026-11-02 (Asia/Kolkata). Current cleanup is
-[#95](https://github.com/aaron-seq/CareerAgent/issues/95), branch
+Checkpoint: 2026-11-02 (Asia/Kolkata). Cleanup
+[#95](https://github.com/aaron-seq/CareerAgent/issues/95) was delivered from
 `codex/95-maintenance-cleanup`, based on main
 [`627a8b3`](https://github.com/aaron-seq/CareerAgent/commit/627a8b34fcdce134a0a922665902b0855c147184).
 The [private cleanup and bug-review Project](https://github.com/users/aaron-seq/projects/8)
 tracks this pass. [PR #100](https://github.com/aaron-seq/CareerAgent/pull/100)
-contains the implementation, measured changes and current checks. It remains
-draft and unmerged; [milestone 3](https://github.com/aaron-seq/CareerAgent/milestone/3)
-stays open until reviewed delivery is merged.
+contains the merged implementation, measurements and checks. The issue/PR and
+[milestone 3](https://github.com/aaron-seq/CareerAgent/milestone/3) own current
+delivery and verification state.
 The retry exposed dependency advisories.
 [#101](https://github.com/aaron-seq/CareerAgent/issues/101) tracks the reviewed
 pypdf/pyasn1 patch repair; retain its security floors and the strict audit gate.
@@ -74,7 +74,8 @@ are follow-ups in Project 8. Security prerequisites
 
 The editor and earlier cleanup goals are complete in merged PRs #90 and #86.
 Bug discovery and GitHub reporting are complete; the linked fixes remain Todo.
-Review #100's final diff, checks and retained evidence before merging it.
+Start with Project 8's Todo items; verify the selected issue, current main and
+relevant checks before implementing a follow-up.
 No deployment or data migration is part of this cleanup. Reverting its
 documentation/packaging must preserve #101's security floors and locks or a
 separately reviewed safe successor. Prior editor/compiler/browser evidence and
